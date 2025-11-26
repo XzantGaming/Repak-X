@@ -221,9 +221,16 @@ async fn get_pak_files(state: State<'_, Arc<Mutex<AppState>>>) -> Result<Vec<Mod
                     m.path.with_extension("pak_disabled") == path
                 });
             
-            let file_size = std::fs::metadata(path)
-                .map(|m| m.len())
-                .unwrap_or(0);
+            let ucas_path = path.with_extension("ucas");
+            let file_size = if ucas_path.exists() {
+                std::fs::metadata(&ucas_path)
+                    .map(|m| m.len())
+                    .unwrap_or(0)
+            } else {
+                std::fs::metadata(path)
+                    .map(|m| m.len())
+                    .unwrap_or(0)
+            };
             
             // Calculate priority (number of 9s)
             let mut priority = 0;
@@ -1118,9 +1125,16 @@ async fn get_mod_details(mod_path: String) -> Result<ModDetails, String> {
     info!("Detected mod type: {}", mod_type);
     
     // Get total size
-    let total_size = std::fs::metadata(&path)
-        .map(|m| m.len())
-        .unwrap_or(0);
+    let ucas_path_for_size = path.with_extension("ucas");
+    let total_size = if ucas_path_for_size.exists() {
+        std::fs::metadata(&ucas_path_for_size)
+            .map(|m| m.len())
+            .unwrap_or(0)
+    } else {
+        std::fs::metadata(&path)
+            .map(|m| m.len())
+            .unwrap_or(0)
+    };
     
     let mod_name = path.file_stem()
         .and_then(|s| s.to_str())

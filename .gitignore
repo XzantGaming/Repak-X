@@ -1,7 +1,11 @@
-﻿*.ps1
+*.ps1
 node_modules/
 target/
 dist/
 repak-gui/node_modules/
 repak-gui/target/
 repak-gui/dist/
+
+# Ignored build artifacts (keep these)
+repak-gui/package-lock.json
+repak-gui/src/assets/
