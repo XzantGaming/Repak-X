@@ -1,0 +1,49 @@
+{
+  "$schema": "https://schema.tauri.app/config/2.0",
+  "productName": "Repak Gui Revamped",
+  "version": "2.6.4",
+  "identifier": "com.xzantgaming.repak-gui-revamped",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "dist"
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["msi", "nsis"],
+    "icon": [
+      "icons/RepakIcon.ico"
+    ],
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": "",
+      "wix": {
+        "language": "en-US",
+        "upgradeCode": "3ABC116E-0858-4842-8C33-F213D7FA8A4B"
+      }
+    }
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Repak Gui Revamped",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true,
+        "center": true,
+        "devtools": true
+      }
+    ],
+    "security": {
+      "csp": null,
+      "capabilities": ["default"]
+    },
+    "withGlobalTauri": true
+  }
+}
