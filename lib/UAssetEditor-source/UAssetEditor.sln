@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UAssetEditor.Testing", "UAssetEditor.Testing\UAssetEditor.Testing.csproj", "{69BFAC6D-9F9A-4577-8225-BB75B92CA8A8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UAssetEditor", "UAssetEditor\UAssetEditor.csproj", "{D10D2D14-A824-4977-A44A-C7ACA3DB123E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UAssetEditor.Console", "UAssetEditor.Console\UAssetEditor.Console.csproj", "{60401F44-1708-4710-9025-913693EC481F}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{69BFAC6D-9F9A-4577-8225-BB75B92CA8A8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{69BFAC6D-9F9A-4577-8225-BB75B92CA8A8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{69BFAC6D-9F9A-4577-8225-BB75B92CA8A8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{69BFAC6D-9F9A-4577-8225-BB75B92CA8A8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D10D2D14-A824-4977-A44A-C7ACA3DB123E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D10D2D14-A824-4977-A44A-C7ACA3DB123E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D10D2D14-A824-4977-A44A-C7ACA3DB123E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D10D2D14-A824-4977-A44A-C7ACA3DB123E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{60401F44-1708-4710-9025-913693EC481F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{60401F44-1708-4710-9025-913693EC481F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{60401F44-1708-4710-9025-913693EC481F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{60401F44-1708-4710-9025-913693EC481F}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
