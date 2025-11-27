@@ -1355,12 +1355,30 @@ fn save_state(state: &AppState) -> std::io::Result<()> {
 
 fn load_state() -> AppState {
     let path = app_dir().join("state.json");
-    if let Ok(file) = File::open(path) {
-        if let Ok(state) = serde_json::from_reader(file) {
-            return state;
+    let mut state = if let Ok(file) = File::open(path) {
+        serde_json::from_reader(file).unwrap_or_default()
+    } else {
+        AppState::default()
+    };
+    
+    // Auto-detect USMAP file from roaming folder on startup
+    // This ensures the app always uses whatever USMAP is actually in the folder
+    let usmap_folder = usmap_dir();
+    if usmap_folder.exists() {
+        if let Ok(entries) = std::fs::read_dir(&usmap_folder) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                let path = entry.path();
+                if path.extension().and_then(|s| s.to_str()) == Some("usmap") {
+                    if let Some(filename) = path.file_name().and_then(|s| s.to_str()) {
+                        state.usmap_path = filename.to_string();
+                        break; // Use first .usmap file found
+                    }
+                }
+            }
         }
     }
-    AppState::default()
+    
+    state
 }
 
 fn setup_logging() {
