@@ -172,13 +172,13 @@ await invoke('get_character_by_skin_id', { skinId: string }): Promise<CharacterS
 
 #### `update_character_data_from_rivalskins`
 
-Fetch new skin data from rivalskins.com and merge with existing data.
+Fetch new skin data from rivalskins.com and merge with existing data. Runs in background and emits progress to the install log.
 
 ```typescript
 await invoke('update_character_data_from_rivalskins'): Promise<number>
 ```
 
-**Returns:** Number of new entries added
+**Returns:** Number of new entries added (or throws "Cancelled" if cancelled)
 
 **Behavior:**
 1. Fetches all costume links from rivalskins.com
@@ -186,12 +186,27 @@ await invoke('update_character_data_from_rivalskins'): Promise<number>
    - Handles IDs with "ps" prefix (e.g., `ps1050504` → `1050504`)
    - For default skins where ID isn't displayed: uses `{character_id}001`
    - Skips non-default skins if no ID can be found
+   - **Checks for cancellation between each page fetch**
 3. Merges new skins with existing data (preserves existing, adds new)
 4. Sorts by character ID (numeric) then skin ID (numeric)
 5. Saves to the JSON file
 6. Refreshes the in-memory cache
 
-**Events:** Emits `character_update_log` events with progress updates
+**Events:** Emits `install_log` events with progress updates (prefixed with `[Character Data]`)
+
+**Cancellation:** Can be cancelled via `cancel_character_update` command
+
+---
+
+#### `cancel_character_update`
+
+Cancel an ongoing character data update.
+
+```typescript
+await invoke('cancel_character_update'): Promise<void>
+```
+
+**Behavior:** Sets a cancellation flag that the update process checks between page fetches. The running `update_character_data_from_rivalskins` will return an error with message "Cancelled".
 
 ---
 

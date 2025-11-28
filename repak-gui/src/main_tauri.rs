@@ -69,6 +69,9 @@ struct ModEntry {
     custom_tags: Vec<String>,
     file_size: u64,
     priority: usize,
+    // Character/skin info from character_data (dynamically looked up)
+    character_name: Option<String>,
+    skin_name: Option<String>,
 }
 
 // ============================================================================
@@ -258,6 +261,8 @@ async fn get_pak_files(state: State<'_, Arc<Mutex<AppState>>>) -> Result<Vec<Mod
                 custom_tags: metadata.map(|m| m.custom_tags.clone()).unwrap_or_default(),
                 file_size,
                 priority,
+                character_name: None,
+                skin_name: None,
             });
         }
     }
@@ -1268,24 +1273,46 @@ async fn get_character_by_skin_id(skin_id: String) -> Result<Option<character_da
     Ok(character_data::get_character_by_skin_id(&skin_id))
 }
 
+/// Update character data from rivalskins.com with progress events
+/// Supports cancellation via cancel_character_update command
 #[tauri::command]
 async fn update_character_data_from_rivalskins(window: Window) -> Result<usize, String> {
-    let _ = window.emit("character_update_log", "Starting rivalskins.com data fetch...");
+    let _ = window.emit("install_log", "[Character Data] Starting rivalskins.com data fetch...");
     
-    match character_data::update_from_rivalskins().await {
+    // Create progress callback that emits events
+    let window_clone = window.clone();
+    let on_progress = move |msg: &str| {
+        let _ = window_clone.emit("install_log", format!("[Character Data] {}", msg));
+    };
+    
+    match character_data::update_from_rivalskins_with_progress(on_progress).await {
         Ok(new_count) => {
-            let msg = format!("Successfully updated character data. {} new skins added.", new_count);
-            let _ = window.emit("character_update_log", &msg);
-            info!("{}", msg);
+            let msg = format!("[Character Data] ✓ Complete! {} new skins added.", new_count);
+            let _ = window.emit("install_log", &msg);
+            // Trigger mod list refresh so new character names show up
+            let _ = window.emit("character_data_updated", new_count);
+            info!("Successfully updated character data. {} new skins added.", new_count);
             Ok(new_count)
         }
+        Err(e) if e == "Cancelled" => {
+            let _ = window.emit("install_log", "[Character Data] ✗ Update cancelled by user");
+            Err(e)
+        }
         Err(e) => {
-            let msg = format!("Failed to update character data: {}", e);
-            let _ = window.emit("character_update_log", &msg);
-            error!("{}", msg);
+            let msg = format!("[Character Data] ✗ Error: {}", e);
+            let _ = window.emit("install_log", &msg);
+            error!("Failed to update character data: {}", e);
             Err(e)
         }
     }
+}
+
+/// Cancel an ongoing character data update
+#[tauri::command]
+async fn cancel_character_update() -> Result<(), String> {
+    character_data::request_cancel_update();
+    info!("Character data update cancellation requested");
+    Ok(())
 }
 
 #[tauri::command]
@@ -1587,6 +1614,7 @@ fn main() {
             get_character_data,
             get_character_by_skin_id,
             update_character_data_from_rivalskins,
+            cancel_character_update,
             identify_mod_character,
             get_character_data_path,
             refresh_character_cache

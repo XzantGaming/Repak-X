@@ -1,31 +1,40 @@
+use std::collections::HashSet;
 use std::option::Option;
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 use std::{fs, io};
 
-#[derive(Debug, Deserialize, Serialize, Hash)]
-struct SkinEntry {
-    skinid: String,
-    #[serde(rename = "skin_name")]
-    skin_name: String,
-    name: String,
-}
-
-static SKIN_ENTRIES: LazyLock<HashMap<u32, SkinEntry>> = LazyLock::new(|| {
-    let skins: Vec<SkinEntry> =
-        serde_json::from_str(include_str!("data/character_data.json")).expect("Invalid JSON");
-    let skin_map: HashMap<u32, SkinEntry> = skins
-        .into_iter()
-        .map(|entry| (entry.skinid.parse().unwrap(), entry))
-        .collect();
-
-    skin_map
-});
+// Use the runtime character_data module instead of compile-time embedded data
+use crate::character_data;
 
 static SKIN_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"[0-9]{4}\/[0-9]{7}").unwrap()
 });
+
+// Regex to extract just the character ID (4 digits) from paths like /Characters/1021/
+static CHAR_ID_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"Characters/(\d{4})").unwrap()
+});
+
+/// Result of mod characteristics detection, includes mod type and detected heroes
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ModCharacteristics {
+    pub mod_type: String,
+    pub heroes: Vec<String>,
+}
+
+impl ModCharacteristics {
+    /// Format the mod type with hero info for display
+    pub fn display_type(&self) -> String {
+        if self.heroes.is_empty() {
+            self.mod_type.clone()
+        } else if self.heroes.len() == 1 {
+            format!("{} ({})", self.heroes[0], self.mod_type)
+        } else {
+            format!("Multiple Heroes ({}) ({})", self.heroes.len(), self.mod_type)
+        }
+    }
+}
 
 pub fn collect_files(paths: &mut Vec<PathBuf>, dir: &Path) -> io::Result<()> {
     for entry in fs::read_dir(dir)? {
@@ -44,13 +53,18 @@ pub enum ModType {
     Default(String),
     Custom(String),
 }
+
+/// Get character/skin info from file path using runtime character data cache
+/// This uses the updated data from roaming folder, not the compile-time embedded data
 pub fn get_character_mod_skin(file: &str) -> Option<ModType> {
-    let skin_id = SKIN_REGEX.clone().captures(file);
-    if let Some(skin_id) = skin_id {
-        let skin_id = skin_id[0].to_string();
-        let skin_id = &skin_id[5..];
-        let skin = SKIN_ENTRIES.get(&(skin_id.parse().unwrap()));
-        if let Some(skin) = skin {
+    let skin_id_match = SKIN_REGEX.captures(file);
+    if let Some(caps) = skin_id_match {
+        let full_match = caps[0].to_string();
+        // Extract just the 7-digit skin ID (skip the "1234/" prefix)
+        let skin_id = &full_match[5..];
+        
+        // Use the runtime character data lookup
+        if let Some(skin) = character_data::get_character_by_skin_id(skin_id) {
             if skin.skin_name == "Default" {
                 return Some(ModType::Default(format!(
                     "{} - {}",
@@ -67,7 +81,8 @@ pub fn get_character_mod_skin(file: &str) -> Option<ModType> {
         None
     }
 }
-pub fn get_current_pak_characteristics(mod_contents: Vec<String>) -> String {
+/// Get detailed mod characteristics including mod type and all detected heroes
+pub fn get_pak_characteristics_detailed(mod_contents: Vec<String>) -> ModCharacteristics {
     let mut fallback: Option<String> = None;
     
     // Track what content types we find
@@ -78,7 +93,8 @@ pub fn get_current_pak_characteristics(mod_contents: Vec<String>) -> String {
     let mut has_audio = false;
     let mut has_movies = false;
     let mut has_ui = false;
-    let mut character_name: Option<String> = None;
+    let mut character_name: Option<String> = None;  // Full skin-specific name (e.g., "Hawkeye - Default")
+    let mut hero_names: HashSet<String> = HashSet::new();  // All detected hero names
 
     for file in &mod_contents {
         let path = file
@@ -126,76 +142,90 @@ pub fn get_current_pak_characteristics(mod_contents: Vec<String>) -> String {
             has_movies = true;
         }
 
+        // Try to get skin-specific name from Characters paths
         let category = path.split('/').next().unwrap_or_default();
-
-        match category {
-            "Characters" => {
-                match get_character_mod_skin(path) {
-                    Some(ModType::Custom(skin)) => character_name = Some(skin),
-                    Some(ModType::Default(name)) => fallback = Some(name),
-                    None => {}
+        if category == "Characters" {
+            match get_character_mod_skin(path) {
+                Some(ModType::Custom(skin)) => character_name = Some(skin),
+                Some(ModType::Default(name)) => fallback = Some(name),
+                None => {}
+            }
+        }
+        
+        // Extract ALL hero names from character IDs anywhere in path
+        // This handles paths like /Game/Marvel/VFX/Meshes/Characters/1048/...
+        if let Some(caps) = CHAR_ID_REGEX.captures(file) {
+            if let Some(char_id) = caps.get(1) {
+                if let Some(name) = character_data::get_character_name_from_id(char_id.as_str()) {
+                    hero_names.insert(name);
                 }
             }
-            _ => {}
         }
     }
+    
+    // Convert to sorted Vec for consistent ordering
+    let mut heroes: Vec<String> = hero_names.into_iter().collect();
+    heroes.sort();
 
     // Priority order for mod type determination
     // Audio and Movies are special standalone types
-    if has_audio && !has_skeletal_mesh && !has_static_mesh && !has_texture && !has_material {
-        return "Audio".to_string();
-    }
-    if has_movies && !has_skeletal_mesh && !has_static_mesh && !has_texture && !has_material {
-        return "Movies".to_string();
-    }
-    if has_ui && !has_skeletal_mesh && !has_static_mesh && !has_texture && !has_material {
-        return "UI".to_string();
-    }
-    
-    // For character mods, be more specific about what kind
-    if let Some(char_name) = character_name {
-        // Determine the sub-type (priority order)
+    let mod_type = if has_audio && !has_skeletal_mesh && !has_static_mesh && !has_texture && !has_material {
+        "Audio".to_string()
+    } else if has_movies && !has_skeletal_mesh && !has_static_mesh && !has_texture && !has_material {
+        "Movies".to_string()
+    } else if has_ui && !has_skeletal_mesh && !has_static_mesh && !has_texture && !has_material {
+        "UI".to_string()
+    } else if let Some(char_name) = character_name {
+        // For character mods with skin-specific name
         if has_skeletal_mesh {
-            return format!("{} (Mesh)", char_name);
+            format!("{} (Mesh)", char_name)
+        } else if has_static_mesh {
+            format!("{} (Static Mesh)", char_name)
+        } else if has_material {
+            format!("{} (VFX)", char_name)
+        } else if has_texture {
+            format!("{} (Retexture)", char_name)
+        } else {
+            char_name
         }
-        if has_static_mesh {
-            return format!("{} (Static Mesh)", char_name);
-        }
-        if has_material {
-            return format!("{} (VFX)", char_name);
-        }
-        // Retexture is lowest priority - only if nothing else matches
-        if has_texture {
-            return format!("{} (Retexture)", char_name);
-        }
-        // Mixed or just character
-        return char_name;
-    }
+    } else if has_skeletal_mesh {
+        "Mesh".to_string()
+    } else if has_static_mesh {
+        "Static Mesh".to_string()
+    } else if has_material {
+        "VFX".to_string()
+    } else if has_audio {
+        "Audio".to_string()
+    } else if has_texture {
+        "Retexture".to_string()
+    } else {
+        fallback.unwrap_or_else(|| "Unknown".to_string())
+    };
     
-    // Standalone type detection (non-character mods) - priority order
-    if has_skeletal_mesh {
-        return "Mesh".to_string();
+    ModCharacteristics {
+        mod_type,
+        heroes,
     }
-    if has_static_mesh {
-        return "Static Mesh".to_string();
-    }
-    if has_material {
-        return "VFX".to_string();
-    }
-    if has_audio {
-        return "Audio".to_string();
-    }
-    // Retexture is lowest priority - only if nothing else matches
-    if has_texture {
-        return "Retexture".to_string();
-    }
+}
 
-    fallback.unwrap_or_else(|| "Unknown".to_string())
+/// Get mod characteristics as a display string (backward compatible)
+/// For mods with heroes detected, formats as "Hero (Type)" or "Multiple Heroes (N) (Type)"
+pub fn get_current_pak_characteristics(mod_contents: Vec<String>) -> String {
+    let chars = get_pak_characteristics_detailed(mod_contents);
+    
+    // If we have a skin-specific character name (like "Hawkeye - Default"), use mod_type as-is
+    // Otherwise, format with hero info
+    if chars.mod_type.contains(" - ") || chars.heroes.is_empty() {
+        chars.mod_type
+    } else if chars.heroes.len() == 1 {
+        format!("{} ({})", chars.heroes[0], chars.mod_type)
+    } else {
+        format!("Multiple Heroes ({}) ({})", chars.heroes.len(), chars.mod_type)
+    }
 }
 
 
 use log::info;
-use serde::{Deserialize, Serialize};
 use regex_lite::Regex;
 
 pub fn find_marvel_rivals() -> Option<PathBuf> {

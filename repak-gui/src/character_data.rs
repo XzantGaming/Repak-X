@@ -8,7 +8,27 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
+use std::sync::atomic::{AtomicBool, Ordering};
 use once_cell::sync::Lazy;
+
+// === CHARACTER UPDATE CANCELLATION FLAG ===
+// Global flag to signal cancellation of the rivalskins.com fetch
+static CANCEL_CHARACTER_UPDATE: AtomicBool = AtomicBool::new(false);
+
+/// Request cancellation of the ongoing character data update
+pub fn request_cancel_update() {
+    CANCEL_CHARACTER_UPDATE.store(true, Ordering::SeqCst);
+}
+
+/// Check if cancellation was requested
+pub fn is_update_cancelled() -> bool {
+    CANCEL_CHARACTER_UPDATE.load(Ordering::SeqCst)
+}
+
+/// Reset the cancellation flag (call before starting a new update)
+pub fn reset_cancel_flag() {
+    CANCEL_CHARACTER_UPDATE.store(false, Ordering::SeqCst);
+}
 
 // ============================================================================
 // DATA STRUCTURES
@@ -54,7 +74,7 @@ static CHARACTER_CACHE: Lazy<Arc<RwLock<CharacterDataCache>>> = Lazy::new(|| {
 // KNOWN CHARACTER IDS (for default skin generation)
 // ============================================================================
 
-/// Known character IDs - used for generating default skin IDs
+/// Known character IDs - used for generating default skin IDs (name -> id)
 pub fn get_known_character_ids() -> HashMap<String, String> {
     let mut map = HashMap::new();
     map.insert("Hulk".to_string(), "1011".to_string());
@@ -102,6 +122,59 @@ pub fn get_known_character_ids() -> HashMap<String, String> {
     map.insert("Angela".to_string(), "1056".to_string());
     map.insert("Gambit".to_string(), "1058".to_string());
     map
+}
+
+/// Get character name from character ID (id -> name)
+/// Used for static mesh and audio mods that aren't skin-specific
+pub fn get_character_name_from_id(char_id: &str) -> Option<String> {
+    // Reverse lookup from ID to name
+    match char_id {
+        "1011" => Some("Hulk".to_string()),
+        "1014" => Some("Punisher".to_string()),
+        "1015" => Some("Storm".to_string()),
+        "1016" => Some("Loki".to_string()),
+        "1017" => Some("Human Torch".to_string()),
+        "1018" => Some("Doctor Strange".to_string()),
+        "1020" => Some("Mantis".to_string()),
+        "1021" => Some("Hawkeye".to_string()),
+        "1022" => Some("Captain America".to_string()),
+        "1023" => Some("Rocket Raccoon".to_string()),
+        "1024" => Some("Hela".to_string()),
+        "1025" => Some("Cloak & Dagger".to_string()),
+        "1026" => Some("Black Panther".to_string()),
+        "1027" => Some("Groot".to_string()),
+        "1028" => Some("Ultron".to_string()),
+        "1029" => Some("Magik".to_string()),
+        "1030" => Some("Moon Knight".to_string()),
+        "1031" => Some("Luna Snow".to_string()),
+        "1032" => Some("Squirrel Girl".to_string()),
+        "1033" => Some("Black Widow".to_string()),
+        "1034" => Some("Iron Man".to_string()),
+        "1035" => Some("Venom".to_string()),
+        "1036" => Some("Spider-Man".to_string()),
+        "1037" => Some("Magneto".to_string()),
+        "1038" => Some("Scarlet Witch".to_string()),
+        "1039" => Some("Thor".to_string()),
+        "1040" => Some("Mister Fantastic".to_string()),
+        "1041" => Some("Winter Soldier".to_string()),
+        "1042" => Some("Peni Parker".to_string()),
+        "1043" => Some("Star-Lord".to_string()),
+        "1044" => Some("Blade".to_string()),
+        "1045" => Some("Namor".to_string()),
+        "1046" => Some("Adam Warlock".to_string()),
+        "1047" => Some("Jeff the Landshark".to_string()),
+        "1048" => Some("Psylocke".to_string()),
+        "1049" => Some("Wolverine".to_string()),
+        "1050" => Some("Invisible Woman".to_string()),
+        "1051" => Some("The Thing".to_string()),
+        "1052" => Some("Iron Fist".to_string()),
+        "1053" => Some("Emma Frost".to_string()),
+        "1054" => Some("Phoenix".to_string()),
+        "1055" => Some("Daredevil".to_string()),
+        "1056" => Some("Angela".to_string()),
+        "1058" => Some("Gambit".to_string()),
+        _ => None,
+    }
 }
 
 // ============================================================================
@@ -254,14 +327,38 @@ pub fn get_all_character_data() -> Vec<CharacterSkin> {
 // ============================================================================
 
 /// Character name mappings from URL slug to proper name
+/// These MUST match the names in get_known_character_ids() exactly
 fn get_character_name_from_slug(slug: &str) -> String {
     match slug {
+        // Direct mappings for special cases
         "the-punisher" => "Punisher".to_string(),
         "the-thing" => "The Thing".to_string(),
         "cloak-and-dagger" => "Cloak & Dagger".to_string(),
         "jeff-the-landshark" => "Jeff the Landshark".to_string(),
+        "jeff-the-land-shark" => "Jeff the Landshark".to_string(),
+        // Hyphenated names that need exact formatting
+        "spider-man" => "Spider-Man".to_string(),
+        "star-lord" => "Star-Lord".to_string(),
+        "iron-man" => "Iron Man".to_string(),
+        "iron-fist" => "Iron Fist".to_string(),
+        "black-panther" => "Black Panther".to_string(),
+        "black-widow" => "Black Widow".to_string(),
+        "moon-knight" => "Moon Knight".to_string(),
+        "luna-snow" => "Luna Snow".to_string(),
+        "squirrel-girl" => "Squirrel Girl".to_string(),
+        "human-torch" => "Human Torch".to_string(),
+        "doctor-strange" => "Doctor Strange".to_string(),
+        "captain-america" => "Captain America".to_string(),
+        "rocket-raccoon" => "Rocket Raccoon".to_string(),
+        "mister-fantastic" => "Mister Fantastic".to_string(),
+        "winter-soldier" => "Winter Soldier".to_string(),
+        "peni-parker" => "Peni Parker".to_string(),
+        "adam-warlock" => "Adam Warlock".to_string(),
+        "invisible-woman" => "Invisible Woman".to_string(),
+        "emma-frost" => "Emma Frost".to_string(),
+        "scarlet-witch" => "Scarlet Witch".to_string(),
         _ => {
-            // Convert slug to title case
+            // Convert slug to title case for simple names
             slug.split('-')
                 .map(|word| {
                     let mut chars = word.chars();
@@ -277,36 +374,36 @@ fn get_character_name_from_slug(slug: &str) -> String {
 }
 
 /// Parse the main page and extract links (sync helper to avoid Send issues)
+/// Returns (url, character_name, skin_name) tuples
 fn parse_costume_links(html: &str) -> Vec<(String, String, String)> {
     use scraper::{Html, Selector};
     
     let document = Html::parse_document(html);
     let link_selector = Selector::parse("a[href*='/item/']").unwrap();
-    let costume_regex = regex_lite::Regex::new(r"/item/\d+/(.*?)-costume-(.*)/?").unwrap();
+    let costume_regex = regex_lite::Regex::new(r"/item/\d+/(.*?)-costume-").unwrap();
     
     let mut links: Vec<(String, String, String)> = Vec::new();
+    let mut seen_urls: std::collections::HashSet<String> = std::collections::HashSet::new();
     
     for element in document.select(&link_selector) {
         if let Some(href) = element.value().attr("href") {
+            // Only process costume links
             if let Some(caps) = costume_regex.captures(href) {
                 let char_slug = caps.get(1).map(|m| m.as_str()).unwrap_or("");
-                let skin_slug = caps.get(2).map(|m| m.as_str()).unwrap_or("");
-                
                 let char_name = get_character_name_from_slug(char_slug);
                 
-                // Clean skin name from slug
-                let skin_name = skin_slug
-                    .trim_end_matches('/')
-                    .split('-')
-                    .map(|word| {
-                        let mut chars = word.chars();
-                        match chars.next() {
-                            None => String::new(),
-                            Some(first) => first.to_uppercase().chain(chars).collect(),
-                        }
-                    })
-                    .collect::<Vec<_>>()
-                    .join(" ");
+                // Get skin name from link text (like Python does), not URL
+                let skin_name_raw: String = element.text().collect();
+                
+                // Clean the skin name - remove UI elements like "+ Wishlist + Locker"
+                // Handle both with and without spaces
+                let skin_name = skin_name_raw
+                    .replace(" + Wishlist", "")
+                    .replace("+Wishlist", "")
+                    .replace(" + Locker", "")
+                    .replace("+Locker", "")
+                    .trim()
+                    .to_string();
                 
                 if !char_name.is_empty() && !skin_name.is_empty() {
                     let full_url = if href.starts_with("http") {
@@ -315,12 +412,17 @@ fn parse_costume_links(html: &str) -> Vec<(String, String, String)> {
                         format!("https://rivalskins.com{}", href)
                     };
                     
-                    links.push((full_url, char_name, skin_name));
+                    // Avoid duplicates (same URL can appear multiple times)
+                    if !seen_urls.contains(&full_url) {
+                        seen_urls.insert(full_url.clone());
+                        links.push((full_url, char_name, skin_name));
+                    }
                 }
             }
         }
     }
     
+    info!("Parsed {} unique costume links from page", links.len());
     links
 }
 
@@ -346,14 +448,21 @@ fn parse_skin_id_from_html(html: &str) -> Option<String> {
     None
 }
 
-/// Fetch skin data from rivalskins.com
-pub async fn fetch_rivalskins_data() -> Result<Vec<CharacterSkin>, String> {
+/// Fetch skin data from rivalskins.com with progress callback and cancellation support
+pub async fn fetch_rivalskins_data_with_progress<F>(on_progress: &mut F) -> Result<Vec<CharacterSkin>, String>
+where
+    F: FnMut(&str) + Send,
+{
+    // Reset cancellation flag at start
+    reset_cancel_flag();
+    
     let client = reqwest::Client::builder()
         .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
         .timeout(std::time::Duration::from_secs(30))
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
     
+    on_progress("Connecting to rivalskins.com...");
     info!("Fetching skin data from rivalskins.com...");
     
     // Fetch the costumes page
@@ -372,16 +481,33 @@ pub async fn fetch_rivalskins_data() -> Result<Vec<CharacterSkin>, String> {
     
     // Parse links synchronously to avoid Send issues with scraper
     let links_to_fetch = parse_costume_links(&html);
+    let total = links_to_fetch.len();
     
-    info!("Found {} costume links to process", links_to_fetch.len());
+    on_progress(&format!("Found {} skins to process...", total));
+    info!("Found {} costume links to process", total);
     
     let mut skins: Vec<CharacterSkin> = Vec::new();
     let known_ids = get_known_character_ids();
     
+    let mut added_count = 0;
+    let mut skipped_count = 0;
+    
     // Fetch each item page to get skin ID
-    for (url, char_name, skin_name) in links_to_fetch {
+    for (i, (url, char_name, skin_name)) in links_to_fetch.into_iter().enumerate() {
+        // Check for cancellation
+        if is_update_cancelled() {
+            on_progress("Update cancelled by user");
+            return Err("Cancelled".to_string());
+        }
+        
+        // Progress update every 10 items
+        if i % 10 == 0 || i < 5 {
+            on_progress(&format!("Processing {}/{}: {} - {} (added: {}, skipped: {})", 
+                i + 1, total, char_name, skin_name, added_count, skipped_count));
+        }
+        
         // Add delay to be respectful
-        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
         
         match client.get(&url).send().await {
             Ok(resp) if resp.status().is_success() => {
@@ -391,6 +517,7 @@ pub async fn fetch_rivalskins_data() -> Result<Vec<CharacterSkin>, String> {
                     
                     // If no skin ID found, check if it's a default skin
                     let skin_id = if let Some(id) = found_skin_id {
+                        info!("Found skin ID {} for {} - {}", id, char_name, skin_name);
                         id
                     } else {
                         let skin_lower = skin_name.to_lowercase();
@@ -399,13 +526,17 @@ pub async fn fetch_rivalskins_data() -> Result<Vec<CharacterSkin>, String> {
                         if is_default {
                             // Default skins use pattern: character_id + "001"
                             if let Some(char_id) = known_ids.get(&char_name) {
-                                format!("{}001", char_id)
+                                let default_id = format!("{}001", char_id);
+                                info!("Generated default skin ID {} for {} - {}", default_id, char_name, skin_name);
+                                default_id
                             } else {
-                                warn!("No character ID for default skin: {} - {}", char_name, skin_name);
+                                warn!("No character ID mapping for: '{}' - cannot generate default skin ID", char_name);
+                                skipped_count += 1;
                                 continue;
                             }
                         } else {
-                            warn!("Could not find skin ID for: {} - {}", char_name, skin_name);
+                            warn!("No skin ID found in HTML for: {} - {} (URL: {})", char_name, skin_name, url);
+                            skipped_count += 1;
                             continue;
                         }
                     };
@@ -416,27 +547,33 @@ pub async fn fetch_rivalskins_data() -> Result<Vec<CharacterSkin>, String> {
                     } else if let Some(id) = known_ids.get(&char_name) {
                         id.clone()
                     } else {
+                        warn!("Could not determine character ID for skin: {}", skin_id);
+                        skipped_count += 1;
                         continue;
                     };
                     
                     skins.push(CharacterSkin {
-                        name: char_name,
-                        id: char_id,
-                        skinid: skin_id,
-                        skin_name,
+                        name: char_name.clone(),
+                        id: char_id.clone(),
+                        skinid: skin_id.clone(),
+                        skin_name: skin_name.clone(),
                     });
+                    added_count += 1;
                 }
             }
             Ok(resp) => {
-                warn!("Failed to fetch {}: {}", url, resp.status());
+                warn!("Failed to fetch {}: status {}", url, resp.status());
+                skipped_count += 1;
             }
             Err(e) => {
                 warn!("Error fetching {}: {}", url, e);
+                skipped_count += 1;
             }
         }
     }
     
-    info!("Fetched {} skins from rivalskins.com", skins.len());
+    on_progress(&format!("Fetch complete: {} skins found, {} skipped", added_count, skipped_count));
+    info!("Fetched {} skins from rivalskins.com ({} skipped)", skins.len(), skipped_count);
     Ok(skins)
 }
 
@@ -472,18 +609,31 @@ pub fn merge_character_data(existing: &[CharacterSkin], new_skins: &[CharacterSk
     result
 }
 
-/// Update character data from rivalskins.com (fetches, merges, saves, refreshes cache)
-pub async fn update_from_rivalskins() -> Result<usize, String> {
+/// Update character data from rivalskins.com with progress callback
+/// (fetches, merges, saves, refreshes cache)
+pub async fn update_from_rivalskins_with_progress<F>(mut on_progress: F) -> Result<usize, String>
+where
+    F: FnMut(&str) + Send,
+{
     let existing = load_character_data();
-    let new_skins = fetch_rivalskins_data().await?;
+    info!("Loaded {} existing skins from cache", existing.len());
+    
+    let new_skins = fetch_rivalskins_data_with_progress(&mut on_progress).await?;
+    info!("Fetched {} skins from rivalskins.com", new_skins.len());
+    
+    on_progress(&format!("Merging {} fetched skins with {} existing...", new_skins.len(), existing.len()));
     
     let merged = merge_character_data(&existing, &new_skins);
-    let new_count = merged.len() - existing.len();
+    let new_count = if merged.len() > existing.len() { merged.len() - existing.len() } else { 0 };
     
+    on_progress(&format!("Saving {} total skins to disk...", merged.len()));
     save_character_data(&merged)?;
+    
+    on_progress("Refreshing cache...");
     refresh_cache();
     
-    Ok(new_count.max(0) as usize)
+    info!("Update complete: {} total skins, {} new", merged.len(), new_count);
+    Ok(new_count)
 }
 
 // ============================================================================
