@@ -4,8 +4,8 @@
   "version": "2.6.4",
   "identifier": "com.xzantgaming.repak-gui-revamped",
   "build": {
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build",
+    "beforeDevCommand": "npm-dev.bat",
+    "beforeBuildCommand": "npm-build.bat",
     "devUrl": "http://localhost:5173",
     "frontendDist": "dist"
   },

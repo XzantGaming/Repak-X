@@ -456,13 +456,23 @@ public class Program
         if (filePaths == null || filePaths.Count == 0)
             return new UAssetResponse { Success = false, Message = "file_paths required" };
 
+        // Get usmap path from environment
+        string? usmapPath = Environment.GetEnvironmentVariable("USMAP_PATH");
+
         // Process files in parallel for maximum speed
+        // Only return true if texture needs MipGen fixing (not already NoMipmaps)
         bool foundMatch = filePaths.AsParallel().Any(filePath =>
         {
             if (!File.Exists(filePath)) return false;
             try
             {
-                return IsTexture2DAsset(filePath, null) || IsLikelyTextureUAsset(filePath);
+                // First check if it needs fixing using accurate detection
+                bool needsFix = IsTextureNeedingMipGenFix(filePath, usmapPath);
+                if (needsFix) return true;
+                
+                // Fallback to heuristic for files that can't be loaded
+                // But heuristic can't check MipGenSettings, so be conservative
+                return false;
             }
             catch
             {
@@ -473,7 +483,7 @@ public class Program
         return new UAssetResponse
         {
             Success = true,
-            Message = foundMatch ? "Found Texture in batch" : "No Texture found in batch",
+            Message = foundMatch ? "Found Texture needing MipGen fix in batch" : "No Texture needing fix found in batch",
             Data = foundMatch
         };
     }
@@ -500,20 +510,17 @@ public class Program
 
         try
         {
-            // Try UAssetAPI detection first (requires usmap for unversioned assets)
-            var isTexture = IsTexture2DAsset(filePath, null);
+            // Get usmap path from environment
+            string? usmapPath = Environment.GetEnvironmentVariable("USMAP_PATH");
             
-            if (!isTexture)
-            {
-                // Fallback to heuristic detection
-                isTexture = IsLikelyTextureUAsset(filePath);
-            }
+            // Check if texture needs MipGen fixing (not already NoMipmaps)
+            var needsFix = IsTextureNeedingMipGenFix(filePath, usmapPath);
 
             return new UAssetResponse 
             { 
                 Success = true, 
-                Message = isTexture ? "File is a Texture2D asset" : "File is not a texture",
-                Data = isTexture
+                Message = needsFix ? "File is a Texture2D asset needing MipGen fix" : "File is not a texture or already has NoMipmaps",
+                Data = needsFix
             };
         }
         catch (Exception ex)
@@ -965,6 +972,90 @@ public class Program
                     string className = import.ObjectName?.Value?.Value ?? "";
                     if (className.Equals("Texture2D", StringComparison.OrdinalIgnoreCase))
                     {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+    
+    /// <summary>
+    /// Checks if a texture asset needs MipGen fixing.
+    /// Returns true only if:
+    /// 1. The asset is a Texture2D
+    /// 2. Its MipGenSettings is NOT already set to NoMipmaps (13)
+    /// </summary>
+    private static bool IsTextureNeedingMipGenFix(string filePath, string? usmapPath)
+    {
+        try
+        {
+            Usmap? mappings = null;
+            if (!string.IsNullOrEmpty(usmapPath) && File.Exists(usmapPath))
+            {
+                mappings = new Usmap(usmapPath);
+            }
+            
+            var asset = new UAsset(filePath, EngineVersion.VER_UE5_3);
+            asset.UseSeparateBulkDataFiles = true;
+            if (mappings != null)
+            {
+                asset.Mappings = mappings;
+            }
+            
+            return IsTextureNeedingMipGenFix(asset);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+    
+    /// <summary>
+    /// Checks if a loaded asset needs MipGen fixing.
+    /// Returns true only if it's a Texture2D with MipGenSettings != NoMipmaps.
+    /// </summary>
+    private static bool IsTextureNeedingMipGenFix(UAsset asset)
+    {
+        foreach (var export in asset.Exports)
+        {
+            if (export.ClassIndex.IsImport())
+            {
+                var import = export.ClassIndex.ToImport(asset);
+                if (import != null && import.ObjectName?.Value?.Value == "Texture2D")
+                {
+                    // Found a Texture2D, now check its MipGenSettings
+                    if (export is NormalExport normalExport)
+                    {
+                        foreach (var property in normalExport.Data)
+                        {
+                            if (property.Name?.Value?.Value == "MipGenSettings")
+                            {
+                                // Property exists, check if it's already NoMipmaps
+                                if (property is EnumPropertyData enumProp)
+                                {
+                                    string mipGenValue = enumProp.Value?.Value?.Value ?? "";
+                                    // If already NoMipmaps, no fix needed
+                                    if (mipGenValue.Equals("TMGS_NoMipmaps", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        return false;
+                                    }
+                                    // Otherwise, needs fixing
+                                    return true;
+                                }
+                                else if (property is BytePropertyData byteProp)
+                                {
+                                    // 13 = TMGS_NoMipmaps
+                                    if (byteProp.Value == 13)
+                                    {
+                                        return false;
+                                    }
+                                    return true;
+                                }
+                            }
+                        }
+                        // MipGenSettings property not found - using default (FromTextureGroup)
+                        // This needs fixing
                         return true;
                     }
                 }

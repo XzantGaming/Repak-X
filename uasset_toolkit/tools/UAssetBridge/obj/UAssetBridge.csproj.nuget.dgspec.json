@@ -1,25 +1,20 @@
 {
   "format": 1,
   "restore": {
-    "E:\\WindsurfCoding\\repak_rivals-remastered\\Repak_Gui-Revamped-TauriUpdate\\uasset_toolkit\\tools\\UAssetBridge\\UAssetBridge.csproj": {}
+    "C:\\WindsurfCoding\\Repak-Gui-Revamped\\Repak-Gui-Revamped\\uasset_toolkit\\tools\\UAssetBridge\\UAssetBridge.csproj": {}
   },
   "projects": {
-    "E:\\WindsurfCoding\\repak_rivals-remastered\\Repak_Gui-Revamped-TauriUpdate\\UAssetAPI\\UAssetAPI\\UAssetAPI.csproj": {
+    "C:\\WindsurfCoding\\Repak-Gui-Revamped\\Repak-Gui-Revamped\\UAssetAPI\\UAssetAPI\\UAssetAPI.csproj": {
       "version": "1.0.2",
       "restore": {
-        "projectUniqueName": "E:\\WindsurfCoding\\repak_rivals-remastered\\Repak_Gui-Revamped-TauriUpdate\\UAssetAPI\\UAssetAPI\\UAssetAPI.csproj",
+        "projectUniqueName": "C:\\WindsurfCoding\\Repak-Gui-Revamped\\Repak-Gui-Revamped\\UAssetAPI\\UAssetAPI\\UAssetAPI.csproj",
         "projectName": "UAssetAPI",
-        "projectPath": "E:\\WindsurfCoding\\repak_rivals-remastered\\Repak_Gui-Revamped-TauriUpdate\\UAssetAPI\\UAssetAPI\\UAssetAPI.csproj",
-        "packagesPath": "C:\\Users\\NIkolas\\.nuget\\packages\\",
-        "outputPath": "E:\\WindsurfCoding\\repak_rivals-remastered\\Repak_Gui-Revamped-TauriUpdate\\UAssetAPI\\UAssetAPI\\obj\\",
+        "projectPath": "C:\\WindsurfCoding\\Repak-Gui-Revamped\\Repak-Gui-Revamped\\UAssetAPI\\UAssetAPI\\UAssetAPI.csproj",
+        "packagesPath": "C:\\Users\\BNnik\\.nuget\\packages\\",
+        "outputPath": "C:\\WindsurfCoding\\Repak-Gui-Revamped\\Repak-Gui-Revamped\\UAssetAPI\\UAssetAPI\\obj\\",
         "projectStyle": "PackageReference",
-        "fallbackFolders": [
-          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
-        ],
         "configFilePaths": [
-          "C:\\Users\\NIkolas\\AppData\\Roaming\\NuGet\\NuGet.Config",
-          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
-          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+          "C:\\Users\\BNnik\\AppData\\Roaming\\NuGet\\NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net8.0"
@@ -42,8 +37,7 @@
           "enableAudit": "true",
           "auditLevel": "low",
           "auditMode": "direct"
-        },
-        "SdkAnalysisLevel": "9.0.200"
+        }
       },
       "frameworks": {
         "net8.0": {
@@ -74,7 +68,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.203/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.414/PortableRuntimeIdentifierGraph.json"
         }
       },
       "runtimes": {
@@ -83,22 +77,17 @@
         }
       }
     },
-    "E:\\WindsurfCoding\\repak_rivals-remastered\\Repak_Gui-Revamped-TauriUpdate\\uasset_toolkit\\tools\\UAssetBridge\\UAssetBridge.csproj": {
+    "C:\\WindsurfCoding\\Repak-Gui-Revamped\\Repak-Gui-Revamped\\uasset_toolkit\\tools\\UAssetBridge\\UAssetBridge.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "E:\\WindsurfCoding\\repak_rivals-remastered\\Repak_Gui-Revamped-TauriUpdate\\uasset_toolkit\\tools\\UAssetBridge\\UAssetBridge.csproj",
+        "projectUniqueName": "C:\\WindsurfCoding\\Repak-Gui-Revamped\\Repak-Gui-Revamped\\uasset_toolkit\\tools\\UAssetBridge\\UAssetBridge.csproj",
         "projectName": "UAssetBridge",
-        "projectPath": "E:\\WindsurfCoding\\repak_rivals-remastered\\Repak_Gui-Revamped-TauriUpdate\\uasset_toolkit\\tools\\UAssetBridge\\UAssetBridge.csproj",
-        "packagesPath": "C:\\Users\\NIkolas\\.nuget\\packages\\",
-        "outputPath": "E:\\WindsurfCoding\\repak_rivals-remastered\\Repak_Gui-Revamped-TauriUpdate\\uasset_toolkit\\tools\\UAssetBridge\\obj\\",
+        "projectPath": "C:\\WindsurfCoding\\Repak-Gui-Revamped\\Repak-Gui-Revamped\\uasset_toolkit\\tools\\UAssetBridge\\UAssetBridge.csproj",
+        "packagesPath": "C:\\Users\\BNnik\\.nuget\\packages\\",
+        "outputPath": "C:\\WindsurfCoding\\Repak-Gui-Revamped\\Repak-Gui-Revamped\\uasset_toolkit\\tools\\UAssetBridge\\obj\\",
         "projectStyle": "PackageReference",
-        "fallbackFolders": [
-          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
-        ],
         "configFilePaths": [
-          "C:\\Users\\NIkolas\\AppData\\Roaming\\NuGet\\NuGet.Config",
-          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
-          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+          "C:\\Users\\BNnik\\AppData\\Roaming\\NuGet\\NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net8.0"
@@ -110,8 +99,8 @@
           "net8.0": {
             "targetAlias": "net8.0",
             "projectReferences": {
-              "E:\\WindsurfCoding\\repak_rivals-remastered\\Repak_Gui-Revamped-TauriUpdate\\UAssetAPI\\UAssetAPI\\UAssetAPI.csproj": {
-                "projectPath": "E:\\WindsurfCoding\\repak_rivals-remastered\\Repak_Gui-Revamped-TauriUpdate\\UAssetAPI\\UAssetAPI\\UAssetAPI.csproj"
+              "C:\\WindsurfCoding\\Repak-Gui-Revamped\\Repak-Gui-Revamped\\UAssetAPI\\UAssetAPI\\UAssetAPI.csproj": {
+                "projectPath": "C:\\WindsurfCoding\\Repak-Gui-Revamped\\Repak-Gui-Revamped\\UAssetAPI\\UAssetAPI\\UAssetAPI.csproj"
               }
             }
           }
@@ -125,8 +114,7 @@
           "enableAudit": "true",
           "auditLevel": "low",
           "auditMode": "direct"
-        },
-        "SdkAnalysisLevel": "9.0.200"
+        }
       },
       "frameworks": {
         "net8.0": {
@@ -135,7 +123,7 @@
             "Microsoft.NET.ILLink.Tasks": {
               "suppressParent": "All",
               "target": "Package",
-              "version": "[8.0.15, )",
+              "version": "[8.0.20, )",
               "autoReferenced": true
             },
             "Newtonsoft.Json": {
@@ -159,7 +147,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.203/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.414/PortableRuntimeIdentifierGraph.json"
         }
       },
       "runtimes": {

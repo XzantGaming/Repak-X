@@ -1,0 +1,3 @@
+C:\WindsurfCoding\Repak-Gui-Revamped\Repak-Gui-Revamped\UAssetAPI\StaticMeshSerializeSizeFixer\bin\Release\net8.0\win-x64\publish\StaticMeshSerializeSizeFixer.pdb
+C:\WindsurfCoding\Repak-Gui-Revamped\Repak-Gui-Revamped\UAssetAPI\StaticMeshSerializeSizeFixer\bin\Release\net8.0\win-x64\publish\UAssetAPI.pdb
+C:\WindsurfCoding\Repak-Gui-Revamped\Repak-Gui-Revamped\UAssetAPI\StaticMeshSerializeSizeFixer\bin\Release\net8.0\win-x64\publish\StaticMeshSerializeSizeFixer.exe

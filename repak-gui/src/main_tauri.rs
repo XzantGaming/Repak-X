@@ -1451,6 +1451,8 @@ fn setup_logging() {
 struct ModDetails {
     mod_name: String,
     mod_type: String,
+    character_name: String,
+    category: String,
     file_count: usize,
     total_size: u64,
     files: Vec<String>,
@@ -1514,10 +1516,12 @@ async fn get_mod_details(mod_path: String) -> Result<ModDetails, String> {
         info!("First 10 files: {:?}", &files[..10]);
     }
     
-    // Determine mod type using the same function as egui
-    use crate::utils::get_current_pak_characteristics;
-    let mod_type = get_current_pak_characteristics(files.clone());
-    info!("Detected mod type: {}", mod_type);
+    // Determine mod type using the detailed function
+    use crate::utils::get_pak_characteristics_detailed;
+    let characteristics = get_pak_characteristics_detailed(files.clone());
+    info!("Detected mod type: {}", characteristics.mod_type);
+    info!("Character name: {}", characteristics.character_name);
+    info!("Category: {}", characteristics.category);
     
     // Get total size
     let ucas_path_for_size = path.with_extension("ucas");
@@ -1538,7 +1542,9 @@ async fn get_mod_details(mod_path: String) -> Result<ModDetails, String> {
     
     Ok(ModDetails {
         mod_name,
-        mod_type,
+        mod_type: characteristics.mod_type,
+        character_name: characteristics.character_name,
+        category: characteristics.category,
         file_count,
         total_size,
         files,

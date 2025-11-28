@@ -4,6 +4,9 @@ use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 use std::{fs, io};
 
+use log::info;
+use regex_lite::Regex;
+
 // Use the runtime character_data module instead of compile-time embedded data
 use crate::character_data;
 
@@ -16,11 +19,23 @@ static CHAR_ID_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"Characters/(\d{4})").unwrap()
 });
 
+// Regex to extract character ID from filenames (e.g., bnk_vo_1044001.bnk -> 1044)
+// Matches 7-digit patterns and extracts first 4 digits as character ID
+static FILENAME_CHAR_ID_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"_(\d{4})\d{3}").unwrap()
+});
+
 /// Result of mod characteristics detection, includes mod type and detected heroes
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ModCharacteristics {
     pub mod_type: String,
     pub heroes: Vec<String>,
+    /// Character name for display (e.g., "Blade" or "Hawkeye - Default")
+    /// Empty if no specific character or multiple characters
+    pub character_name: String,
+    /// Pure mod category (e.g., "Audio", "Mesh", "VFX")
+    /// Without character name prefix
+    pub category: String,
 }
 
 impl ModCharacteristics {
@@ -161,72 +176,80 @@ pub fn get_pak_characteristics_detailed(mod_contents: Vec<String>) -> ModCharact
                 }
             }
         }
+        
+        // Also try to extract character ID from filenames (for audio/UI mods)
+        // Handles patterns like bnk_vo_1044001.bnk or UI_1048_icon.uasset
+        if let Some(caps) = FILENAME_CHAR_ID_REGEX.captures(filename) {
+            if let Some(char_id) = caps.get(1) {
+                if let Some(name) = character_data::get_character_name_from_id(char_id.as_str()) {
+                    hero_names.insert(name);
+                }
+            }
+        }
     }
     
     // Convert to sorted Vec for consistent ordering
     let mut heroes: Vec<String> = hero_names.into_iter().collect();
     heroes.sort();
 
-    // Priority order for mod type determination
-    // Audio and Movies are special standalone types
-    let mod_type = if has_audio && !has_skeletal_mesh && !has_static_mesh && !has_texture && !has_material {
-        "Audio".to_string()
+    // Determine the pure category (without character name)
+    let category = if has_audio && !has_skeletal_mesh && !has_static_mesh && !has_texture && !has_material {
+        "Audio"
     } else if has_movies && !has_skeletal_mesh && !has_static_mesh && !has_texture && !has_material {
-        "Movies".to_string()
+        "Movies"
     } else if has_ui && !has_skeletal_mesh && !has_static_mesh && !has_texture && !has_material {
-        "UI".to_string()
-    } else if let Some(char_name) = character_name {
-        // For character mods with skin-specific name
-        if has_skeletal_mesh {
-            format!("{} (Mesh)", char_name)
-        } else if has_static_mesh {
-            format!("{} (Static Mesh)", char_name)
-        } else if has_material {
-            format!("{} (VFX)", char_name)
-        } else if has_texture {
-            format!("{} (Retexture)", char_name)
-        } else {
-            char_name
-        }
+        "UI"
     } else if has_skeletal_mesh {
-        "Mesh".to_string()
+        "Mesh"
     } else if has_static_mesh {
-        "Static Mesh".to_string()
+        "Static Mesh"
     } else if has_material {
-        "VFX".to_string()
+        "VFX"
     } else if has_audio {
-        "Audio".to_string()
+        "Audio"
     } else if has_texture {
-        "Retexture".to_string()
+        "Retexture"
     } else {
-        fallback.unwrap_or_else(|| "Unknown".to_string())
+        "Unknown"
+    };
+    
+    // Determine character_name for display
+    // Priority: skin-specific name > single hero > empty
+    let display_character_name = if let Some(ref char_name) = character_name {
+        char_name.clone()
+    } else if heroes.len() == 1 {
+        heroes[0].clone()
+    } else {
+        String::new()
+    };
+    
+    // Build the combined mod_type string with " - " separator for easy splitting
+    let mod_type = if !display_character_name.is_empty() {
+        // Character detected - combine with " - " separator
+        format!("{} - {}", display_character_name, category)
+    } else if heroes.len() > 1 {
+        // Multiple heroes
+        format!("Multiple Heroes ({}) - {}", heroes.len(), category)
+    } else {
+        // No heroes detected - just category
+        category.to_string()
     };
     
     ModCharacteristics {
         mod_type,
         heroes,
+        character_name: display_character_name,
+        category: category.to_string(),
     }
 }
 
 /// Get mod characteristics as a display string (backward compatible)
-/// For mods with heroes detected, formats as "Hero (Type)" or "Multiple Heroes (N) (Type)"
+/// Returns the mod_type string which uses " - " separator between character and category
+/// Format: "Character - Category" or just "Category" if no character
 pub fn get_current_pak_characteristics(mod_contents: Vec<String>) -> String {
     let chars = get_pak_characteristics_detailed(mod_contents);
-    
-    // If we have a skin-specific character name (like "Hawkeye - Default"), use mod_type as-is
-    // Otherwise, format with hero info
-    if chars.mod_type.contains(" - ") || chars.heroes.is_empty() {
-        chars.mod_type
-    } else if chars.heroes.len() == 1 {
-        format!("{} ({})", chars.heroes[0], chars.mod_type)
-    } else {
-        format!("Multiple Heroes ({}) ({})", chars.heroes.len(), chars.mod_type)
-    }
+    chars.mod_type
 }
-
-
-use log::info;
-use regex_lite::Regex;
 
 pub fn find_marvel_rivals() -> Option<PathBuf> {
     let shit = get_steam_library_paths();
