@@ -20,9 +20,16 @@ static CHAR_ID_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 // Regex to extract character ID from filenames (e.g., bnk_vo_1044001.bnk -> 1044)
-// Matches 7-digit patterns and extracts first 4 digits as character ID
+// More strict pattern: requires the 7-digit skin ID to start with valid character ID range (10xx)
+// This avoids false positives from random 7-digit numbers in filenames
 static FILENAME_CHAR_ID_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"_(\d{4})\d{3}").unwrap()
+    // Matches patterns like _1044001, vo_1044001, where 1044 is a character ID in 10xx range
+    Regex::new(r"[_/](10[1-6]\d)(\d{3})").unwrap()
+});
+
+// Alternative strict pattern for skin IDs in paths (7 consecutive digits starting with 10xx)
+static SKIN_ID_STRICT_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(10[1-6]\d\d{3})").unwrap()
 });
 
 /// Result of mod characteristics detection, includes mod type and detected heroes
@@ -179,10 +186,27 @@ pub fn get_pak_characteristics_detailed(mod_contents: Vec<String>) -> ModCharact
         
         // Also try to extract character ID from filenames (for audio/UI mods)
         // Handles patterns like bnk_vo_1044001.bnk or UI_1048_icon.uasset
+        // Using stricter regex that requires valid character ID range (10xx)
         if let Some(caps) = FILENAME_CHAR_ID_REGEX.captures(filename) {
             if let Some(char_id) = caps.get(1) {
-                if let Some(name) = character_data::get_character_name_from_id(char_id.as_str()) {
+                let id = char_id.as_str();
+                // Double-check it's a valid character ID before adding
+                if let Some(name) = character_data::get_character_name_from_id(id) {
                     hero_names.insert(name);
+                }
+            }
+        }
+        
+        // Also check for 7-digit skin IDs anywhere in the path (handles paths like /1044001/)
+        if let Some(caps) = SKIN_ID_STRICT_REGEX.captures(file) {
+            if let Some(skin_id_match) = caps.get(1) {
+                let skin_id = skin_id_match.as_str();
+                // Extract first 4 digits as character ID
+                if skin_id.len() >= 4 {
+                    let char_id = &skin_id[..4];
+                    if let Some(name) = character_data::get_character_name_from_id(char_id) {
+                        hero_names.insert(name);
+                    }
                 }
             }
         }
@@ -268,37 +292,114 @@ pub fn find_marvel_rivals() -> Option<PathBuf> {
 }
 
 /// Reads `libraryfolders.vdf` to find additional Steam libraries.
+/// Enhanced to check registry and multiple common locations.
 fn get_steam_library_paths() -> Vec<PathBuf> {
+    let mut vdf_paths_to_check: Vec<PathBuf> = Vec::new();
+    
     #[cfg(target_os = "windows")]
-    let vdf_path = PathBuf::from("C:/Program Files (x86)/Steam/steamapps/libraryfolders.vdf");
-
-    #[cfg(target_os = "linux")]
-    let vdf_path = PathBuf::from("~/.steam/steam/steamapps/libraryfolders.vdf");
-
-    if !vdf_path.exists() {
-        return vec![];
+    {
+        // Try to get Steam path from Windows registry first
+        if let Some(steam_path) = get_steam_path_from_registry() {
+            let vdf = steam_path.join("steamapps/libraryfolders.vdf");
+            info!("Found Steam path from registry: {:?}", vdf);
+            vdf_paths_to_check.push(vdf);
+        }
+        
+        // Common Steam installation paths to check as fallbacks
+        let common_paths = [
+            "C:/Program Files (x86)/Steam",
+            "C:/Program Files/Steam",
+            "D:/Steam",
+            "D:/Program Files (x86)/Steam",
+            "D:/Program Files/Steam",
+            "E:/Steam",
+            "E:/SteamLibrary",
+            "F:/Steam",
+            "F:/SteamLibrary",
+        ];
+        
+        for path in common_paths {
+            let vdf = PathBuf::from(path).join("steamapps/libraryfolders.vdf");
+            if !vdf_paths_to_check.contains(&vdf) {
+                vdf_paths_to_check.push(vdf);
+            }
+        }
     }
-
-    let content = fs::read_to_string(vdf_path).ok().unwrap_or_default();
+    
+    #[cfg(target_os = "linux")]
+    {
+        // Expand home directory properly
+        if let Some(home) = dirs::home_dir() {
+            vdf_paths_to_check.push(home.join(".steam/steam/steamapps/libraryfolders.vdf"));
+            vdf_paths_to_check.push(home.join(".local/share/Steam/steamapps/libraryfolders.vdf"));
+        }
+    }
+    
+    // Find first existing VDF file
+    let vdf_path = vdf_paths_to_check.into_iter().find(|p| p.exists());
+    
+    let Some(vdf_path) = vdf_path else {
+        info!("No Steam libraryfolders.vdf found");
+        return vec![];
+    };
+    
+    info!("Using Steam library config: {:?}", vdf_path);
+    
+    let content = fs::read_to_string(&vdf_path).ok().unwrap_or_default();
     let mut paths = Vec::new();
 
     for line in content.lines() {
-        // if line.contains('"') {
-        //     let path: String = line
-        //         .split('"')
-        //         .nth(3)  // Extracts the path
-        //         .map(|s| s.replace("\\\\", "/"))?; // Fix Windows paths
-        //     paths.push(PathBuf::from(path).join("steamapps/common"));
-        // }
         if line.trim().starts_with("\"path\"") {
             let path = line
                 .split("\"")
                 .nth(3)
                 .map(|s| PathBuf::from(s.replace("\\\\", "\\")));
             info!("Found steam library path: {:?}", path);
-            paths.push(path.unwrap());
+            if let Some(p) = path {
+                paths.push(p);
+            }
         }
     }
 
     paths
+}
+
+/// Get Steam installation path from Windows registry
+#[cfg(target_os = "windows")]
+fn get_steam_path_from_registry() -> Option<PathBuf> {
+    use std::process::Command;
+    
+    // Query registry for Steam install path
+    // reg query "HKCU\Software\Valve\Steam" /v SteamPath
+    let output = Command::new("reg")
+        .args(["query", r"HKCU\Software\Valve\Steam", "/v", "SteamPath"])
+        .output()
+        .ok()?;
+    
+    if !output.status.success() {
+        return None;
+    }
+    
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    
+    // Parse output: "    SteamPath    REG_SZ    C:\Program Files (x86)\Steam"
+    for line in stdout.lines() {
+        if line.contains("SteamPath") && line.contains("REG_SZ") {
+            // Split by REG_SZ and take the path part
+            if let Some(path_part) = line.split("REG_SZ").nth(1) {
+                let path = path_part.trim();
+                if !path.is_empty() {
+                    info!("Found Steam path in registry: {}", path);
+                    return Some(PathBuf::from(path));
+                }
+            }
+        }
+    }
+    
+    None
+}
+
+#[cfg(not(target_os = "windows"))]
+fn get_steam_path_from_registry() -> Option<PathBuf> {
+    None
 }
