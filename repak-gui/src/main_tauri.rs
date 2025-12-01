@@ -9,6 +9,7 @@ mod uasset_api_integration;
 mod utils;
 mod utoc_utils;
 mod character_data;
+mod p2p_sharing;
 
 use uasset_detection::{detect_mesh_files_async, detect_texture_files_async, detect_static_mesh_files_async};
 use log::{info, warn, error};
@@ -31,6 +32,11 @@ struct WatcherState {
     watcher: Mutex<Option<RecommendedWatcher>>,
 }
 
+/// P2P Sharing state management
+struct P2PState {
+    manager: Mutex<p2p_sharing::P2PManager>,
+}
+
 #[derive(Default, Serialize, Deserialize)]
 struct AppState {
     game_path: PathBuf,
@@ -49,6 +55,31 @@ struct ModFolder {
     enabled: bool,
     expanded: bool,
     color: Option<[u8; 3]>,
+    /// Depth in folder hierarchy (0 = root, 1 = direct child, etc.)
+    #[serde(default)]
+    depth: usize,
+    /// Parent folder ID (None = root folder, "_root" for root's direct children)
+    #[serde(default)]
+    parent_id: Option<String>,
+    /// Is this the root folder (the ~mods directory itself)
+    #[serde(default)]
+    is_root: bool,
+    /// Number of mods directly in this folder
+    #[serde(default)]
+    mod_count: usize,
+}
+
+/// Root folder info for hierarchy display
+#[derive(Clone, Serialize, Deserialize)]
+struct RootFolderInfo {
+    /// The actual folder name (e.g., "~mods")
+    name: String,
+    /// Full path to the root folder
+    path: String,
+    /// Total number of mods in root (not in subfolders)
+    direct_mod_count: usize,
+    /// Total number of subfolders
+    subfolder_count: usize,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -202,17 +233,28 @@ async fn get_pak_files(state: State<'_, Arc<Mutex<AppState>>>) -> Result<Vec<Mod
         if ext == Some("pak") || ext == Some("bak_repak") || ext == Some("pak_disabled") {
             let is_enabled = ext == Some("pak");
             
-            // Determine which folder this mod is in (if any)
+            // Determine which folder this mod is in
+            // Use actual folder name for all mods (root folder name for mods in ~mods)
+            let root_folder_name = game_path.file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("~mods")
+                .to_string();
+            
             let folder_id = if let Some(parent) = path.parent() {
                 if parent != game_path {
+                    // Mod is in a subfolder - use subfolder name
                     parent.file_name()
                         .and_then(|n| n.to_str())
                         .map(|s| s.to_string())
                 } else {
-                    None
+                    // Mod is directly in root - use root folder name (e.g., "~mods")
+                    Some(root_folder_name)
                 }
             } else {
-                None
+                Some(game_path.file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("~mods")
+                    .to_string())
             };
             
             info!("Found PAK file: {} (enabled: {}, folder: {:?})", path.display(), is_enabled, folder_id);
@@ -802,7 +844,43 @@ async fn get_folders(state: State<'_, Arc<Mutex<AppState>>>) -> Result<Vec<ModFo
     
     let mut folders = Vec::new();
     
-    // Scan for subdirectories in ~mods
+    // Get root folder name (e.g., "~mods")
+    let root_name = game_path.file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("Mods")
+        .to_string();
+    
+    // Count mods directly in root (not in subfolders)
+    let root_mod_count = std::fs::read_dir(game_path)
+        .map(|entries| {
+            entries.filter_map(|e| e.ok())
+                .filter(|e| {
+                    let path = e.path();
+                    if path.is_file() {
+                        let ext = path.extension().and_then(|s| s.to_str());
+                        ext == Some("pak") || ext == Some("bak_repak") || ext == Some("pak_disabled")
+                    } else {
+                        false
+                    }
+                })
+                .count()
+        })
+        .unwrap_or(0);
+    
+    // Add root folder first (depth 0) - use actual folder name as ID
+    folders.push(ModFolder {
+        id: root_name.clone(),  // Use actual name like "~mods" as ID
+        name: root_name.clone(),
+        enabled: true,
+        expanded: true,
+        color: None,
+        depth: 0,
+        parent_id: None,
+        is_root: true,
+        mod_count: root_mod_count,
+    });
+    
+    // Scan for subdirectories in ~mods (depth 1)
     for entry in std::fs::read_dir(game_path).map_err(|e| e.to_string())? {
         let entry = entry.map_err(|e| e.to_string())?;
         let path = entry.path();
@@ -813,16 +891,22 @@ async fn get_folders(state: State<'_, Arc<Mutex<AppState>>>) -> Result<Vec<ModFo
                 .unwrap_or("Unknown")
                 .to_string();
             
-            // Count mods in this folder
-            let _mod_count = WalkDir::new(&path)
-                .max_depth(1)
-                .into_iter()
-                .filter_map(|e| e.ok())
-                .filter(|e| {
-                    let ext = e.path().extension().and_then(|s| s.to_str());
-                    ext == Some("pak") || ext == Some("bak_repak") || ext == Some("pak_disabled")
+            // Count mods in this folder (only direct children)
+            let mod_count = std::fs::read_dir(&path)
+                .map(|entries| {
+                    entries.filter_map(|e| e.ok())
+                        .filter(|e| {
+                            let p = e.path();
+                            if p.is_file() {
+                                let ext = p.extension().and_then(|s| s.to_str());
+                                ext == Some("pak") || ext == Some("bak_repak") || ext == Some("pak_disabled")
+                            } else {
+                                false
+                            }
+                        })
+                        .count()
                 })
-                .count();
+                .unwrap_or(0);
             
             folders.push(ModFolder {
                 id: name.clone(),
@@ -830,11 +914,55 @@ async fn get_folders(state: State<'_, Arc<Mutex<AppState>>>) -> Result<Vec<ModFo
                 enabled: true,
                 expanded: true,
                 color: None,
+                depth: 1,
+                parent_id: Some(root_name.clone()),  // Use actual root name as parent
+                is_root: false,
+                mod_count,
             });
         }
     }
     
     Ok(folders)
+}
+
+/// Get detailed info about the root mods folder
+#[tauri::command]
+async fn get_root_folder_info(state: State<'_, Arc<Mutex<AppState>>>) -> Result<RootFolderInfo, String> {
+    let state = state.lock().unwrap();
+    let game_path = &state.game_path;
+    
+    if !game_path.exists() {
+        return Err("Game path does not exist".to_string());
+    }
+    
+    let root_name = game_path.file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("Mods")
+        .to_string();
+    
+    let mut direct_mod_count = 0;
+    let mut subfolder_count = 0;
+    
+    for entry in std::fs::read_dir(game_path).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+        
+        if path.is_dir() {
+            subfolder_count += 1;
+        } else if path.is_file() {
+            let ext = path.extension().and_then(|s| s.to_str());
+            if ext == Some("pak") || ext == Some("bak_repak") || ext == Some("pak_disabled") {
+                direct_mod_count += 1;
+            }
+        }
+    }
+    
+    Ok(RootFolderInfo {
+        name: root_name,
+        path: game_path.to_string_lossy().to_string(),
+        direct_mod_count,
+        subfolder_count,
+    })
 }
 
 #[tauri::command]
@@ -1575,6 +1703,116 @@ async fn get_mod_details(mod_path: String) -> Result<ModDetails, String> {
 }
 
 // ============================================================================
+// P2P SHARING COMMANDS
+// ============================================================================
+
+/// Start sharing a mod pack
+#[tauri::command]
+async fn p2p_start_sharing(
+    name: String,
+    description: String,
+    mod_paths: Vec<String>,
+    creator: Option<String>,
+    p2p_state: State<'_, P2PState>,
+) -> Result<p2p_sharing::ShareSession, String> {
+    let paths: Vec<PathBuf> = mod_paths.iter().map(PathBuf::from).collect();
+    
+    let mut manager = p2p_state.manager.lock().unwrap();
+    manager.start_sharing(name, description, paths, creator)
+        .map_err(|e| e.to_string())
+}
+
+/// Stop sharing
+#[tauri::command]
+async fn p2p_stop_sharing(p2p_state: State<'_, P2PState>) -> Result<(), String> {
+    let mut manager = p2p_state.manager.lock().unwrap();
+    manager.stop_sharing();
+    Ok(())
+}
+
+/// Get current share session info
+#[tauri::command]
+async fn p2p_get_share_session(p2p_state: State<'_, P2PState>) -> Result<Option<p2p_sharing::ShareSession>, String> {
+    let manager = p2p_state.manager.lock().unwrap();
+    Ok(manager.get_share_session())
+}
+
+/// Check if currently sharing
+#[tauri::command]
+async fn p2p_is_sharing(p2p_state: State<'_, P2PState>) -> Result<bool, String> {
+    let manager = p2p_state.manager.lock().unwrap();
+    Ok(manager.is_sharing())
+}
+
+/// Start receiving mods from a connection string
+#[tauri::command]
+async fn p2p_start_receiving(
+    connection_string: String,
+    client_name: Option<String>,
+    state: State<'_, Arc<Mutex<AppState>>>,
+    p2p_state: State<'_, P2PState>,
+) -> Result<(), String> {
+    let state_guard = state.lock().unwrap();
+    let output_dir = state_guard.game_path.clone();
+    drop(state_guard);
+    
+    let mut manager = p2p_state.manager.lock().unwrap();
+    manager.start_receiving(&connection_string, output_dir, client_name)
+        .map_err(|e| e.to_string())
+}
+
+/// Stop receiving
+#[tauri::command]
+async fn p2p_stop_receiving(p2p_state: State<'_, P2PState>) -> Result<(), String> {
+    let mut manager = p2p_state.manager.lock().unwrap();
+    manager.stop_receiving();
+    Ok(())
+}
+
+/// Get current transfer progress
+#[tauri::command]
+async fn p2p_get_receive_progress(p2p_state: State<'_, P2PState>) -> Result<Option<p2p_sharing::TransferProgress>, String> {
+    let manager = p2p_state.manager.lock().unwrap();
+    Ok(manager.get_receive_progress())
+}
+
+/// Check if currently receiving
+#[tauri::command]
+async fn p2p_is_receiving(p2p_state: State<'_, P2PState>) -> Result<bool, String> {
+    let manager = p2p_state.manager.lock().unwrap();
+    Ok(manager.is_receiving())
+}
+
+/// Create a shareable mod pack info (for preview before sharing)
+#[tauri::command]
+async fn p2p_create_mod_pack_preview(
+    name: String,
+    description: String,
+    mod_paths: Vec<String>,
+    creator: Option<String>,
+) -> Result<p2p_sharing::ShareableModPack, String> {
+    let paths: Vec<PathBuf> = mod_paths.iter().map(PathBuf::from).collect();
+    p2p_sharing::create_mod_pack(name, description, &paths, creator)
+        .map_err(|e| e.to_string())
+}
+
+/// Validate a connection string without connecting
+#[tauri::command]
+async fn p2p_validate_connection_string(connection_string: String) -> Result<bool, String> {
+    match p2p_sharing::parse_connection_string(&connection_string) {
+        Ok(_) => Ok(true),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+/// Calculate hash for a file (useful for verification)
+#[tauri::command]
+async fn p2p_hash_file(file_path: String) -> Result<String, String> {
+    let path = PathBuf::from(file_path);
+    p2p_sharing::hash_file(&path).map_err(|e| e.to_string())
+}
+
+// ============================================================================
 // MAIN
 // ============================================================================
 
@@ -1599,10 +1837,12 @@ fn main() {
     
     let state = Arc::new(Mutex::new(load_state()));
     let watcher_state = WatcherState { watcher: Mutex::new(None) };
+    let p2p_state = P2PState { manager: Mutex::new(p2p_sharing::P2PManager::new()) };
 
     tauri::Builder::default()
         .manage(state)
         .manage(watcher_state)
+        .manage(p2p_state)
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
@@ -1617,6 +1857,7 @@ fn main() {
             delete_mod,
             create_folder,
             get_folders,
+            get_root_folder_info,
             update_folder,
             delete_folder,
             assign_mod_to_folder,
@@ -1645,7 +1886,19 @@ fn main() {
             cancel_character_update,
             identify_mod_character,
             get_character_data_path,
-            refresh_character_cache
+            refresh_character_cache,
+            // P2P sharing commands
+            p2p_start_sharing,
+            p2p_stop_sharing,
+            p2p_get_share_session,
+            p2p_is_sharing,
+            p2p_start_receiving,
+            p2p_stop_receiving,
+            p2p_get_receive_progress,
+            p2p_is_receiving,
+            p2p_create_mod_pack_preview,
+            p2p_validate_connection_string,
+            p2p_hash_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
