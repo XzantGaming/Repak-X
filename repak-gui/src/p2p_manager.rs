@@ -120,6 +120,13 @@ impl UnifiedP2PManager {
             let mut network = self.network.lock();
             network.bootstrap()
                 .map_err(|e| P2PError::NetworkError(format!("Failed to bootstrap: {}", e)))?;
+            
+            // Connect to default relays
+            let relays = network.relay_addresses();
+            for relay in relays {
+                info!("Connecting to default relay: {}", relay);
+                let _ = network.connect_to_relay(relay);
+            }
         }
 
         info!("P2P network started");

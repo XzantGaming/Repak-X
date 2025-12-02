@@ -147,9 +147,11 @@ impl P2PNetwork {
     /// These are public relays that can be used for NAT traversal
     fn default_relay_addresses() -> Vec<Multiaddr> {
         vec![
-            // Add public relay addresses here
-            // For now, we'll bootstrap with known peers
-            // In production, you'd want to maintain a list of reliable relays
+            // Standard libp2p public relays (use with caution in production)
+            "/dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN".parse().unwrap(),
+            "/dnsaddr/bootstrap.libp2p.io/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa".parse().unwrap(),
+            "/dnsaddr/bootstrap.libp2p.io/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9CkDHEjzdU93P85Q92qxH".parse().unwrap(),
+            "/dnsaddr/bootstrap.libp2p.io/p2p/QmcZf59bWwK5XFi76CZX8cbJ4BhTzzA3gU1ZjdEP8kQ2LP".parse().unwrap(),
         ]
     }
 
