@@ -1,12 +1,105 @@
 # UX Designer Integration Guide - Internet-Wide P2P Sharing
 
+## 🚨 CRITICAL: IP PRIVACY ISSUE & SOLUTION
+
+### Current Status (NOT PRODUCTION READY)
+
+**⚠️ PROBLEM:** The current P2P system (`p2p_sharing.rs`) exposes users' IP addresses in the connection string. This is a **privacy and security risk**.
+
+**Example of current (BAD) connection string:**
+```
+GAZ3-VTDS-YQP7:hRoIT3iKEZr54nKXa-4iSiltaK8PI24nd-ZHbzsfGBU:10.148.96.12:47820
+                                                              ^^^^^^^^^^^^^ EXPOSED IP!
+```
+
+### ✅ SOLUTION: Switch to libp2p System
+
+We have **TWO P2P implementations**:
+
+1. **`p2p_sharing.rs`** (OLD - Currently Active)
+   - ❌ Requires IP address in connection string
+   - ❌ Direct TCP connections
+   - ❌ No NAT traversal
+   - ❌ Privacy risk
+   - ✅ Currently wired to frontend
+
+2. **`p2p_manager.rs`** (NEW - Ready but Not Connected)
+   - ✅ NO IP addresses needed!
+   - ✅ Uses Kademlia DHT for peer discovery
+   - ✅ Automatic NAT traversal
+   - ✅ Relay servers for connectivity
+   - ✅ Privacy-safe
+   - ❌ Not wired to frontend yet
+
+### How libp2p Works (IP-Less)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  SHARER                                                      │
+├─────────────────────────────────────────────────────────────┤
+│  1. Generate share code: "GAZ3-VTDS-YQP7"                   │
+│  2. Generate encryption key                                  │
+│  3. Publish to DHT: "GAZ3-VTDS-YQP7" → Peer ID              │
+│  4. Share ONLY: "GAZ3-VTDS-YQP7:encryption_key"             │
+│                                                              │
+│  NO IP ADDRESS SHARED! ✅                                    │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│  RECEIVER                                                    │
+├─────────────────────────────────────────────────────────────┤
+│  1. Receives: "GAZ3-VTDS-YQP7:encryption_key"               │
+│  2. Looks up "GAZ3-VTDS-YQP7" in DHT                        │
+│  3. DHT returns Peer ID (not IP!)                           │
+│  4. Connects via relay servers                              │
+│  5. Downloads encrypted files                               │
+│                                                              │
+│  NO IP ADDRESS NEEDED! ✅                                    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### What Needs to Change
+
+**Backend Changes Required:**
+1. Wire `UnifiedP2PManager` to Tauri commands instead of `P2PManager`
+2. Update `P2PState` to use libp2p system
+3. Ensure DHT bootstrap nodes are configured
+4. Test relay server connectivity
+
+**Frontend Changes Required:**
+1. Connection string format changes:
+   - OLD: `share_code:key:IP:port`
+   - NEW: `share_code:key` (base64 encoded ShareInfo)
+2. Update validation logic
+3. Show "Connecting via relay..." status
+4. Handle DHT lookup status
+
+### Privacy-Safe Connection String Format
+
+```typescript
+// NEW FORMAT (libp2p - Privacy Safe)
+interface ShareInfo {
+    peer_id: string;           // Peer ID (NOT an IP address!)
+    addresses: string[];       // Multiaddresses (relay addresses)
+    encryption_key: string;    // AES-256 key
+    share_code: string;        // DHT lookup key
+}
+
+// Encoded as base64:
+"eyJwZWVyX2lkIjoiMTJEM0tvb1dS..." // NO IP VISIBLE!
+
+// Users share ONLY this code - no IP addresses exposed
+```
+
+---
+
 ## 📋 Overview
 
-This guide provides everything your UX designer needs to integrate the **internet-wide P2P file sharing** feature into the frontend. All backend functionality is **100% implemented** and ready to use.
+This guide provides everything your UX designer needs to integrate the **internet-wide P2P file sharing** feature into the frontend.
 
-## 🎯 What's Available
+## 🎯 Current Implementation Status
 
-### ✅ Backend Complete
+### ✅ Backend Complete (libp2p)
 - Internet-wide P2P networking (libp2p)
 - NAT traversal (automatic hole punching)
 - Peer discovery (DHT-based)
@@ -14,12 +107,19 @@ This guide provides everything your UX designer needs to integrate the **interne
 - Multi-layer security (7 layers!)
 - Progress tracking
 - Error handling
+- **IP obfuscation utilities**
+
+### ⚠️ Not Yet Connected
+- libp2p system not wired to Tauri commands
+- Still using old TCP-based system
+- IP addresses currently exposed
 
 ### 🎨 Frontend Needed
 - UI components for sharing/receiving
 - Progress indicators
 - Connection status display
 - Error message display
+- **Switch to libp2p when backend is wired**
 
 ---
 
@@ -837,4 +937,128 @@ If you need clarification on any command or functionality:
 3. Test commands in browser console
 4. Check logs for detailed error messages
 
-**All backend is ready - just wire it up! 🚀**
+---
+
+## 🗺️ IMPLEMENTATION ROADMAP
+
+### Phase 1: Switch to libp2p Backend (CRITICAL)
+
+**Priority: HIGH - Privacy & Security Issue**
+
+1. **Update `main_tauri.rs`:**
+   ```rust
+   // Change from:
+   struct P2PState {
+       manager: Mutex<p2p_sharing::P2PManager>,
+   }
+   
+   // To:
+   struct P2PState {
+       manager: Mutex<p2p_manager::UnifiedP2PManager>,
+   }
+   ```
+
+2. **Update Tauri commands to use libp2p:**
+   - `p2p_start_sharing` → Use `UnifiedP2PManager::start_sharing()`
+   - `p2p_start_receiving` → Use `UnifiedP2PManager::start_receiving()`
+   - Connection string format changes to base64 ShareInfo
+
+3. **Configure DHT Bootstrap Nodes:**
+   - Add public bootstrap nodes in `p2p_libp2p.rs`
+   - Or use default libp2p bootstrap nodes
+
+4. **Test Connectivity:**
+   - Test NAT traversal
+   - Test relay connections
+   - Test DHT peer discovery
+
+### Phase 2: Frontend Updates
+
+1. **Update Connection String Handling:**
+   ```typescript
+   // OLD (exposes IP):
+   const connStr = "GAZ3-VTDS-YQP7:key:10.148.96.12:47820";
+   
+   // NEW (privacy-safe):
+   const connStr = "eyJwZWVyX2lkIjoiMTJEM0tvb1dS..."; // base64 ShareInfo
+   ```
+
+2. **Update Validation:**
+   ```typescript
+   // Validate base64 ShareInfo instead of IP:port format
+   function validateConnectionString(str: string): boolean {
+       try {
+           const decoded = atob(str);
+           const shareInfo = JSON.parse(decoded);
+           return shareInfo.peer_id && shareInfo.share_code;
+       } catch {
+           return false;
+       }
+   }
+   ```
+
+3. **Add Status Messages:**
+   - "Connecting to DHT..."
+   - "Looking up peer..."
+   - "Connecting via relay..."
+   - "Connected!"
+
+### Phase 3: Testing & Polish
+
+1. **Test Scenarios:**
+   - [ ] Share between two users on same network
+   - [ ] Share between users on different networks
+   - [ ] Share with users behind NAT
+   - [ ] Test with large files (>1GB)
+   - [ ] Test connection recovery
+
+2. **Performance Monitoring:**
+   - DHT lookup time
+   - Connection establishment time
+   - Transfer speeds
+   - Relay overhead
+
+3. **Error Handling:**
+   - DHT lookup failures
+   - Relay connection failures
+   - Peer not found
+   - Network timeouts
+
+### Current State Summary
+
+```
+┌────────────────────────────────────────────────────────────┐
+│  CURRENT SYSTEM (p2p_sharing.rs)                           │
+├────────────────────────────────────────────────────────────┤
+│  ✅ Wired to frontend                                       │
+│  ✅ Working file transfers                                  │
+│  ❌ Exposes IP addresses (PRIVACY RISK!)                    │
+│  ❌ No NAT traversal                                        │
+│  ❌ Requires port forwarding                                │
+│  ❌ Not production-ready                                    │
+└────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────┐
+│  NEW SYSTEM (p2p_manager.rs + libp2p)                      │
+├────────────────────────────────────────────────────────────┤
+│  ✅ Complete implementation                                 │
+│  ✅ NO IP addresses exposed                                 │
+│  ✅ Automatic NAT traversal                                 │
+│  ✅ DHT peer discovery                                      │
+│  ✅ Relay servers                                           │
+│  ✅ Production-ready code                                   │
+│  ❌ Not wired to frontend yet                               │
+└────────────────────────────────────────────────────────────┘
+```
+
+### Recommendation
+
+**DO NOT use the current system in production!** The IP exposure is a serious privacy and security issue. Switch to the libp2p system before releasing to users.
+
+**Estimated Time to Switch:**
+- Backend wiring: 2-4 hours
+- Frontend updates: 2-3 hours
+- Testing: 4-6 hours
+- **Total: 1-2 days**
+
+**All backend is ready - just needs to be wired up! 🚀**

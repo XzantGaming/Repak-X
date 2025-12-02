@@ -101,8 +101,11 @@ pub struct ShareSession {
     pub obfuscated_ip: String,
     /// Port listening on
     pub port: u16,
-    /// Full connection string for sharing
+    /// Full connection string for sharing (internal use only - not serialized to frontend)
+    #[serde(skip_serializing)]
     pub connection_string: String,
+    /// Obfuscated connection string for display purposes
+    pub obfuscated_connection_string: String,
     /// Is the session active
     pub active: bool,
 }
@@ -279,6 +282,19 @@ pub fn create_connection_string(
 ) -> String {
     let key_b64 = URL_SAFE_NO_PAD.encode(key);
     format!("{}:{}:{}:{}", share_code, key_b64, ip, port)
+}
+
+/// Creates an obfuscated connection string for display
+/// Format: share_code:key_base64:obfuscated_ip:port
+pub fn create_obfuscated_connection_string(
+    share_code: &str,
+    key: &[u8; 32],
+    ip: &str,
+    port: u16,
+) -> String {
+    let key_b64 = URL_SAFE_NO_PAD.encode(key);
+    let obfuscated_ip = ip_obfuscation::obfuscate_ip(ip);
+    format!("{}:{}:{}:{}", share_code, key_b64, obfuscated_ip, port)
 }
 
 /// Parses a connection string into components
