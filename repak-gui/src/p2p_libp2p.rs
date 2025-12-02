@@ -416,9 +416,19 @@ impl P2PNetwork {
 
     /// Dial a peer directly
     pub fn dial_peer(&mut self, peer_id: PeerId, addr: Multiaddr) -> Result<(), Box<dyn Error>> {
-        let mut addr_with_peer = addr.clone();
-        addr_with_peer.push(Protocol::P2p(peer_id));
-        self.swarm.dial(addr_with_peer)?;
+        // Check if address already ends with the peer ID
+        let has_peer_id = matches!(addr.iter().last(), Some(Protocol::P2p(id)) if id == peer_id);
+        
+        let addr_to_dial = if has_peer_id {
+            addr
+        } else {
+            let mut new_addr = addr.clone();
+            new_addr.push(Protocol::P2p(peer_id));
+            new_addr
+        };
+        
+        info!("Dialing peer {} at address: {}", peer_id, addr_to_dial);
+        self.swarm.dial(addr_to_dial)?;
         Ok(())
     }
 
