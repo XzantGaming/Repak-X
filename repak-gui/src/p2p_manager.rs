@@ -54,9 +54,9 @@ impl UnifiedP2PManager {
         info!("[Share] Creating zip at: {}", zip_path.display());
         create_zip(&paths, &zip_path)?;
         
-        // Upload to gofile.io
-        info!("[Share] Uploading to file host...");
-        let download_url = upload_to_gofile(&zip_path).await?;
+        // Upload to file.io (provides direct download links)
+        info!("[Share] Uploading to file.io...");
+        let download_url = upload_to_fileio(&zip_path).await?;
         info!("[Share] Upload complete: {}", download_url);
         
         // Clean up temp zip
@@ -178,41 +178,38 @@ fn create_zip(paths: &[PathBuf], zip_path: &PathBuf) -> P2PResult<()> {
     Ok(())
 }
 
-async fn upload_to_gofile(path: &PathBuf) -> P2PResult<String> {
-    // Get best server
+async fn upload_to_fileio(path: &PathBuf) -> P2PResult<String> {
+    // file.io provides direct download links without authentication
     let client = reqwest::Client::new();
-    let server_resp: serde_json::Value = client.get("https://api.gofile.io/servers")
-        .send().await.map_err(|e| P2PError::ConnectionError(e.to_string()))?
-        .json().await.map_err(|e| P2PError::ConnectionError(e.to_string()))?;
     
-    let server = server_resp["data"]["servers"][0]["name"].as_str().unwrap_or("store1");
-    info!("[Share] Using server: {}", server);
-
-    // Upload file
     let file_data = std::fs::read(path).map_err(|e| P2PError::FileError(e.to_string()))?;
     let file_name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+    let file_size = file_data.len();
     
-    let part = reqwest::multipart::Part::bytes(file_data).file_name(file_name);
+    info!("[Share] Uploading {} ({} bytes) to file.io...", file_name, file_size);
+    
+    let part = reqwest::multipart::Part::bytes(file_data)
+        .file_name(file_name)
+        .mime_str("application/zip").map_err(|e| P2PError::ConnectionError(e.to_string()))?;
     let form = reqwest::multipart::Form::new().part("file", part);
 
-    let upload_url = format!("https://{}.gofile.io/contents/uploadfile", server);
-    let resp: serde_json::Value = client.post(&upload_url)
+    let resp: serde_json::Value = client.post("https://file.io")
         .multipart(form)
         .send().await.map_err(|e| P2PError::ConnectionError(e.to_string()))?
         .json().await.map_err(|e| P2PError::ConnectionError(e.to_string()))?;
 
-    if resp["status"] != "ok" {
+    info!("[Share] file.io response: {:?}", resp);
+
+    if !resp["success"].as_bool().unwrap_or(false) {
         return Err(P2PError::ConnectionError(format!("Upload failed: {:?}", resp)));
     }
 
-    let download_url = resp["data"]["downloadPage"].as_str()
+    // file.io returns a direct download link
+    let download_url = resp["link"].as_str()
         .ok_or_else(|| P2PError::ConnectionError("No download URL in response".into()))?;
     
-    // Get direct download link
-    let file_id = resp["data"]["fileId"].as_str().unwrap_or("");
-    let direct_url = format!("https://{}.gofile.io/download/direct/{}", server, file_id);
-    
-    Ok(direct_url)
+    info!("[Share] Upload complete! URL: {}", download_url);
+    Ok(download_url.to_string())
 }
 
 async fn download_and_extract(url: &str, out_dir: &PathBuf, dl: Arc<Mutex<HashMap<String, ActiveDownload>>>, code: &str) -> Result<(), String> {
