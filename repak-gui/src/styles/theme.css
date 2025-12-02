@@ -19,6 +19,24 @@
   
   --btn-text: #ffffff;
   --overlay: rgba(0,0,0,0.6);
+
+  /* Added for consistency */
+  --card-surface: rgba(12, 14, 20, 0.9);
+  --card-layer: rgba(18, 20, 28, 0.88);
+  --border-color: rgba(255, 255, 255, 0.08);
+  --header-bg: #1e1e1e;
+  --header-border: #333;
+  --status-bar-bg: #1e1e1e;
+  --status-bar-border: #333;
+  --input-bg: #1a1a1a;
+  --input-border: #3a3a3a;
+  --folder-item-bg: #1a1a1a;
+  --folder-item-hover: #252525;
+  --mod-name-suffix: rgba(255, 255, 255, 0.5);
+  --mod-size-color: #b0b0b0;
+  --mod-switch-track: rgba(255, 255, 255, 0.12);
+  --mod-switch-knob: #fff;
+  --field-bg: rgba(255, 255, 255, 0.04);
 }
 
 [data-theme="light"] {
@@ -41,6 +59,24 @@
   
   --btn-text: #111214;
   --overlay: rgba(0,0,0,0.06);
+
+  /* Added for consistency */
+  --card-surface: #ffffff;
+  --card-layer: #fcfcfc;
+  --border-color: rgba(0, 0, 0, 0.1);
+  --header-bg: #ffffff;
+  --header-border: #e0e0e0;
+  --status-bar-bg: #f0f0f0;
+  --status-bar-border: #e0e0e0;
+  --input-bg: #ffffff;
+  --input-border: #e0e0e0;
+  --folder-item-bg: #f6f6f6;
+  --folder-item-hover: #eeeeee;
+  --mod-name-suffix: rgba(0, 0, 0, 0.5);
+  --mod-size-color: #666666;
+  --mod-switch-track: rgba(0, 0, 0, 0.12);
+  --mod-switch-knob: #fff;
+  --field-bg: rgba(0, 0, 0, 0.05);
 }
 
 /* Generic helpers used across components */

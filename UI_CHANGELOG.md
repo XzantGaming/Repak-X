@@ -1,5 +1,22 @@
 # Changelog - UI & Functionality Overhaul
 
+## Update - Nested Folders & Theming (Dec 2, 2025)
+
+### Nested Folder Support (Proposal)
+- **Status**: Implementation details documented in `SUBFOLDER_SUPPORT_PROPOSAL.md` (Pending Backend Approval).
+- **Proposed Features**: Recursive directory scanning, nested folder creation, and hierarchical UI rendering.
+
+### UI & Theming
+- **Context Menu**: Added scrollbar to "Move to..." menu for better handling of many folders.
+- **White Theme Fixes**: Replaced hardcoded dark colors with CSS variables in `theme.css`, `App.css`, and `InstallModPanel.css`.
+- **Bulk Actions**: Styled the "Move to..." dropdown in the toolbar to match the theme.
+- **Cleanup**: Removed the artificial "Ungrouped" folder; mods in the root are now displayed under "Root".
+
+### Functionality
+- **File Watcher**: Implemented auto-refresh. The app now detects external file changes (add/remove/modify) and updates the mod list automatically.
+- **Multi-Select**: Added `Ctrl + Click` support on mod names to toggle selection for bulk actions.
+
+## (Dec 1, 2025)
 ## Layout & Design
 ### Global Layout Rework
 - **Structure**: Implemented a new 3-pane layout for better usability:

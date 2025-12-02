@@ -12,7 +12,7 @@
 }
 
 .install-mod-panel {
-  background: #1a1a1a;
+  background: var(--panel-bg);
   border-radius: 8px;
   width: 90%;
   max-width: 1200px;
@@ -27,18 +27,18 @@
   justify-content: space-between;
   align-items: center;
   padding: 1rem 1.5rem;
-  border-bottom: 1px solid #3a3a3a;
+  border-bottom: 1px solid var(--panel-border);
 }
 
 .install-header h2 {
   margin: 0;
-  color: #e0e0e0;
+  color: var(--text-primary);
 }
 
 .close-btn {
   background: none;
   border: none;
-  color: #e0e0e0;
+  color: var(--text-primary);
   font-size: 2rem;
   cursor: pointer;
   padding: 0;
@@ -52,12 +52,12 @@
 }
 
 .close-btn:hover {
-  background: #3a3a3a;
+  background: var(--bg-lighter);
 }
 
 .filter-section {
   padding: 1rem 1.5rem;
-  border-bottom: 1px solid #3a3a3a;
+  border-bottom: 1px solid var(--panel-border);
 }
 
 .filter-section label {
@@ -80,7 +80,7 @@
   align-items: center;
   gap: 0.25rem;
   padding: 0.25rem 0.5rem;
-  background: #2a2a2a;
+  background: var(--bg-light);
   border-radius: 4px;
 }
 
@@ -98,7 +98,7 @@
 .mods-table thead {
   position: sticky;
   top: 0;
-  background: #2a2a2a;
+  background: var(--bg-light);
   z-index: 1;
 }
 
@@ -106,25 +106,25 @@
   padding: 0.75rem;
   text-align: left;
   font-weight: bold;
-  color: #e0e0e0;
-  border-bottom: 2px solid #3a3a3a;
+  color: var(--text-primary);
+  border-bottom: 2px solid var(--panel-border);
 }
 
 .mods-table td {
   padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid #2a2a2a;
+  border-bottom: 1px solid var(--panel-border);
 }
 
 .mods-table tbody tr:hover {
-  background: #2a2a2a;
+  background: var(--bg-light);
 }
 
 .mod-name-input {
   width: 100%;
   padding: 0.25rem 0.5rem;
-  background: #1a1a1a;
-  border: 1px solid #3a3a3a;
-  color: #e0e0e0;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  color: var(--text-primary);
   border-radius: 4px;
 }
 

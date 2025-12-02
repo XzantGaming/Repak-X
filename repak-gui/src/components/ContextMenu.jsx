@@ -66,14 +66,16 @@ const ContextMenu = ({ x, y, mod, onClose, onAssignTag, onMoveTo, onCreateFolder
              + New Folder...
            </div>
            <div className="context-menu-separator" />
-           {folders.map(f => (
-             <div key={f.id} className="context-menu-item" onClick={() => { onMoveTo(f.id); onClose(); }}>
-               {f.name}
-             </div>
-           ))}
+           <div className="scrollable-menu-list" style={{ maxHeight: '300px', overflowY: 'auto', paddingRight: '4px' }}>
+             {folders.map(f => (
+               <div key={f.id} className="context-menu-item" onClick={() => { onMoveTo(f.id); onClose(); }}>
+                 {f.name}
+               </div>
+             ))}
+           </div>
            <div className="context-menu-separator" />
            <div className="context-menu-item" onClick={() => { onMoveTo(null); onClose(); }}>
-             Ungrouped
+             Root
            </div>
         </div>
       </div>

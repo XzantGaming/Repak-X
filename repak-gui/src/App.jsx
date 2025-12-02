@@ -81,7 +81,13 @@ function ModItem({ mod, selectedMod, selectedMods, setSelectedMod, handleToggleM
           <motion.button 
             type="button"
             className="mod-name-button"
-            onClick={() => setSelectedMod(mod)}
+            onClick={(e) => {
+              if (e.ctrlKey || e.metaKey) {
+                handleToggleModSelection(mod)
+              } else {
+                setSelectedMod(mod)
+              }
+            }}
             whileHover={{ color: '#4a9eff' }}
             title={rawName}
           >
@@ -658,11 +664,7 @@ function App() {
   const filteredMods = mods.filter(mod => {
     // Folder filter
     if (selectedFolderId !== 'all') {
-      if (selectedFolderId === 'ungrouped') {
-        if (mod.folder_id) return false
-      } else {
-        if (mod.folder_id !== selectedFolderId) return false
-      }
+      if (mod.folder_id !== selectedFolderId) return false
     }
 
     // Search query
@@ -883,14 +885,6 @@ function App() {
                   <span className="folder-name">All Mods</span>
                   <span className="folder-count">{mods.length}</span>
                 </div>
-                <div 
-                  className={`folder-item ${selectedFolderId === 'ungrouped' ? 'active' : ''} ${mods.filter(m => !m.folder_id).length === 0 ? 'empty' : ''}`}
-                  onClick={() => setSelectedFolderId('ungrouped')}
-                >
-                  <FolderIcon fontSize="small" />
-                  <span className="folder-name">Ungrouped</span>
-                  <span className="folder-count">{mods.filter(m => !m.folder_id).length}</span>
-                </div>
                 {folders.map(folder => {
                   const count = mods.filter(m => m.folder_id === folder.id).length;
                   return (
@@ -923,7 +917,6 @@ function App() {
                 <div className="header-title">
                   <h2>
                     {selectedFolderId === 'all' ? 'All Mods' : 
-                     selectedFolderId === 'ungrouped' ? 'Ungrouped Mods' : 
                      folders.find(f => f.id === selectedFolderId)?.name || 'Unknown Folder'}
                   </h2>
                   <span className="mod-count">({filteredMods.length})</span>
@@ -1062,7 +1055,7 @@ function App() {
               className="btn-link"
               onClick={() => setShowInstallLogs(v => !v)}
             >
-              {showInstallLogs ? 'Hide Log ▲' : 'Show Log ▼'}
+              {showInstallLogs ? 'Hide Log ▼' : 'Show Log ▲'}
             </button>
             {installLogs.length > 0 && showInstallLogs && (
               <button
