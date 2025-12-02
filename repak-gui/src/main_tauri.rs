@@ -214,9 +214,8 @@ async fn get_pak_files(state: State<'_, Arc<Mutex<AppState>>>) -> Result<Vec<Mod
     // game_path IS the ~mods directory (matching egui behavior)
     let mut mods = Vec::new();
     
-    // Scan root ~mods directory and all subdirectories (folders)
+    // Scan root ~mods directory and all subdirectories recursively (no depth limit)
     for entry in WalkDir::new(&game_path)
-        .max_depth(2) // Scan root and one level of subdirectories
         .into_iter()
         .filter_map(|e| e.ok())
     {
@@ -234,27 +233,24 @@ async fn get_pak_files(state: State<'_, Arc<Mutex<AppState>>>) -> Result<Vec<Mod
             let is_enabled = ext == Some("pak");
             
             // Determine which folder this mod is in
-            // Use actual folder name for all mods (root folder name for mods in ~mods)
             let root_folder_name = game_path.file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("~mods")
                 .to_string();
             
+            // Determine folder_id based on relative path from game_path
             let folder_id = if let Some(parent) = path.parent() {
-                if parent != game_path {
-                    // Mod is in a subfolder - use subfolder name
-                    parent.file_name()
-                        .and_then(|n| n.to_str())
-                        .map(|s| s.to_string())
-                } else {
+                if parent == game_path {
                     // Mod is directly in root - use root folder name (e.g., "~mods")
                     Some(root_folder_name)
+                } else {
+                    // Mod is in a subfolder - use relative path from game_path as ID
+                    parent.strip_prefix(game_path)
+                        .map(|p| p.to_string_lossy().replace('\\', "/"))
+                        .ok()
                 }
             } else {
-                Some(game_path.file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("~mods")
-                    .to_string())
+                Some(root_folder_name)
             };
             
             info!("Found PAK file: {} (enabled: {}, folder: {:?})", path.display(), is_enabled, folder_id);
@@ -996,7 +992,8 @@ async fn create_folder(name: String, state: State<'_, Arc<Mutex<AppState>>>) -> 
         return Err("Folder already exists".to_string());
     }
     
-    std::fs::create_dir(&folder_path)
+    // Use create_dir_all to support nested paths like "Category/Subcategory"
+    std::fs::create_dir_all(&folder_path)
         .map_err(|e| format!("Failed to create folder: {}", e))?;
     
     Ok(name)
@@ -1049,17 +1046,41 @@ async fn get_folders(state: State<'_, Arc<Mutex<AppState>>>) -> Result<Vec<ModFo
         mod_count: root_mod_count,
     });
     
-    // Scan for subdirectories in ~mods (depth 1)
-    for entry in std::fs::read_dir(game_path).map_err(|e| e.to_string())? {
-        let entry = entry.map_err(|e| e.to_string())?;
+    // Recursively scan for subdirectories using WalkDir
+    for entry in WalkDir::new(game_path)
+        .min_depth(1)
+        .into_iter()
+        .filter_map(|e| e.ok()) 
+    {
         let path = entry.path();
         
         if path.is_dir() {
+            // Calculate relative path from game_path to get ID
+            let relative_path = path.strip_prefix(game_path)
+                .map(|p| p.to_string_lossy().replace('\\', "/"))
+                .unwrap_or_else(|_| "Unknown".to_string());
+                
             let name = path.file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("Unknown")
                 .to_string();
             
+            // Calculate depth (number of path segments)
+            let depth = relative_path.split('/').count();
+            
+            // Calculate parent ID
+            let parent_id = if depth > 1 {
+                // If depth > 1, parent is the directory containing this one
+                // e.g. "A/B" -> parent is "A"
+                let parent_rel = std::path::Path::new(&relative_path)
+                    .parent()
+                    .map(|p| p.to_string_lossy().replace('\\', "/"));
+                parent_rel
+            } else {
+                // If depth is 1, parent is the root folder
+                Some(root_name.clone())
+            };
+
             // Count mods in this folder (only direct children)
             let mod_count = std::fs::read_dir(&path)
                 .map(|entries| {
@@ -1078,13 +1099,13 @@ async fn get_folders(state: State<'_, Arc<Mutex<AppState>>>) -> Result<Vec<ModFo
                 .unwrap_or(0);
             
             folders.push(ModFolder {
-                id: name.clone(),
+                id: relative_path, // ID is the relative path (e.g. "Category/Subcategory")
                 name,
                 enabled: true,
                 expanded: true,
                 color: None,
-                depth: 1,
-                parent_id: Some(root_name.clone()),  // Use actual root name as parent
+                depth,
+                parent_id,
                 is_root: false,
                 mod_count,
             });
