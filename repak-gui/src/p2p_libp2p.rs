@@ -494,12 +494,14 @@ impl ShareInfo {
     /// Encode share info as a base64 string
     pub fn encode(&self) -> Result<String, Box<dyn Error>> {
         let json = serde_json::to_string(self)?;
-        Ok(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(json))
+        // Use standard Base64 with padding so it's compatible with JS btoa/atob
+        Ok(base64::engine::general_purpose::STANDARD.encode(json))
     }
 
     /// Decode share info from a base64 string
     pub fn decode(encoded: &str) -> Result<Self, Box<dyn Error>> {
-        let json = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(encoded)?;
+        // Accept standard Base64 with padding (what JS atob expects)
+        let json = base64::engine::general_purpose::STANDARD.decode(encoded)?;
         let share_info = serde_json::from_slice(&json)?;
         Ok(share_info)
     }
