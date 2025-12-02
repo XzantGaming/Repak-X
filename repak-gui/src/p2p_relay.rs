@@ -26,9 +26,14 @@ use tokio_tungstenite::{connect_async, tungstenite::Message};
 /// Chunk size for file transfers (64KB - small for relay efficiency)
 const CHUNK_SIZE: usize = 64 * 1024;
 
-/// Relay server base URL (room/channel is appended)
-const RELAY_BASE_URL: &str = "wss://free.blr2.piesocket.com/v3";
-const RELAY_API_KEY: &str = "VCXCEuvhGcBDP7XhiJJUDvR1e1D3eiVjgZ9VRiaV";
+/// Relay servers to try (in order)
+/// Using socketsbay.com - free WebSocket echo/broadcast service
+const RELAY_SERVERS: &[(&str, &str)] = &[
+    // SocketsBay - free, no API key needed, room in path
+    ("wss://socketsbay.com/wss/v2/1/demo/", ""),
+    // Backup: PieSocket (may have rate limits)
+    ("wss://free.blr2.piesocket.com/v3/", "?api_key=VCXCEuvhGcBDP7XhiJJUDvR1e1D3eiVjgZ9VRiaV&notify_self=1"),
+];
 
 // ============================================================================
 // RELAY MESSAGE PROTOCOL
@@ -179,19 +184,31 @@ impl RelayClient {
     
     /// Connect to a specific room/channel on the relay
     pub async fn connect_to_room(instance_id: String, room: &str) -> Result<(Self, mpsc::UnboundedReceiver<RelayMessage>), String> {
-        // Each room gets its own WebSocket channel - this ensures messages are only
-        // broadcast to clients in the same room
-        let url = format!("{}{}?api_key={}&notify_self=1", RELAY_BASE_URL, room, RELAY_API_KEY);
-        
         info!("[P2P Relay] Connecting to relay server...");
         info!("[P2P Relay] Room: {}", room);
-        info!("[P2P Relay] URL: {}", url);
-
-        let (ws_stream, response) = connect_async(&url)
-            .await
-            .map_err(|e| format!("WebSocket connection failed: {}", e))?;
-
-        info!("[P2P Relay] Connected! Response status: {}", response.status());
+        
+        // Try each relay server until one works
+        let mut last_error = String::new();
+        let mut ws_stream = None;
+        
+        for (base_url, suffix) in RELAY_SERVERS {
+            let url = format!("{}{}{}", base_url, room, suffix);
+            info!("[P2P Relay] Trying: {}", url);
+            
+            match connect_async(&url).await {
+                Ok((stream, response)) => {
+                    info!("[P2P Relay] Connected! Status: {}", response.status());
+                    ws_stream = Some(stream);
+                    break;
+                }
+                Err(e) => {
+                    warn!("[P2P Relay] Failed to connect to {}: {}", base_url, e);
+                    last_error = format!("{}", e);
+                }
+            }
+        }
+        
+        let ws_stream = ws_stream.ok_or_else(|| format!("All relay servers failed. Last error: {}", last_error))?;
 
         let (mut write, mut read) = ws_stream.split();
         let (tx, mut internal_rx) = mpsc::unbounded_channel::<RelayMessage>();
