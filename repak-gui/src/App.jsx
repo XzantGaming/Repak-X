@@ -185,6 +185,15 @@ function App() {
   const [allTags, setAllTags] = useState([])
   const [filterTag, setFilterTag] = useState('')
   const [filterType, setFilterType] = useState('')
+  // New: Mod Detection API integration
+  const [modDetails, setModDetails] = useState({}) // { [path]: ModDetails }
+  const [detailsLoading, setDetailsLoading] = useState(false)
+  const [selectedCharacters, setSelectedCharacters] = useState(new Set()) // values: character_name, '__generic', '__multi'
+  const [selectedCategories, setSelectedCategories] = useState(new Set()) // category strings
+  const [availableCharacters, setAvailableCharacters] = useState([])
+  const [availableCategories, setAvailableCategories] = useState([])
+  const [showCharacterFilters, setShowCharacterFilters] = useState(true)
+  const [showTypeFilters, setShowTypeFilters] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [expandedFolders, setExpandedFolders] = useState(new Set())
   const [showInstallPanel, setShowInstallPanel] = useState(false)
@@ -346,10 +355,89 @@ function App() {
       console.log('Loaded mods:', modList)
       setMods(modList)
       setStatus(`Loaded ${modList.length} mod(s)`)
+      // After loading mods, refresh details for each
+      preloadModDetails(modList)
     } catch (error) {
       console.error('Error loading mods:', error)
       setStatus('Error loading mods: ' + error)
     }
+  }
+
+  // Preload details for all mods using the new Mod Detection API
+  const preloadModDetails = async (modList) => {
+    if (!Array.isArray(modList) || modList.length === 0) {
+      setAvailableCharacters([])
+      setAvailableCategories([])
+      return
+    }
+
+    try {
+      setDetailsLoading(true)
+      const existing = modDetails
+      const pathsToFetch = modList
+        .map(m => m.path)
+        .filter(p => !existing[p])
+
+      if (pathsToFetch.length === 0) {
+        // Already have details; recompute filters source lists
+        recomputeFilterSources(modList, modDetails)
+        return
+      }
+
+      const results = await Promise.allSettled(
+        pathsToFetch.map(p => invoke('get_mod_details', { modPath: p }))
+      )
+
+      const newMap = { ...existing }
+      results.forEach((res, idx) => {
+        const path = pathsToFetch[idx]
+        if (res.status === 'fulfilled' && res.value) {
+          newMap[path] = res.value
+        }
+      })
+      setModDetails(newMap)
+      recomputeFilterSources(modList, newMap)
+    } catch (e) {
+      console.error('Failed to preload mod details:', e)
+    } finally {
+      setDetailsLoading(false)
+    }
+  }
+
+  const recomputeFilterSources = (modList, detailsMap) => {
+    const charSet = new Set()
+    let hasMulti = false
+    modList.forEach(m => {
+      const d = detailsMap[m.path]
+      if (!d) return
+      if (d.character_name) charSet.add(d.character_name)
+      if (typeof d.mod_type === 'string' && d.mod_type.startsWith('Multiple Heroes')) hasMulti = true
+    })
+    const catSet = new Set()
+    modList.forEach(m => {
+      const d = detailsMap[m.path]
+      if (!d) return
+      if (d.category) catSet.add(d.category)
+    })
+    setAvailableCharacters(Array.from(charSet).sort((a,b)=>a.localeCompare(b)))
+    setAvailableCategories(Array.from(catSet).sort((a,b)=>a.localeCompare(b)))
+    // Keep multi-selections if still valid; otherwise prune invalids
+    const validChars = new Set(charSet)
+    setSelectedCharacters(prev => {
+      const next = new Set()
+      for (const v of prev) {
+        if (v === '__generic' || v === '__multi' || validChars.has(v)) next.add(v)
+      }
+      return next
+    })
+    const validCats = new Set(catSet)
+    setSelectedCategories(prev => {
+      const next = new Set()
+      for (const v of prev) {
+        if (validCats.has(v)) next.add(v)
+      }
+      return next
+    })
   }
 
   const loadTags = async () => {
@@ -694,6 +782,26 @@ function App() {
       return false
     }
 
+    // New: Multi-select Character/Hero and Category filters using Mod Detection API
+    const hasCharFilter = selectedCharacters.size > 0
+    const hasCatFilter = selectedCategories.size > 0
+    if (hasCharFilter || hasCatFilter) {
+      const d = modDetails[mod.path]
+      if (!d) return false // wait for details when filters active
+      if (hasCatFilter && !selectedCategories.has(d.category)) return false
+
+      if (hasCharFilter) {
+        const isMulti = typeof d.mod_type === 'string' && d.mod_type.startsWith('Multiple Heroes')
+        const isGeneric = !d.character_name && !isMulti
+        const match = (
+          (d.character_name && selectedCharacters.has(d.character_name)) ||
+          (isMulti && selectedCharacters.has('__multi')) ||
+          (isGeneric && selectedCharacters.has('__generic'))
+        )
+        if (!match) return false
+      }
+    }
+
     return true
   })
 
@@ -899,6 +1007,92 @@ function App() {
           <div className="content-wrapper" style={{ width: `${leftPanelWidth}%`, display: 'flex', height: '100%' }}>
             {/* Left Sidebar - Folders */}
             <div className="left-sidebar">
+              {/* Filters Section */}
+              <div className="sidebar-filters" style={{ padding: '0.5rem 0.6rem', borderBottom: '1px solid var(--panel-border)' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                    <div style={{ fontSize: '0.75rem', opacity: 0.7, fontWeight: 600 }}>FILTERS</div>
+                    {(selectedCharacters.size > 0 || selectedCategories.size > 0) && (
+                      <button
+                        className="btn-ghost-mini"
+                        onClick={() => { setSelectedCharacters(new Set()); setSelectedCategories(new Set()) }}
+                        title="Clear all filters"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Character/Hero Chips */}
+                  <div 
+                    className="filter-section-header"
+                    onClick={() => setShowCharacterFilters(v => !v)}
+                    style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                  >
+                    <div style={{ fontSize: '0.75rem', opacity: 0.6 }}>Characters {selectedCharacters.size > 0 && `(${selectedCharacters.size})`}</div>
+                    <span style={{ fontSize: '0.7rem', opacity: 0.5 }}>{showCharacterFilters ? '\u25bc' : '\u25b6'}</span>
+                  </div>
+                  {showCharacterFilters && (
+                    <div className="filter-chips-scroll">
+                      {availableCharacters.map(c => {
+                        const active = selectedCharacters.has(c)
+                        return (
+                          <button
+                            key={c}
+                            className={`filter-chip-compact ${active ? 'active' : ''}`}
+                            onClick={() => setSelectedCharacters(prev => { const next = new Set(prev); active ? next.delete(c) : next.add(c); return next; })}
+                            title={c}
+                          >
+                            {c}
+                          </button>
+                        )
+                      })}
+                      {/* Special chips */}
+                      <button
+                        className={`filter-chip-compact ${selectedCharacters.has('__multi') ? 'active' : ''}`}
+                        onClick={() => setSelectedCharacters(prev => { const next = new Set(prev); next.has('__multi') ? next.delete('__multi') : next.add('__multi'); return next; })}
+                        title="Multiple Heroes"
+                      >
+                        Multi
+                      </button>
+                      <button
+                        className={`filter-chip-compact ${selectedCharacters.has('__generic') ? 'active' : ''}`}
+                        onClick={() => setSelectedCharacters(prev => { const next = new Set(prev); next.has('__generic') ? next.delete('__generic') : next.add('__generic'); return next; })}
+                        title="Generic/Global"
+                      >
+                        Generic
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Category Chips */}
+                  <div 
+                    className="filter-section-header"
+                    onClick={() => setShowTypeFilters(v => !v)}
+                    style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.25rem' }}
+                  >
+                    <div style={{ fontSize: '0.75rem', opacity: 0.6 }}>Types {selectedCategories.size > 0 && `(${selectedCategories.size})`}</div>
+                    <span style={{ fontSize: '0.7rem', opacity: 0.5 }}>{showTypeFilters ? '\u25bc' : '\u25b6'}</span>
+                  </div>
+                  {showTypeFilters && (
+                    <div className="filter-chips-scroll">
+                      {availableCategories.map(cat => {
+                        const active = selectedCategories.has(cat)
+                        return (
+                          <button
+                            key={cat}
+                            className={`filter-chip-compact ${active ? 'active' : ''}`}
+                            onClick={() => setSelectedCategories(prev => { const next = new Set(prev); active ? next.delete(cat) : next.add(cat); return next; })}
+                            title={cat}
+                          >
+                            {cat}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
               <div className="sidebar-header">
                 <h3>Folders</h3>
                 <div style={{ display: 'flex', gap: '4px' }}>
@@ -920,15 +1114,19 @@ function App() {
               </div>
               <div className="folder-list">
                 <div 
-                  className={`folder-item ${selectedFolderId === 'all' ? 'active' : ''} ${mods.length === 0 ? 'empty' : ''}`}
+                  className={`folder-item ${selectedFolderId === 'all' ? 'active' : ''} ${filteredMods.length === 0 ? 'empty' : ''}`}
                   onClick={() => setSelectedFolderId('all')}
                 >
                   <FolderIcon fontSize="small" />
                   <span className="folder-name">All Mods</span>
-                  <span className="folder-count">{mods.length}</span>
+                  <span className="folder-count">{filteredMods.length}</span>
                 </div>
                 {folders.map(folder => {
-                  const count = mods.filter(m => m.folder_id === folder.id).length;
+                  const count = filteredMods.filter(m => m.folder_id === folder.id).length;
+                  const hasFilters = selectedCharacters.size > 0 || selectedCategories.size > 0;
+                  // Hide empty folders when filters are active
+                  if (hasFilters && count === 0) return null;
+                  
                   return (
                     <div 
                       key={folder.id} 
@@ -1141,10 +1339,6 @@ function App() {
           )}
         </AnimatePresence>
       </motion.div>
-
-      <footer className="footer">
-        <p>Drag & drop PAK files anywhere to install mods</p>
-      </footer>
 
       {contextMenu && (
         <ContextMenu

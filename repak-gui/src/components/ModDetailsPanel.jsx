@@ -48,11 +48,23 @@ export default function ModDetailsPanel({ mod, onClose }) {
         ) : details ? (
           <>
             <div className="detail-section">
-              <h3>Mod Type</h3>
-              <div className="mod-type-badge-large">{details.mod_type}</div>
-              {details.is_iostore && (
-                <div className="iostore-badge">IoStore Package</div>
-              )}
+              <h3>Type & Character</h3>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                {details.character_name && (
+                  <div className="character-badge" title="Character">
+                    {details.character_name}
+                  </div>
+                )}
+                <div className="category-badge" title="Mod Type">
+                  {details.category || 'Unknown'}
+                </div>
+                {details.is_iostore && (
+                  <div className="iostore-badge">IoStore Package</div>
+                )}
+              </div>
+              <div style={{ marginTop: '0.5rem', opacity: 0.7, fontSize: '0.9em' }}>
+                Full: {details.mod_type}
+              </div>
             </div>
 
             <div className="detail-section">
