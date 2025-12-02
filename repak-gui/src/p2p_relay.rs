@@ -26,8 +26,9 @@ use tokio_tungstenite::{connect_async, tungstenite::Message};
 /// Chunk size for file transfers (64KB - small for relay efficiency)
 const CHUNK_SIZE: usize = 64 * 1024;
 
-/// Relay server URL
-const RELAY_URL: &str = "wss://free.blr2.piesocket.com/v3/repak-p2p-v2?api_key=VCXCEuvhGcBDP7XhiJJUDvR1e1D3eiVjgZ9VRiaV&notify_self=1";
+/// Relay server base URL (room/channel is appended)
+const RELAY_BASE_URL: &str = "wss://free.blr2.piesocket.com/v3";
+const RELAY_API_KEY: &str = "VCXCEuvhGcBDP7XhiJJUDvR1e1D3eiVjgZ9VRiaV";
 
 // ============================================================================
 // RELAY MESSAGE PROTOCOL
@@ -170,12 +171,23 @@ pub struct RelayClient {
 }
 
 impl RelayClient {
-    /// Connect to the relay server
+    /// Connect to the relay server for a specific room
     pub async fn connect(instance_id: String) -> Result<(Self, mpsc::UnboundedReceiver<RelayMessage>), String> {
+        // Use a default channel - will be overridden by connect_to_room
+        Self::connect_to_room(instance_id, "lobby").await
+    }
+    
+    /// Connect to a specific room/channel on the relay
+    pub async fn connect_to_room(instance_id: String, room: &str) -> Result<(Self, mpsc::UnboundedReceiver<RelayMessage>), String> {
+        // Each room gets its own WebSocket channel - this ensures messages are only
+        // broadcast to clients in the same room
+        let url = format!("{}{}?api_key={}&notify_self=1", RELAY_BASE_URL, room, RELAY_API_KEY);
+        
         info!("[P2P Relay] Connecting to relay server...");
-        info!("[P2P Relay] URL: {}", RELAY_URL);
+        info!("[P2P Relay] Room: {}", room);
+        info!("[P2P Relay] URL: {}", url);
 
-        let (ws_stream, response) = connect_async(RELAY_URL)
+        let (ws_stream, response) = connect_async(&url)
             .await
             .map_err(|e| format!("WebSocket connection failed: {}", e))?;
 
@@ -199,8 +211,8 @@ impl RelayClient {
                         continue;
                     }
                 };
-                debug!("[P2P Relay] Sending: {}", &json[..json.len().min(200)]);
-                if let Err(e) = write.send(Message::Text(json)).await {
+                info!("[P2P Relay] >>> SENDING: {}", &json[..json.len().min(500)]);
+                if let Err(e) = write.send(Message::Text(json.clone())).await {
                     error!("[P2P Relay] Send error: {}", e);
                     break;
                 }
@@ -213,9 +225,10 @@ impl RelayClient {
             while let Some(msg_result) = read.next().await {
                 match msg_result {
                     Ok(Message::Text(text)) => {
-                        debug!("[P2P Relay] Received: {}", &text[..text.len().min(200)]);
+                        info!("[P2P Relay] <<< RECEIVED: {}", &text[..text.len().min(500)]);
                         match serde_json::from_str::<RelayMessage>(&text) {
                             Ok(relay_msg) => {
+                                info!("[P2P Relay] Parsed as: {:?}", std::mem::discriminant(&relay_msg));
                                 if let Err(e) = event_tx.send(relay_msg) {
                                     error!("[P2P Relay] Failed to forward message: {}", e);
                                     break;
@@ -223,7 +236,7 @@ impl RelayClient {
                             }
                             Err(e) => {
                                 // Might be a system message from the relay
-                                debug!("[P2P Relay] Non-protocol message: {} ({})", text, e);
+                                warn!("[P2P Relay] Non-protocol message (parse error: {}): {}", e, text);
                             }
                         }
                     }
@@ -266,9 +279,10 @@ impl RelayClient {
             .map_err(|e| format!("Failed to send: {}", e))
     }
 
-    /// Join a share room
+    /// Announce presence in the room
     pub fn join_room(&self, room: &str, role: &str) -> Result<(), String> {
-        info!("[P2P Relay] Joining room '{}' as {}", room, role);
+        info!("[P2P Relay] Announcing presence in room '{}' as {}", room, role);
+        // Send a join message so other clients know we're here
         self.send(RelayMessage::Join {
             room: room.to_string(),
             instance_id: self.instance_id.clone(),

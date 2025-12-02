@@ -289,10 +289,11 @@ async fn run_sharer_task(
 ) -> Result<(), String> {
     info!("[P2P Sharer] Starting sharer task for {}", share_code);
     
-    // Connect to relay
-    let (client, mut rx) = RelayClient::connect(instance_id.clone()).await?;
+    // Connect to relay room (each share code gets its own channel)
+    let room_name = format!("/repak-{}", share_code.replace("-", "").to_lowercase());
+    let (client, mut rx) = RelayClient::connect_to_room(instance_id.clone(), &room_name).await?;
     
-    // Join the room as sharer
+    // Announce presence as sharer
     client.join_room(&share_code, "sharer")?;
     info!("[P2P Sharer] Joined room: {}", share_code);
     
@@ -439,10 +440,11 @@ async fn run_receiver_task(
     info!("[P2P Receiver] Starting receiver task for {}", share_code);
     info!("[P2P Receiver] Looking for sharer: {}", sharer_id);
     
-    // Connect to relay
-    let (client, mut rx) = RelayClient::connect(instance_id.clone()).await?;
+    // Connect to relay room (must match sharer's room)
+    let room_name = format!("/repak-{}", share_code.replace("-", "").to_lowercase());
+    let (client, mut rx) = RelayClient::connect_to_room(instance_id.clone(), &room_name).await?;
     
-    // Join the room as receiver
+    // Announce presence as receiver
     client.join_room(&share_code, "receiver")?;
     info!("[P2P Receiver] Joined room: {}", share_code);
     
