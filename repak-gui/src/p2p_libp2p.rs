@@ -11,10 +11,11 @@
 //! - Encrypted connections via Noise protocol
 
 use crate::ip_obfuscation;
+use crate::p2p_protocol::{self, FileTransferCodec, FileTransferRequest, FileTransferResponse};
 use libp2p::{
     autonat, dcutr, gossipsub, identify, kad,
     multiaddr::Protocol,
-    noise, relay, swarm::{NetworkBehaviour, SwarmEvent},
+    noise, relay, request_response as req_resp, swarm::{NetworkBehaviour, SwarmEvent},
     tcp, yamux, Multiaddr, PeerId, Swarm, SwarmBuilder,
 };
 use log::{debug, info, warn};
@@ -42,6 +43,8 @@ pub struct P2PBehaviour {
     pub autonat: autonat::Behaviour,
     /// Gossipsub for broadcasting availability (optional)
     pub gossipsub: gossipsub::Behaviour,
+    /// File transfer request/response protocol
+    pub file_transfer: req_resp::Behaviour<FileTransferCodec>,
 }
 
 // ============================================================================
@@ -106,6 +109,9 @@ impl P2PNetwork {
             gossipsub_config,
         )?;
 
+        // Create file transfer protocol
+        let file_transfer = p2p_protocol::create_file_transfer_protocol();
+
         // Combine all behaviours
         let behaviour = P2PBehaviour {
             kad,
@@ -114,6 +120,7 @@ impl P2PNetwork {
             dcutr,
             autonat,
             gossipsub,
+            file_transfer,
         };
 
         // Build the swarm
@@ -208,6 +215,34 @@ impl P2PNetwork {
     /// Get external addresses (as detected by AutoNAT)
     pub fn external_addresses(&self) -> Vec<Multiaddr> {
         self.swarm.external_addresses().cloned().collect()
+    }
+
+    /// Request mod pack info from a peer
+    pub fn request_pack_info(&mut self, peer: PeerId) -> req_resp::OutboundRequestId {
+        self.swarm.behaviour_mut().file_transfer.send_request(&peer, FileTransferRequest::GetPackInfo)
+    }
+
+    /// Request a file chunk from a peer
+    pub fn request_file_chunk(
+        &mut self,
+        peer: PeerId,
+        filename: String,
+        offset: u64,
+        size: usize,
+    ) -> req_resp::OutboundRequestId {
+        self.swarm.behaviour_mut().file_transfer.send_request(
+            &peer,
+            FileTransferRequest::GetChunk { filename, offset, size },
+        )
+    }
+
+    /// Send a response to a file transfer request
+    pub fn send_response(
+        &mut self,
+        channel: req_resp::ResponseChannel<FileTransferResponse>,
+        response: FileTransferResponse,
+    ) -> Result<(), FileTransferResponse> {
+        self.swarm.behaviour_mut().file_transfer.send_response(channel, response)
     }
 
     /// Process network events
@@ -306,6 +341,30 @@ impl P2PNetwork {
                     _ => {}
                 }
             }
+            P2PBehaviourEvent::FileTransfer(ft_event) => {
+                use req_resp::{Event, Message};
+                match ft_event {
+                    Event::Message { peer, message } => {
+                        match message {
+                            Message::Request { request, channel, .. } => {
+                                info!("Received file transfer request from {}: {:?}", peer, request);
+                                return Some(P2PNetworkEvent::FileTransferRequest { peer, request, channel });
+                            }
+                            Message::Response { response, .. } => {
+                                info!("Received file transfer response from {}: {:?}", peer, response);
+                                return Some(P2PNetworkEvent::FileTransferResponse { peer, response });
+                            }
+                        }
+                    }
+                    Event::OutboundFailure { peer, error, .. } => {
+                        warn!("File transfer outbound failure to {}: {:?}", peer, error);
+                    }
+                    Event::InboundFailure { peer, error, .. } => {
+                        warn!("File transfer inbound failure from {}: {:?}", peer, error);
+                    }
+                    _ => {}
+                }
+            }
             _ => {}
         }
         None
@@ -325,7 +384,7 @@ impl P2PNetwork {
 // ============================================================================
 
 /// Events emitted by the P2P network
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum P2PNetworkEvent {
     /// Started listening on an address
     ListeningOn(Multiaddr),
@@ -341,6 +400,17 @@ pub enum P2PNetworkEvent {
     NatStatusChanged(autonat::NatStatus),
     /// Relay reservation successful
     RelayReservationSuccess(PeerId),
+    /// Received a file transfer request
+    FileTransferRequest {
+        peer: PeerId,
+        request: FileTransferRequest,
+        channel: req_resp::ResponseChannel<FileTransferResponse>,
+    },
+    /// Received a file transfer response
+    FileTransferResponse {
+        peer: PeerId,
+        response: FileTransferResponse,
+    },
 }
 
 // ============================================================================
