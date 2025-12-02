@@ -445,9 +445,17 @@ impl UnifiedP2PManager {
             let network = self.network.lock();
             let peer_id = network.local_peer_id();
             let mut addrs = network.listening_addresses();
-            addrs.extend(network.external_addresses());
+            let external = network.external_addresses();
+            info!("Listening addresses: {:?}", addrs);
+            info!("External addresses: {:?}", external);
+            addrs.extend(external);
             (peer_id, addrs)
         };
+
+        info!("Total addresses for share: {}", addresses.len());
+        for (i, addr) in addresses.iter().enumerate() {
+            info!("  Address {}: {}", i+1, addr);
+        }
 
         // Create share info
         let share_info = ShareInfo {
@@ -456,6 +464,8 @@ impl UnifiedP2PManager {
             encryption_key: encryption_key_b64.clone(),
             share_code: share_code.clone(),
         };
+        
+        info!("Created ShareInfo with {} addresses", share_info.addresses.len());
 
         // Advertise in DHT
         {
