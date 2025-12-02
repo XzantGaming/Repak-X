@@ -208,14 +208,20 @@ impl UnifiedP2PManager {
 
         // Store active share
         let peer_id_str = peer_id.to_string();
+        let encoded_share_info = share_info.encode()
+            .map_err(|e| P2PError::ValidationError(format!("Failed to encode: {}", e)))?;
         let session = ShareSession {
             share_code: share_code.clone(),
-            encryption_key: encryption_key_b64,
+            encryption_key: encryption_key_b64.clone(),
             local_ip: peer_id_str.clone(), // Use peer ID instead of IP
             obfuscated_ip: format!("Peer [{}]", &peer_id_str[..8]), // Show first 8 chars of peer ID
             port: 0, // Not used in libp2p
-            connection_string: share_info.encode()
-                .map_err(|e| P2PError::ValidationError(format!("Failed to encode: {}", e)))?,
+            connection_string: encoded_share_info.clone(),
+            obfuscated_connection_string: format!("{}:{}:Peer[{}]:libp2p", 
+                share_code, 
+                encryption_key_b64,
+                &peer_id_str[..8]
+            ),
             active: true,
         };
 

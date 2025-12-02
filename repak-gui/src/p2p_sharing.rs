@@ -475,6 +475,7 @@ impl P2PServer {
         let share_code = generate_share_code();
         let key_b64 = URL_SAFE_NO_PAD.encode(&encryption_key);
         let connection_string = create_connection_string(&share_code, &encryption_key, &local_ip, port);
+        let obfuscated_connection_string = create_obfuscated_connection_string(&share_code, &encryption_key, &local_ip, port);
 
         // Build path map
         let mut path_map = HashMap::new();
@@ -502,6 +503,7 @@ impl P2PServer {
             local_ip,
             port,
             connection_string,
+            obfuscated_connection_string,
             active: true,
         };
 
