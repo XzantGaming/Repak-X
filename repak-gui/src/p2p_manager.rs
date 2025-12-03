@@ -204,6 +204,7 @@ async fn upload_to_fileio(path: &PathBuf) -> P2PResult<String> {
 
     info!("[Share] Sending upload request to 0x0.st...");
     let response = client.post("https://0x0.st")
+        .header("User-Agent", "repak-gui/1.0")
         .multipart(form)
         .send().await.map_err(|e| P2PError::ConnectionError(format!("Failed to send request: {}", e)))?;
 
