@@ -1,5 +1,5 @@
 //! P2P Manager - File Hosting Implementation
-//! Uses free file hosting (gofile.io) for reliable mod sharing
+//! Uses free file hosting (0x0.st) for reliable mod sharing
 
 use crate::p2p_libp2p::ShareInfo;
 use crate::p2p_sharing::{ShareableModPack, ShareSession, TransferProgress, TransferStatus, P2PError, P2PResult};
@@ -54,8 +54,8 @@ impl UnifiedP2PManager {
         info!("[Share] Creating zip at: {}", zip_path.display());
         create_zip(&paths, &zip_path)?;
         
-        // Upload to file.io (provides direct download links)
-        info!("[Share] Uploading to file.io...");
+        // Upload to 0x0.st (provides direct download links)
+        info!("[Share] Uploading to 0x0.st...");
         let download_url = upload_to_fileio(&zip_path).await?;
         info!("[Share] Upload complete: {}", download_url);
         
@@ -157,7 +157,7 @@ impl UnifiedP2PManager {
     pub fn is_sharing(&self, code: &str) -> bool { self.active_shares.lock().contains_key(code) }
     pub fn is_receiving(&self, code: &str) -> bool { self.active_downloads.lock().contains_key(code) }
     pub fn local_peer_id(&self) -> String { self.instance_id.clone() }
-    pub fn listening_addresses(&self) -> Vec<String> { vec!["cloud://gofile.io".into()] }
+    pub fn listening_addresses(&self) -> Vec<String> { vec!["cloud://0x0.st".into()] }
 }
 
 fn create_zip(paths: &[PathBuf], zip_path: &PathBuf) -> P2PResult<()> {
@@ -179,7 +179,7 @@ fn create_zip(paths: &[PathBuf], zip_path: &PathBuf) -> P2PResult<()> {
 }
 
 async fn upload_to_fileio(path: &PathBuf) -> P2PResult<String> {
-    // file.io provides direct download links without authentication
+    // 0x0.st provides simple, reliable file hosting (512MB limit, 365 day retention)
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(300)) // 5 minute timeout for large files
         .build()
@@ -189,21 +189,27 @@ async fn upload_to_fileio(path: &PathBuf) -> P2PResult<String> {
     let file_name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
     let file_size = file_data.len();
     
-    info!("[Share] Uploading {} ({} bytes / {:.2} MB) to file.io...", file_name, file_size, file_size as f64 / 1024.0 / 1024.0);
+    info!("[Share] Uploading {} ({} bytes / {:.2} MB) to 0x0.st...", file_name, file_size, file_size as f64 / 1024.0 / 1024.0);
+    
+    // Check file size (0x0.st has 512MB limit)
+    if file_size > 512 * 1024 * 1024 {
+        error!("[Share] File too large: {} bytes (max 512MB)", file_size);
+        return Err(P2PError::FileError("File exceeds 512MB limit".into()));
+    }
     
     let part = reqwest::multipart::Part::bytes(file_data)
         .file_name(file_name.clone())
         .mime_str("application/zip").map_err(|e| P2PError::ConnectionError(e.to_string()))?;
     let form = reqwest::multipart::Form::new().part("file", part);
 
-    info!("[Share] Sending upload request to file.io...");
-    let response = client.post("https://file.io")
+    info!("[Share] Sending upload request to 0x0.st...");
+    let response = client.post("https://0x0.st")
         .multipart(form)
         .send().await.map_err(|e| P2PError::ConnectionError(format!("Failed to send request: {}", e)))?;
 
     // Check status code first
     let status = response.status();
-    info!("[Share] file.io response status: {}", status);
+    info!("[Share] 0x0.st response status: {}", status);
     
     if !status.is_success() {
         let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
@@ -211,38 +217,22 @@ async fn upload_to_fileio(path: &PathBuf) -> P2PResult<String> {
         return Err(P2PError::ConnectionError(format!("Upload failed with status {}: {}", status, error_text)));
     }
 
-    // Get response text first for debugging
-    let response_text = response.text().await
-        .map_err(|e| P2PError::ConnectionError(format!("Failed to read response: {}", e)))?;
+    // 0x0.st returns the download URL as plain text
+    let download_url = response.text().await
+        .map_err(|e| P2PError::ConnectionError(format!("Failed to read response: {}", e)))?
+        .trim()
+        .to_string();
     
-    info!("[Share] file.io raw response: {}", response_text);
+    info!("[Share] 0x0.st raw response: {}", download_url);
 
-    // Try to parse as JSON
-    let resp: serde_json::Value = serde_json::from_str(&response_text)
-        .map_err(|e| {
-            error!("[Share] Failed to parse JSON response: {}. Response was: {}", e, response_text);
-            P2PError::ConnectionError(format!("Failed to parse JSON response: {}. Response was: {}", e, response_text))
-        })?;
-
-    info!("[Share] file.io parsed response: {:?}", resp);
-
-    // Check for success field
-    let success = resp["success"].as_bool().unwrap_or(false);
-    if !success {
-        let error_msg = resp["message"].as_str().unwrap_or("Unknown error");
-        error!("[Share] file.io upload failed: {}", error_msg);
-        return Err(P2PError::ConnectionError(format!("Upload failed: {}", error_msg)));
+    // Validate URL format
+    if !download_url.starts_with("https://0x0.st/") {
+        error!("[Share] Invalid response from 0x0.st: {}", download_url);
+        return Err(P2PError::ConnectionError(format!("Invalid response from server: {}", download_url)));
     }
-
-    // file.io returns a direct download link
-    let download_url = resp["link"].as_str()
-        .ok_or_else(|| {
-            error!("[Share] No download URL in response: {:?}", resp);
-            P2PError::ConnectionError("No download URL in response".into())
-        })?;
     
-    info!("[Share] Upload complete! URL: {} (expires in 14 days)", download_url);
-    Ok(download_url.to_string())
+    info!("[Share] Upload complete! URL: {} (expires in 365 days)", download_url);
+    Ok(download_url)
 }
 
 async fn download_and_extract(url: &str, out_dir: &PathBuf, dl: Arc<Mutex<HashMap<String, ActiveDownload>>>, code: &str) -> Result<(), String> {
