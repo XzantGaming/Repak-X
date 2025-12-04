@@ -524,11 +524,13 @@ async fn parse_dropped_files(
                     if extract_result.is_ok() {
                         let _ = window.emit("install_log", format!("[Detection] Archive extracted, analyzing contents..."));
                         
-                        // Find first .pak file in extracted contents
+                        // First, look for .pak files in extracted contents
+                        let mut found_pak = false;
                         for entry in WalkDir::new(temp_path) {
                             if let Ok(entry) = entry {
                                 let entry_path = entry.path();
                                 if entry_path.is_file() && entry_path.extension().and_then(|s| s.to_str()) == Some("pak") {
+                                    found_pak = true;
                                     // Found a pak file, analyze it
                                     if let Ok(file) = File::open(entry_path) {
                                         if let Ok(aes_key) = AesKey::from_str("0C263D8C22DCB085894899C3A3796383E9BF9DE0CBFB08C9BF2DEF2E84F29D74") {
@@ -657,6 +659,70 @@ async fn parse_dropped_files(
                                         }
                                     }
                                     break; // Only analyze first pak file
+                                }
+                            }
+                        }
+                        
+                        // If no .pak files found, look for content folders with loose assets
+                        if !found_pak {
+                            let _ = window.emit("install_log", "[Detection] No PAK files found in archive, looking for content folders...");
+                            
+                            use crate::utils::collect_files;
+                            
+                            // Collect all files from the extracted archive
+                            let mut all_files = Vec::new();
+                            let temp_path_buf = PathBuf::from(temp_path);
+                            if collect_files(&mut all_files, &temp_path_buf).is_ok() {
+                                // Check if there are content files (.uasset, .uexp, .ubulk, etc.)
+                                let content_files: Vec<String> = all_files.iter()
+                                    .filter(|f| {
+                                        if let Some(ext) = f.extension().and_then(|s| s.to_str()) {
+                                            matches!(ext, "uasset" | "uexp" | "ubulk" | "bnk" | "wem")
+                                        } else {
+                                            false
+                                        }
+                                    })
+                                    .map(|p| p.to_string_lossy().to_string())
+                                    .collect();
+                                
+                                if !content_files.is_empty() {
+                                    let _ = window.emit("install_log", format!("[Detection] Found {} content files in archive folder", content_files.len()));
+                                    
+                                    // Get mod type from content
+                                    let mod_type = get_current_pak_characteristics(content_files.clone());
+                                    
+                                    // Run UAsset detection on the content files
+                                    let _ = window.emit("install_log", "[Detection] Checking for SkeletalMesh assets...");
+                                    let has_skeletal_mesh = detect_mesh_files_async(&content_files).await;
+                                    let _ = window.emit("install_log", format!("[Detection] SkeletalMesh result: {}", has_skeletal_mesh));
+                                    
+                                    let _ = window.emit("install_log", "[Detection] Checking for StaticMesh assets...");
+                                    let has_static_mesh = detect_static_mesh_files_async(&content_files).await;
+                                    let _ = window.emit("install_log", format!("[Detection] StaticMesh result: {}", has_static_mesh));
+                                    
+                                    let _ = window.emit("install_log", "[Detection] Checking for Texture assets with .ubulk...");
+                                    let has_texture = detect_texture_files_async(&content_files).await;
+                                    let _ = window.emit("install_log", format!("[Detection] Texture result: {}", has_texture));
+                                    
+                                    let summary = format!("[Detection] Archive folder results: skeletal={}, static={}, texture={}", 
+                                          has_skeletal_mesh, has_static_mesh, has_texture);
+                                    info!("{}", summary);
+                                    let _ = window.emit("install_log", &summary);
+                                    
+                                    // Clean up temp dir
+                                    drop(temp_dir);
+                                    
+                                    // Return as a directory mod (will be converted to IoStore)
+                                    return Ok(vec![InstallableModInfo {
+                                        mod_name,
+                                        mod_type,
+                                        is_dir: true,  // Mark as directory so it goes through convert_to_iostore_directory
+                                        path: path_str,
+                                        auto_fix_mesh: has_skeletal_mesh,
+                                        auto_fix_texture: has_texture,
+                                        auto_fix_serialize_size: has_static_mesh,
+                                        auto_to_repak: true,
+                                    }]);
                                 }
                             }
                         }
