@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use parking_lot::Mutex;
 use std::io::Write;
+use tauri::{Emitter, Window};
 
 pub struct UnifiedP2PManager {
     instance_id: String,
@@ -100,7 +101,7 @@ impl UnifiedP2PManager {
         Ok(())
     }
 
-    pub async fn start_receiving(&self, conn: &str, out: PathBuf, _name: Option<String>) -> P2PResult<()> {
+    pub async fn start_receiving(&self, conn: &str, out: PathBuf, _name: Option<String>, window: Window) -> P2PResult<()> {
         info!("[Share] Starting download to: {}", out.display());
         
         let share_info = ShareInfo::decode(conn).map_err(|e| P2PError::ValidationError(format!("{}", e)))?;
@@ -133,6 +134,9 @@ impl UnifiedP2PManager {
                         d.progress.status = TransferStatus::Completed;
                         d.progress.files_completed = d.progress.total_files;
                     }
+                    // Emit event to refresh mod list
+                    info!("[Share] Emitting mods_dir_changed event to refresh UI");
+                    let _ = window.emit("mods_dir_changed", ());
                 }
                 Err(e) => {
                     error!("[Share] Download failed: {}", e);
@@ -170,37 +174,69 @@ fn create_zip(paths: &[PathBuf], zip_path: &PathBuf) -> P2PResult<()> {
 
     for path in paths {
         if path.is_file() {
-            // Add the main file
-            let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
-            if added_files.insert(name.clone()) {
-                info!("[Share] Adding to zip: {}", name);
-                zip.start_file(name.clone(), options).map_err(|e| P2PError::FileError(e.to_string()))?;
+            let original_name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+            
+            // Check if this is a disabled mod (.bak_repak) - rename to .pak for enabled state
+            let (zip_name, is_disabled_mod) = if original_name.ends_with(".bak_repak") {
+                let enabled_name = original_name.replace(".bak_repak", ".pak");
+                info!("[Share] Converting disabled mod to enabled: {} -> {}", original_name, enabled_name);
+                (enabled_name, true)
+            } else {
+                (original_name.clone(), false)
+            };
+            
+            // Add the main file with the appropriate name
+            if added_files.insert(zip_name.clone()) {
+                info!("[Share] Adding to zip: {}", zip_name);
+                zip.start_file(zip_name.clone(), options).map_err(|e| P2PError::FileError(e.to_string()))?;
                 let data = std::fs::read(path).map_err(|e| P2PError::FileError(e.to_string()))?;
                 zip.write_all(&data).map_err(|e| P2PError::FileError(e.to_string()))?;
             }
 
-            // If this is a .pak file, check for accompanying .ucas and .utoc files
-            if name.ends_with(".pak") {
-                let base_name = &name[..name.len() - 4]; // Remove ".pak"
+            // Check for accompanying .ucas and .utoc files
+            // Works for both .pak and .bak_repak files
+            let should_check_companions = zip_name.ends_with(".pak");
+            
+            if should_check_companions {
+                let base_name = &zip_name[..zip_name.len() - 4]; // Remove ".pak"
                 let parent_dir = path.parent();
 
                 if let Some(dir) = parent_dir {
+                    // Determine the base name on disk (for disabled mods, companions also have .bak_repak)
+                    let disk_base = if is_disabled_mod {
+                        original_name[..original_name.len() - 10].to_string() // Remove ".bak_repak"
+                    } else {
+                        base_name.to_string()
+                    };
+
                     // Check for .ucas file
-                    let ucas_name = format!("{}.ucas", base_name);
-                    let ucas_path = dir.join(&ucas_name);
-                    if ucas_path.exists() && added_files.insert(ucas_name.clone()) {
-                        info!("[Share] Adding accompanying file: {}", ucas_name);
-                        zip.start_file(ucas_name, options).map_err(|e| P2PError::FileError(e.to_string()))?;
+                    let ucas_disk_name = if is_disabled_mod {
+                        format!("{}.ucas.bak_repak", disk_base)
+                    } else {
+                        format!("{}.ucas", disk_base)
+                    };
+                    let ucas_zip_name = format!("{}.ucas", base_name);
+                    let ucas_path = dir.join(&ucas_disk_name);
+                    
+                    if ucas_path.exists() && added_files.insert(ucas_zip_name.clone()) {
+                        info!("[Share] Adding accompanying file: {} (from {})", ucas_zip_name, ucas_disk_name);
+                        zip.start_file(ucas_zip_name, options).map_err(|e| P2PError::FileError(e.to_string()))?;
                         let data = std::fs::read(&ucas_path).map_err(|e| P2PError::FileError(e.to_string()))?;
                         zip.write_all(&data).map_err(|e| P2PError::FileError(e.to_string()))?;
                     }
 
                     // Check for .utoc file
-                    let utoc_name = format!("{}.utoc", base_name);
-                    let utoc_path = dir.join(&utoc_name);
-                    if utoc_path.exists() && added_files.insert(utoc_name.clone()) {
-                        info!("[Share] Adding accompanying file: {}", utoc_name);
-                        zip.start_file(utoc_name, options).map_err(|e| P2PError::FileError(e.to_string()))?;
+                    let utoc_disk_name = if is_disabled_mod {
+                        format!("{}.utoc.bak_repak", disk_base)
+                    } else {
+                        format!("{}.utoc", disk_base)
+                    };
+                    let utoc_zip_name = format!("{}.utoc", base_name);
+                    let utoc_path = dir.join(&utoc_disk_name);
+                    
+                    if utoc_path.exists() && added_files.insert(utoc_zip_name.clone()) {
+                        info!("[Share] Adding accompanying file: {} (from {})", utoc_zip_name, utoc_disk_name);
+                        zip.start_file(utoc_zip_name, options).map_err(|e| P2PError::FileError(e.to_string()))?;
                         let data = std::fs::read(&utoc_path).map_err(|e| P2PError::FileError(e.to_string()))?;
                         zip.write_all(&data).map_err(|e| P2PError::FileError(e.to_string()))?;
                     }

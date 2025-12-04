@@ -36,6 +36,7 @@ use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 
 struct WatcherState {
     watcher: Mutex<Option<RecommendedWatcher>>,
+    last_event_time: Mutex<std::time::Instant>,
 }
 
 /// P2P Sharing state management
@@ -167,19 +168,27 @@ async fn start_file_watcher(
 
     let mut watcher_guard = watcher_state.watcher.lock().unwrap();
     
-    // Create a new watcher
+    // Create a new watcher with debouncing
     let window_clone = window.clone();
+    let last_event_time = Arc::new(Mutex::new(std::time::Instant::now()));
+    
     let watcher_result = notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
         match res {
             Ok(event) => {
                 // We only care about Create, Remove, Rename, and Modify events (files and directories)
                 match event.kind {
                     EventKind::Create(_) | EventKind::Remove(_) | EventKind::Modify(_) => {
-                         // Debouncing or simple filtering can be done here if needed.
-                         // For now, just emit 'mods_dir_changed'
-                         window_clone.emit("mods_dir_changed", ()).unwrap_or_else(|e| {
-                             error!("Failed to emit mods_dir_changed: {}", e);
-                         });
+                         // Debounce: only emit if 500ms have passed since last event
+                         let mut last_time = last_event_time.lock().unwrap();
+                         let now = std::time::Instant::now();
+                         let elapsed = now.duration_since(*last_time);
+                         
+                         if elapsed.as_millis() >= 500 {
+                             *last_time = now;
+                             window_clone.emit("mods_dir_changed", ()).unwrap_or_else(|e| {
+                                 error!("Failed to emit mods_dir_changed: {}", e);
+                             });
+                         }
                     },
                     _ => {}
                 }
@@ -1948,6 +1957,7 @@ async fn p2p_is_sharing(p2p_state: State<'_, P2PState>) -> Result<bool, String> 
 async fn p2p_start_receiving(
     connection_string: String,
     client_name: Option<String>,
+    window: Window,
     state: State<'_, Arc<Mutex<AppState>>>,
     p2p_state: State<'_, P2PState>,
 ) -> Result<(), String> {
@@ -1957,7 +1967,7 @@ async fn p2p_start_receiving(
     };
     
     p2p_state.manager
-        .start_receiving(&connection_string, output_dir, client_name)
+        .start_receiving(&connection_string, output_dir, client_name, window)
         .await
         .map_err(|e| e.to_string())
 }
@@ -2043,7 +2053,10 @@ fn main() {
     info!("Starting Repak Gui Revamped v{}", env!("CARGO_PKG_VERSION"));
     
     let state = Arc::new(Mutex::new(load_state()));
-    let watcher_state = WatcherState { watcher: Mutex::new(None) };
+    let watcher_state = WatcherState { 
+        watcher: Mutex::new(None),
+        last_event_time: Mutex::new(std::time::Instant::now()),
+    };
     let p2p_manager = tokio::runtime::Runtime::new()
         .expect("Failed to create tokio runtime")
         .block_on(p2p_manager::UnifiedP2PManager::new())
