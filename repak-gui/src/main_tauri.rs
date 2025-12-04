@@ -883,7 +883,7 @@ async fn install_mods(
 ) -> Result<(), String> {
     use std::sync::atomic::{AtomicI32, AtomicBool};
     use std::sync::Arc as StdArc;
-    
+
     let state_guard = state.lock().unwrap();
     let mod_directory = state_guard.game_path.clone();
     let usmap_filename = state_guard.usmap_path.clone();
@@ -913,10 +913,28 @@ async fn install_mods(
 
     // Convert paths to properly initialized InstallableMods
     use crate::install_mod::map_paths_to_mods;
-    
+
     let paths: Vec<PathBuf> = mods.iter().map(|m| PathBuf::from(&m.path)).collect();
+
+    // Log the paths we're trying to install
+    for p in &paths {
+        info!("[Install] Processing path: {}", p.display());
+        let _ = window.emit("install_log", format!("[Install] Processing path: {}", p.display()));
+    }
+
     let mut installable_mods = map_paths_to_mods(&paths);
-    
+
+    // Check if we actually have mods to install
+    if installable_mods.is_empty() {
+        error!("[Install] No valid mods found from {} input path(s)", paths.len());
+        let _ = window.emit("install_log", "ERROR: No valid mods found to install!");
+        let _ = window.emit("install_log", "Possible causes:");
+        let _ = window.emit("install_log", "  - PAK file couldn't be read (wrong AES key or corrupted)");
+        let _ = window.emit("install_log", "  - Archive contains no .pak files or content folders");
+        let _ = window.emit("install_log", "  - Directory contains no valid content");
+        return Err("No valid mods found to install. Check the install logs for details.".to_string());
+    }
+
     // Apply user settings to each mod
     for (idx, mod_to_install) in mods.iter().enumerate() {
         if let Some(installable) = installable_mods.get_mut(idx) {
@@ -926,7 +944,7 @@ async fn install_mods(
                     installable.mod_name = custom.clone();
                 }
             }
-            
+
             // Apply fix settings
             installable.fix_mesh = mod_to_install.fix_mesh;
             installable.fix_textures = mod_to_install.fix_texture;
@@ -939,7 +957,7 @@ async fn install_mods(
     // Use existing installation logic
     let installed_counter = StdArc::new(AtomicI32::new(0));
     let stop_flag = StdArc::new(AtomicBool::new(false));
-    
+
     let total = installable_mods.len() as i32;
     let counter_clone = installed_counter.clone();
     let _stop_clone = stop_flag.clone();

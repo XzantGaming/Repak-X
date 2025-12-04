@@ -79,13 +79,16 @@ pub static AES_KEY: LazyLock<AesKey> = LazyLock::new(|| {
 fn find_mods_from_archive(path: &str) -> Vec<InstallableMod> {
     let mut new_mods = Vec::<InstallableMod>::new();
     let mut processed_mods = std::collections::HashSet::new();
+    let mut found_pak_files = false;
     
+    // First pass: look for .pak files (existing behavior)
     for entry in WalkDir::new(path) {
         let entry = entry.expect("Failed to read directory entry");
         let file_path = entry.path();
         
         // Only process .pak files
         if file_path.is_file() && file_path.extension().and_then(|s| s.to_str()) == Some("pak") {
+            found_pak_files = true;
             let mod_base_name = file_path.file_stem().unwrap().to_str().unwrap().to_string();
             
             // Skip if we've already processed this mod
@@ -171,6 +174,137 @@ fn find_mods_from_archive(path: &str) -> Vec<InstallableMod> {
                         ..Default::default()
                     };
 
+                    new_mods.push(installable_mod);
+                }
+            }
+        }
+    }
+
+    // Second pass: if no .pak files found, look for content folders with .uasset files
+    // This handles archives that contain loose mod files (folders) instead of pre-packed .pak files
+    if !found_pak_files {
+        debug!("No .pak files found in archive, looking for content folders...");
+        
+        // Find directories that contain .uasset files (these are mod content folders)
+        let archive_root = std::path::Path::new(path);
+        
+        // Check immediate subdirectories of the archive root
+        if let Ok(entries) = std::fs::read_dir(archive_root) {
+            for entry in entries.flatten() {
+                let entry_path = entry.path();
+                
+                // Check if this is a directory that contains content
+                if entry_path.is_dir() {
+                    let mut has_content = false;
+                    let mut content_files = Vec::new();
+                    
+                    // Recursively collect files and check for .uasset content
+                    if collect_files(&mut content_files, &entry_path).is_ok() {
+                        for file in &content_files {
+                            if let Some(ext) = file.extension().and_then(|s| s.to_str()) {
+                                if ext == "uasset" || ext == "uexp" || ext == "ubulk" || ext == "bnk" || ext == "wem" {
+                                    has_content = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    
+                    if has_content {
+                        let mod_name = entry_path.file_name()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or("Unknown")
+                            .to_string();
+                        
+                        debug!("Found content folder in archive: {} ({} files)", mod_name, content_files.len());
+                        
+                        // Get file paths as strings for mod type detection
+                        let file_strings: Vec<String> = content_files
+                            .iter()
+                            .map(|p| p.to_string_lossy().to_string())
+                            .collect();
+                        
+                        let modtype = get_current_pak_characteristics(file_strings.clone());
+                        let is_audio_or_movies = modtype.contains("Audio") || modtype.contains("Movies");
+                        
+                        // Auto-detect mesh and texture files
+                        let auto_fix_mesh = detect_mesh_files(&file_strings);
+                        let auto_fix_textures = detect_texture_files(&file_strings);
+                        
+                        let installable_mod = InstallableMod {
+                            mod_name,
+                            mod_type: modtype.to_string(),
+                            repak: !is_audio_or_movies,  // Will go through convert_to_iostore_directory
+                            fix_mesh: auto_fix_mesh,
+                            fix_textures: auto_fix_textures,
+                            is_dir: true,  // Mark as directory so it uses convert_to_iostore_directory
+                            reader: None,
+                            mod_path: entry_path,
+                            mount_point: "../../../".to_string(),
+                            path_hash_seed: "00000000".to_string(),
+                            total_files: content_files.len(),
+                            iostore: false,
+                            is_archived: false,
+                            editing: false,
+                            compression: Oodle,
+                            ..Default::default()
+                        };
+                        
+                        new_mods.push(installable_mod);
+                    }
+                }
+            }
+        }
+        
+        // If still no mods found, check if the archive root itself contains content files directly
+        if new_mods.is_empty() {
+            let mut content_files = Vec::new();
+            if collect_files(&mut content_files, archive_root).is_ok() {
+                let has_content = content_files.iter().any(|f| {
+                    f.extension()
+                        .and_then(|s| s.to_str())
+                        .map(|ext| ext == "uasset" || ext == "uexp" || ext == "ubulk" || ext == "bnk" || ext == "wem")
+                        .unwrap_or(false)
+                });
+                
+                if has_content {
+                    // Use the archive folder name as mod name
+                    let mod_name = archive_root.file_name()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("ExtractedMod")
+                        .to_string();
+                    
+                    debug!("Archive root contains content files: {} ({} files)", mod_name, content_files.len());
+                    
+                    let file_strings: Vec<String> = content_files
+                        .iter()
+                        .map(|p| p.to_string_lossy().to_string())
+                        .collect();
+                    
+                    let modtype = get_current_pak_characteristics(file_strings.clone());
+                    let is_audio_or_movies = modtype.contains("Audio") || modtype.contains("Movies");
+                    let auto_fix_mesh = detect_mesh_files(&file_strings);
+                    let auto_fix_textures = detect_texture_files(&file_strings);
+                    
+                    let installable_mod = InstallableMod {
+                        mod_name,
+                        mod_type: modtype.to_string(),
+                        repak: !is_audio_or_movies,
+                        fix_mesh: auto_fix_mesh,
+                        fix_textures: auto_fix_textures,
+                        is_dir: true,
+                        reader: None,
+                        mod_path: archive_root.to_path_buf(),
+                        mount_point: "../../../".to_string(),
+                        path_hash_seed: "00000000".to_string(),
+                        total_files: content_files.len(),
+                        iostore: false,
+                        is_archived: false,
+                        editing: false,
+                        compression: Oodle,
+                        ..Default::default()
+                    };
+                    
                     new_mods.push(installable_mod);
                 }
             }
