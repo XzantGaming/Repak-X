@@ -17,7 +17,7 @@ mod p2p_stream;
 mod p2p_protocol;
 mod ip_obfuscation;
 
-use uasset_detection::{detect_mesh_files_async, detect_texture_files_async, detect_static_mesh_files_async};
+use uasset_detection::{detect_mesh_files_async, detect_texture_files_async, detect_static_mesh_files_async, detect_blueprint_files_async};
 use log::{info, warn, error};
 use serde::{Deserialize, Serialize};
 use simplelog::{ColorChoice, CombinedLogger, Config, TermLogger, TerminalMode, WriteLogger};
@@ -1812,10 +1812,11 @@ struct ModDetails {
     total_size: u64,
     files: Vec<String>,
     is_iostore: bool,
+    has_blueprint: bool,
 }
 
 #[tauri::command]
-async fn get_mod_details(mod_path: String) -> Result<ModDetails, String> {
+async fn get_mod_details(mod_path: String, detect_blueprint: Option<bool>) -> Result<ModDetails, String> {
     use repak::PakBuilder;
     use repak::utils::AesKey;
     use std::str::FromStr;
@@ -1873,10 +1874,32 @@ async fn get_mod_details(mod_path: String) -> Result<ModDetails, String> {
     
     // Determine mod type using the detailed function
     use crate::utils::get_pak_characteristics_detailed;
-    let characteristics = get_pak_characteristics_detailed(files.clone());
+    let mut characteristics = get_pak_characteristics_detailed(files.clone());
     info!("Detected mod type: {}", characteristics.mod_type);
     info!("Character name: {}", characteristics.character_name);
     info!("Category: {}", characteristics.category);
+    
+    // Run fast Blueprint detection using filename heuristics
+    let has_blueprint = files.iter().any(|f| {
+        let filename = f.split('/').last().unwrap_or("");
+        let name_lower = filename.to_lowercase();
+        let path_lower = f.to_lowercase();
+        
+        // Common Blueprint patterns:
+        // 1. BP_Something (Blueprint prefix)
+        // 2. Something_C (Blueprint class suffix)
+        // 3. SomethingBP (Blueprint suffix without underscore)
+        // 4. /Blueprints/ folder path
+        name_lower.starts_with("bp_") || 
+        name_lower.contains("_c.") ||
+        name_lower.contains("bp.") ||
+        name_lower.ends_with("bp") ||
+        path_lower.contains("/blueprints/")
+    });
+    
+    if has_blueprint {
+        info!("Blueprint detected via filename patterns");
+    }
     
     // Get total size
     let ucas_path_for_size = path.with_extension("ucas");
@@ -1904,6 +1927,7 @@ async fn get_mod_details(mod_path: String) -> Result<ModDetails, String> {
         total_size,
         files,
         is_iostore,
+        has_blueprint,
     })
 }
 

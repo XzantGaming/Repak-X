@@ -35,6 +35,8 @@ pub enum UAssetRequest {
     BatchDetectStaticMesh { file_paths: Vec<String> },
     #[serde(rename = "batch_detect_texture")]
     BatchDetectTexture { file_paths: Vec<String> },
+    #[serde(rename = "batch_detect_blueprint")]
+    BatchDetectBlueprint { file_paths: Vec<String> },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -399,6 +401,23 @@ impl UAssetToolkit {
         
         if !response.success {
             anyhow::bail!("Failed to batch detect texture: {}", response.message);
+        }
+        
+        Ok(response.data
+            .and_then(|d| d.as_bool())
+            .unwrap_or(false))
+    }
+
+    /// Batch detect blueprints - sends all paths at once, returns true if any match
+    pub async fn batch_detect_blueprint(&self, file_paths: &[String]) -> Result<bool> {
+        let request = UAssetRequest::BatchDetectBlueprint {
+            file_paths: file_paths.to_vec(),
+        };
+        
+        let response = self.send_request(request).await?;
+        
+        if !response.success {
+            anyhow::bail!("Failed to batch detect blueprint: {}", response.message);
         }
         
         Ok(response.data

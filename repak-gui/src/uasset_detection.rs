@@ -269,6 +269,45 @@ pub async fn detect_static_mesh_files_async(mod_contents: &[String]) -> bool {
     result
 }
 
+/// Detects Blueprint files in a list of mod contents using UAssetAPI (persistent process)
+/// Async version for use in Tauri commands
+pub async fn detect_blueprint_files_async(mod_contents: &[String]) -> bool {
+    use log::info;
+    
+    let uasset_files: Vec<String> = mod_contents.iter()
+        .filter(|f| f.to_lowercase().ends_with(".uasset"))
+        .cloned()
+        .collect();
+    info!("[Detection] Scanning {} uasset files for Blueprint", uasset_files.len());
+    
+    if uasset_files.is_empty() {
+        return false;
+    }
+    
+    // Try batch detection first (much faster - single request for all files)
+    if let Ok(toolkit) = UAssetToolkit::new(None) {
+        info!("[Detection] Using batch detection for Blueprint");
+        match toolkit.batch_detect_blueprint(&uasset_files).await {
+            Ok(true) => {
+                info!("[Detection] FOUND Blueprint (batch UAssetAPI)");
+                return true;
+            }
+            Ok(false) => {
+                info!("[Detection] No Blueprint found via batch UAssetAPI");
+                return false;
+            }
+            Err(e) => {
+                let err_str = e.to_string();
+                if !err_str.contains("File not found") {
+                    info!("[Detection] Batch blueprint detection error: {}", e);
+                }
+            }
+        }
+    }
+
+    false
+}
+
 /// Detects SKELETAL mesh files in a list of mod contents using UAssetAPI (persistent process)
 /// This is for "Fix Mesh" auto-enable which applies to SK_* files only
 pub fn detect_mesh_files(mod_contents: &[String]) -> bool {

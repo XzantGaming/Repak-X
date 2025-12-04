@@ -14,9 +14,9 @@ static SKIN_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"[0-9]{4}\/[0-9]{7}").unwrap()
 });
 
-// Regex to extract just the character ID (4 digits) from paths like /Characters/1021/
+// Regex to extract just the character ID (4 digits) from paths like /Characters/1021/ or /Hero_ST/1048/
 static CHAR_ID_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"Characters/(\d{4})").unwrap()
+    Regex::new(r"(?:Characters|Hero_ST|Hero)/(\d{4})").unwrap()
 });
 
 // Regex to extract character ID from filenames (e.g., bnk_vo_1044001.bnk -> 1044)
@@ -30,6 +30,12 @@ static FILENAME_CHAR_ID_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 // Alternative strict pattern for skin IDs in paths (7 consecutive digits starting with 10xx)
 static SKIN_ID_STRICT_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(10[1-6]\d\d{3})").unwrap()
+});
+
+// Broad regex to find ANY 4-digit sequence - we'll validate against character data
+// This catches hero IDs anywhere in the path/filename
+static BROAD_FOUR_DIGIT_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\d{4}").unwrap()
 });
 
 /// Result of mod characteristics detection, includes mod type and detected heroes
@@ -115,6 +121,8 @@ pub fn get_pak_characteristics_detailed(mod_contents: Vec<String>) -> ModCharact
     let mut has_audio = false;
     let mut has_movies = false;
     let mut has_ui = false;
+    let mut has_blueprint = false;
+    let mut has_text = false;
     let mut character_name: Option<String> = None;  // Full skin-specific name (e.g., "Hawkeye - Default")
     let mut hero_names: HashSet<String> = HashSet::new();  // All detected hero names
 
@@ -163,6 +171,11 @@ pub fn get_pak_characteristics_detailed(mod_contents: Vec<String>) -> ModCharact
         if path_lower.contains("/movies/") || path_lower.starts_with("movies/") || file_lower.contains("/movies/") || path_lower.ends_with(".bik") || path_lower.ends_with(".mp4") {
             has_movies = true;
         }
+        
+        // Text: StringTable files (localization/text mods)
+        if path_lower.contains("/stringtable/") || path_lower.starts_with("stringtable/") || file_lower.contains("/stringtable/") || path_lower.contains("/data/stringtable/") {
+            has_text = true;
+        }
 
         // Try to get skin-specific name from Characters paths
         let category = path.split('/').next().unwrap_or_default();
@@ -210,6 +223,19 @@ pub fn get_pak_characteristics_detailed(mod_contents: Vec<String>) -> ModCharact
                 }
             }
         }
+        
+        // Broad fallback: Check for ANY 4-digit sequence in the entire file path
+        // This catches hero IDs in any position (e.g., /StringTable/Hero_ST/1048/, /Data/1048_CustomData/, etc.)
+        // We validate each match against the character database to avoid false positives
+        for caps in BROAD_FOUR_DIGIT_REGEX.captures_iter(file) {
+            if let Some(four_digits) = caps.get(0) {
+                let potential_id = four_digits.as_str();
+                // Validate it's actually a character ID by checking the database
+                if let Some(name) = character_data::get_character_name_from_id(potential_id) {
+                    hero_names.insert(name);
+                }
+            }
+        }
     }
     
     // Convert to sorted Vec for consistent ordering
@@ -217,11 +243,12 @@ pub fn get_pak_characteristics_detailed(mod_contents: Vec<String>) -> ModCharact
     heroes.sort();
 
     // Determine the pure category (without character name)
-    let category = if has_audio && !has_skeletal_mesh && !has_static_mesh && !has_texture && !has_material {
+    // Priority order: Audio/Movies/UI (pure) > Mesh > Static Mesh > VFX > Blueprint > Text > Audio (mixed) > Retexture
+    let category = if has_audio && !has_skeletal_mesh && !has_static_mesh && !has_texture && !has_material && !has_blueprint {
         "Audio"
-    } else if has_movies && !has_skeletal_mesh && !has_static_mesh && !has_texture && !has_material {
+    } else if has_movies && !has_skeletal_mesh && !has_static_mesh && !has_texture && !has_material && !has_blueprint {
         "Movies"
-    } else if has_ui && !has_skeletal_mesh && !has_static_mesh && !has_texture && !has_material {
+    } else if has_ui && !has_skeletal_mesh && !has_static_mesh && !has_texture && !has_material && !has_blueprint {
         "UI"
     } else if has_skeletal_mesh {
         "Mesh"
@@ -229,6 +256,10 @@ pub fn get_pak_characteristics_detailed(mod_contents: Vec<String>) -> ModCharact
         "Static Mesh"
     } else if has_material {
         "VFX"
+    } else if has_blueprint {
+        "Blueprint"
+    } else if has_text {
+        "Text"
     } else if has_audio {
         "Audio"
     } else if has_texture {
