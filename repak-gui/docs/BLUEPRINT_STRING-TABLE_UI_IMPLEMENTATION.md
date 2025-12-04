@@ -1,25 +1,80 @@
-# Blueprint Badge UI Implementation Proposal
+# Blueprint & Text (StringTable) Additive Categories - UI Implementation Guide
 
 ## Overview
-This document outlines the proposed UI changes to display Blueprint detection as a separate badge in the mod details panel.
+This document outlines the UI changes needed to support **additive categories** for Blueprint and Text mods. These categories can now appear alongside primary categories (Mesh, VFX, etc.) rather than replacing them.
 
 ## Backend Status
-✅ **Complete** - Blueprint detection is now automatic and efficient:
-- Detects Blueprints using filename patterns (instant, no file extraction)
-- Returns `has_blueprint: bool` in `ModDetails` struct
-- Patterns detected:
+✅ **Complete** - Additive category system implemented:
+- Blueprint and Text are now **additive categories** that don't override the main category
+- Returns `additional_categories: Vec<String>` in `ModCharacteristics` struct
+- The `mod_type` string now includes additional categories: `"Blade - Mesh [Blueprint, Text]"`
+- Blueprint detection patterns:
   - `BP_Something` (Blueprint prefix)
   - `Something_C` (Blueprint class suffix)
   - `SomethingBP` (Blueprint suffix)
   - Files in `/Blueprints/` folder
+- Text detection patterns:
+  - Files in `/StringTable/` folder
+  - Files in `/Data/StringTable/` folder
 
 ## Frontend Implementation Needed
 
-### 1. ModDetailsPanel.jsx Changes
+### 1. Update Type Filters (Left Sidebar)
+
+**Location**: Where mod type filters are generated (likely in main App component)
+
+**Current Behavior**:
+- Filters are generated from the `category` field only
+- Shows: Audio, Mesh, UI, VFX, etc.
+
+**Required Change**:
+- **Also** extract categories from `additional_categories` array
+- Add "Blueprint" and "Text" as filter options when mods with these categories exist
+
+**Implementation**:
+```javascript
+// When building the list of available filter types:
+const allCategories = new Set();
+
+mods.forEach(mod => {
+  // Add main category
+  if (mod.category) {
+    allCategories.add(mod.category);
+  }
+  
+  // Add additional categories (Blueprint, Text)
+  if (mod.additional_categories) {
+    mod.additional_categories.forEach(cat => {
+      allCategories.add(cat);
+    });
+  }
+});
+
+// Convert to array for rendering
+const filterTypes = Array.from(allCategories).sort();
+```
+
+**Filtering Logic**:
+```javascript
+// When filtering mods by selected type:
+const filteredMods = mods.filter(mod => {
+  if (!selectedType) return true;
+  
+  // Check if main category matches
+  if (mod.category === selectedType) return true;
+  
+  // Check if any additional category matches
+  if (mod.additional_categories?.includes(selectedType)) return true;
+  
+  return false;
+});
+```
+
+### 2. ModDetailsPanel.jsx Changes
 
 **Location**: `src/components/ModDetailsPanel.jsx`
 
-**Current State** (lines 54-66):
+**Current State**:
 ```jsx
 <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
   {details.character_name && (
@@ -47,11 +102,16 @@ This document outlines the proposed UI changes to display Blueprint detection as
   <div className="category-badge" title="Mod Type">
     {details.category || 'Unknown'}
   </div>
-  {details.has_blueprint && (
-    <div className="blueprint-badge" title="Contains Blueprints">
-      Blueprint
+  {/* Render additional categories (Blueprint, Text) */}
+  {details.additional_categories?.map(cat => (
+    <div 
+      key={cat}
+      className={`additional-badge ${cat.toLowerCase()}-badge`}
+      title={`Contains ${cat}`}
+    >
+      {cat}
     </div>
-  )}
+  ))}
   {details.is_iostore && (
     <div className="iostore-badge">IoStore Package</div>
   )}
@@ -59,15 +119,15 @@ This document outlines the proposed UI changes to display Blueprint detection as
 ```
 
 **Key Points**:
-- Add Blueprint badge between category and IoStore badges
-- Conditional rendering based on `details.has_blueprint`
-- Uses new `blueprint-badge` CSS class
+- Dynamically render badges for each additional category
+- Uses class names like `blueprint-badge` and `text-badge` for styling
+- Appears between main category and IoStore badge
 
-### 2. App.css Changes
+### 3. App.css Changes
 
 **Location**: `src/App.css`
 
-**Current State** (lines 1104-1123):
+**Current State**:
 ```css
 /* Character/Category badges */
 .character-badge,
@@ -97,7 +157,7 @@ This document outlines the proposed UI changes to display Blueprint detection as
 /* Character/Category badges */
 .character-badge,
 .category-badge,
-.blueprint-badge {
+.additional-badge {
   display: inline-block;
   padding: 0.4rem 0.75rem;
   border-radius: 999px;
@@ -117,111 +177,183 @@ This document outlines the proposed UI changes to display Blueprint detection as
   border: 1px solid rgba(74,158,255,0.35);
 }
 
+/* Additional category badges */
 .blueprint-badge {
   background: #9b59b620;
   color: #c084fc;
   border: 1px solid rgba(192,132,252,0.35);
 }
+
+.text-badge {
+  background: #fbbf2420;
+  color: #fbbf24;
+  border: 1px solid rgba(251,191,36,0.35);
+}
 ```
 
 **Design Notes**:
-- Purple color scheme (`#c084fc`) to distinguish from other badges
-- Matches existing badge styling (rounded, semi-transparent background)
+- Blueprint: Purple color scheme (`#c084fc`) 
+- Text: Yellow/Gold color scheme (`#fbbf24`)
+- Both match existing badge styling (rounded, semi-transparent background)
 - Feel free to adjust colors to match your design system
 
 ## Visual Layout
 
 **Badge Order** (left to right):
 ```
-[Character Name] [Category] [Blueprint] [IoStore Package]
+[Character Name] [Category] [Blueprint] [Text] [IoStore Package]
 ```
 
 **Example Displays**:
 ```
-Luna Snow    Mesh    Blueprint    IoStore Package
+Invisible Woman    Mesh    Blueprint    Text    IoStore Package
+```
+```
+Blade    VFX    Text
 ```
 ```
 Hawkeye    Audio    IoStore Package
 ```
 ```
-Unknown    Text    Blueprint
+Unknown    Blueprint
 ```
 
 ## Alternative Design Considerations
 
-### Option 1: Icon-based Badge
-Instead of text "Blueprint", could use an icon:
+### Option 1: Icon-based Badges
+Instead of text, use icons:
 ```jsx
-{details.has_blueprint && (
-  <div className="blueprint-badge" title="Contains Blueprints">
-    📘 BP
+{details.additional_categories?.map(cat => (
+  <div key={cat} className={`${cat.toLowerCase()}-badge`}>
+    {cat === 'Blueprint' ? '📘' : '📝'} {cat}
   </div>
-)}
+))}
 ```
 
-### Option 2: Smaller Indicator
-Make Blueprint badge smaller/more subtle:
+### Option 2: Smaller Indicators
+Make additional badges smaller/more subtle:
 ```css
-.blueprint-badge {
+.additional-badge {
   padding: 0.25rem 0.5rem;
   font-size: 0.75rem;
   /* ... */
 }
 ```
 
-### Option 3: Combined with Category
-Show Blueprint as part of category badge:
+### Option 3: Abbreviated Text
+Use shorter labels:
 ```jsx
-<div className="category-badge" title="Mod Type">
-  {details.category || 'Unknown'}
-  {details.has_blueprint && ' + Blueprint'}
-</div>
+{cat === 'Blueprint' ? 'BP' : 'TXT'}
 ```
 
 ## Testing Checklist
 
+### Filter Functionality:
+- [ ] "Blueprint" appears in type filters when Blueprint mods exist
+- [ ] "Text" appears in type filters when Text mods exist
+- [ ] Clicking "Blueprint" filter shows all mods with Blueprint (including Mesh+Blueprint)
+- [ ] Clicking "Text" filter shows all mods with Text (including VFX+Text)
+- [ ] Filters work correctly for mods with multiple additional categories
+
+### Badge Display:
 - [ ] Blueprint badge appears for mods with Blueprint files
-- [ ] Blueprint badge does NOT appear for non-Blueprint mods
+- [ ] Text badge appears for mods with StringTable files
+- [ ] Both badges can appear together on the same mod
+- [ ] Badges do NOT appear for mods without those categories
 - [ ] Badge styling matches existing design system
-- [ ] Badge is responsive (wraps properly on small screens)
-- [ ] Tooltip shows "Contains Blueprints" on hover
-- [ ] Badge order is correct (Character → Category → Blueprint → IoStore)
+- [ ] Badges are responsive (wrap properly on small screens)
+- [ ] Tooltips show correct information on hover
+- [ ] Badge order is correct (Character → Category → Additional → IoStore)
 
 ## Data Available from Backend
 
-The `ModDetails` object returned from `get_mod_details` includes:
+The `ModCharacteristics` object (part of mod data) now includes:
 ```typescript
-interface ModDetails {
-  mod_name: string;
-  mod_type: string;
-  character_name: string;
-  category: string;
-  file_count: number;
-  total_size: number;
-  files: string[];
-  is_iostore: boolean;
-  has_blueprint: boolean;  // ← NEW
+interface ModCharacteristics {
+  mod_type: string;              // e.g., "Blade - Mesh [Blueprint, Text]"
+  heroes: string[];              // e.g., ["Blade"]
+  character_name: string;        // e.g., "Blade"
+  category: string;              // e.g., "Mesh" (primary category)
+  additional_categories: string[]; // ← NEW: e.g., ["Blueprint", "Text"]
 }
 ```
 
+**Important Notes**:
+- `mod_type` string now includes additional categories in square brackets for display
+- `category` contains only the primary category (Mesh, VFX, Audio, etc.)
+- `additional_categories` is an array that can contain "Blueprint", "Text", or both
+- For filtering, you need to check BOTH `category` AND `additional_categories`
+
 ## Questions for UX Designer
 
-1. Should Blueprint badge use purple (#c084fc) or a different color?
-2. Should it display text "Blueprint" or an icon/abbreviation?
-3. Should it be the same size as other badges or smaller?
-4. Any specific hover/interaction states needed?
-5. Should Blueprint mods have any special visual treatment in the mod list?
+1. **Colors**: 
+   - Blueprint: Purple (#c084fc) - OK?
+   - Text: Yellow/Gold (#fbbf24) - OK?
+   - Or should they use different colors?
+
+2. **Display Format**:
+   - Full text "Blueprint" and "Text"?
+   - Abbreviated "BP" and "TXT"?
+   - Icons (📘 for Blueprint, 📝 for Text)?
+
+3. **Badge Size**:
+   - Same size as category badge?
+   - Smaller/more subtle?
+
+4. **Filter Display**:
+   - Should Blueprint/Text filters be visually distinct from primary category filters?
+   - Should they be in a separate section?
+
+5. **Interaction States**:
+   - Any specific hover/active states needed?
+   - Should clicking a badge in mod details apply that filter?
 
 ## Implementation Priority
 
-**High Priority**:
-- Basic Blueprint badge display (text-based, purple)
-- Conditional rendering based on `has_blueprint`
+**High Priority** (Required for functionality):
+1. Update filter generation to include `additional_categories`
+2. Update filter logic to check both `category` and `additional_categories`
+3. Add basic badge rendering for additional categories
+4. Add CSS for `.blueprint-badge` and `.text-badge`
 
-**Medium Priority**:
+**Medium Priority** (Polish):
 - Custom icon/styling refinements
 - Hover states/animations
+- Visual distinction in filter sidebar
 
-**Low Priority**:
-- Alternative display options
-- Integration with mod list view
+**Low Priority** (Nice to have):
+- Alternative display options (icons, abbreviations)
+- Click-to-filter from badges
+- Special visual treatment in mod list view
+
+## Example Mod Data
+
+**Mesh mod with Blueprint and Text:**
+```json
+{
+  "mod_type": "Invisible Woman - Mesh [Blueprint, Text]",
+  "character_name": "Invisible Woman",
+  "category": "Mesh",
+  "additional_categories": ["Blueprint", "Text"]
+}
+```
+
+**VFX mod with Text only:**
+```json
+{
+  "mod_type": "Blade - VFX [Text]",
+  "character_name": "Blade",
+  "category": "VFX",
+  "additional_categories": ["Text"]
+}
+```
+
+**Blueprint-only mod:**
+```json
+{
+  "mod_type": "Hawkeye - Blueprint",
+  "character_name": "Hawkeye",
+  "category": "Blueprint",
+  "additional_categories": []
+}
+```

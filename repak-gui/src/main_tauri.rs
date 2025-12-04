@@ -438,7 +438,19 @@ async fn parse_dropped_files(
     
     let mut mods = Vec::new();
     
-    for path_str in paths {
+    // Filter out .utoc and .ucas files - they will be handled with their .pak file
+    let filtered_paths: Vec<String> = paths.into_iter()
+        .filter(|p| {
+            let path = PathBuf::from(p);
+            if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+                ext != "utoc" && ext != "ucas"
+            } else {
+                true
+            }
+        })
+        .collect();
+    
+    for path_str in filtered_paths {
         let path = PathBuf::from(&path_str);
         
         if !path.exists() {
@@ -653,14 +665,53 @@ async fn parse_dropped_files(
                 // Fallback if extraction/analysis failed
                 ("Archive".to_string(), false, false, false)
             } else if ext == "pak" {
-            // Try to read PAK and determine type
-            if let Ok(file) = File::open(&path) {
+            // Check if this is an IoStore package (has .utoc and .ucas companions)
+            let utoc_path = path.with_extension("utoc");
+            let ucas_path = path.with_extension("ucas");
+            let is_iostore = utoc_path.exists() && ucas_path.exists();
+            
+            if is_iostore {
+                // IoStore package detected - just copy files, no processing
+                let _ = window.emit("install_log", format!("[Detection] IoStore package detected: {} (will copy directly)", mod_name));
+                
+                // Read file list for mod type detection only
+                let mod_type = if let Ok(file) = File::open(&path) {
+                    if let Ok(aes_key) = AesKey::from_str("0C263D8C22DCB085894899C3A3796383E9BF9DE0CBFB08C9BF2DEF2E84F29D74") {
+                        let mut reader = BufReader::new(file);
+                        if let Ok(pak) = PakBuilder::new().key(aes_key.0).reader(&mut reader) {
+                            use crate::utoc_utils::read_utoc;
+                            let files = read_utoc(&utoc_path, &pak, &path);
+                            let file_paths: Vec<String> = files.iter().map(|f| f.file_path.clone()).collect();
+                            get_current_pak_characteristics(file_paths)
+                        } else {
+                            "IoStore Package".to_string()
+                        }
+                    } else {
+                        "IoStore Package".to_string()
+                    }
+                } else {
+                    "IoStore Package".to_string()
+                };
+                
+                let _ = window.emit("install_log", format!("[Detection] IoStore mod type: {}", mod_type));
+                
+                // IoStore packages: no fixes, no repak
+                (mod_type, false, false, false)
+            } else if let Ok(file) = File::open(&path) {
+                // Regular PAK file (not IoStore) - process normally
                 // Create AES key for each file
                 if let Ok(aes_key) = AesKey::from_str("0C263D8C22DCB085894899C3A3796383E9BF9DE0CBFB08C9BF2DEF2E84F29D74") {
                     let mut reader = BufReader::new(file);
                     if let Ok(pak) = PakBuilder::new().key(aes_key.0).reader(&mut reader) {
                         let files: Vec<String> = pak.files();
                         let mod_type = get_current_pak_characteristics(files.clone());
+                        
+                        // Check if this might be an IoStore mod with missing companion files
+                        let is_audio_or_movies = mod_type.contains("Audio") || mod_type.contains("Movies");
+                        if !is_audio_or_movies {
+                            // This is NOT an Audio/Movies mod, so it might need .utoc/.ucas files
+                            let _ = window.emit("install_log", format!("[WARNING] {} appears to be a {} mod without .utoc/.ucas files. If this is an IoStore mod, please drag all 3 files (.pak, .utoc, .ucas) together!", mod_name, mod_type));
+                        }
                         
                         // Get uasset files for extraction (also extract matching .uexp files)
                         let uasset_files: Vec<&String> = files.iter()
@@ -788,8 +839,10 @@ async fn parse_dropped_files(
             ("Unknown".to_string(), false, false, false)
         };
         
-        // For .pak files, auto-enable repak
-        let auto_to_repak = path.extension().and_then(|s| s.to_str()) == Some("pak");
+        // For .pak files, auto-enable repak UNLESS it's an IoStore package
+        let is_pak = path.extension().and_then(|s| s.to_str()) == Some("pak");
+        let is_iostore_pkg = is_pak && path.with_extension("utoc").exists() && path.with_extension("ucas").exists();
+        let auto_to_repak = is_pak && !is_iostore_pkg;
         
         mods.push(InstallableModInfo {
             mod_name,

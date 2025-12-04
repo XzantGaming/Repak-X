@@ -630,6 +630,15 @@ fn map_to_mods_internal(paths: &[PathBuf]) -> Vec<InstallableMod> {
             let is_dir = path.clone().is_dir();
             let extension = path.extension().unwrap_or_default();
             let is_archive = extension == "zip" || extension == "rar" || extension == "7z";
+            
+            // Check if this is an IoStore package (has .utoc and .ucas companions)
+            let is_iostore = if extension == "pak" {
+                let utoc_path = path.with_extension("utoc");
+                let ucas_path = path.with_extension("ucas");
+                utoc_path.exists() && ucas_path.exists()
+            } else {
+                false
+            };
 
             let mut modtype = "Unknown".to_string();
             let mut pak = None;
@@ -644,13 +653,27 @@ fn map_to_mods_internal(paths: &[PathBuf]) -> Vec<InstallableMod> {
                 match builder {
                     Ok(builder) => {
                         pak = Some(builder.clone());
-                        let files = builder.files();
-                        modtype = get_current_pak_characteristics(files.clone());
-                        len = files.len();
                         
-                        // Auto-detect mesh and texture files in pak files
-                        auto_fix_mesh = detect_mesh_files(&files);
-                        auto_fix_textures = detect_texture_files(&files);
+                        // For IoStore packages, read from .utoc file
+                        let files = if is_iostore {
+                            let utoc_path = path.with_extension("utoc");
+                            let utoc_files = read_utoc(&utoc_path, &builder, path);
+                            len = utoc_files.len();
+                            utoc_files.iter().map(|f| f.file_path.clone()).collect()
+                        } else {
+                            let files = builder.files();
+                            len = files.len();
+                            files
+                        };
+                        
+                        modtype = get_current_pak_characteristics(files.clone());
+                        
+                        // IoStore packages should not have auto-fixes enabled
+                        if !is_iostore {
+                            // Auto-detect mesh and texture files in pak files
+                            auto_fix_mesh = detect_mesh_files(&files);
+                            auto_fix_textures = detect_texture_files(&files);
+                        }
                     }
                     Err(e) => {
                         error!("Error reading pak file: {}", e);
@@ -697,10 +720,15 @@ fn map_to_mods_internal(paths: &[PathBuf]) -> Vec<InstallableMod> {
                 extensible_vec.append(&mut new_mods);
             }
 
+            // Determine if we should repak this mod
+            // Don't repak if: it's a directory, IoStore package, or Audio/Movies mod
+            let is_audio_or_movies = modtype.contains("Audio") || modtype.contains("Movies");
+            let should_repak = !is_dir && !is_iostore && !is_audio_or_movies;
+            
             Ok(InstallableMod {
                 mod_name: path.file_stem().unwrap().to_str().unwrap().to_string(),
                 mod_type: modtype,
-                repak: !is_dir,
+                repak: should_repak,
                 fix_mesh: auto_fix_mesh,
                 fix_textures: auto_fix_textures,
                 is_dir,
@@ -709,6 +737,7 @@ fn map_to_mods_internal(paths: &[PathBuf]) -> Vec<InstallableMod> {
                 mount_point: "../../../".to_string(),
                 path_hash_seed: "00000000".to_string(),
                 total_files: len,
+                iostore: is_iostore,  // Mark as IoStore package
                 is_archived: is_archive,
                 ..Default::default()
             })

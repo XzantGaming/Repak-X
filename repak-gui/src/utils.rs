@@ -32,10 +32,11 @@ static SKIN_ID_STRICT_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(10[1-6]\d\d{3})").unwrap()
 });
 
-// Broad regex to find ANY 4-digit sequence - we'll validate against character data
-// This catches hero IDs anywhere in the path/filename
+// Broad regex to find 4-digit sequences that are likely character IDs
+// Must be preceded by / or _ and not part of a longer number (not preceded/followed by digits)
+// This catches hero IDs anywhere in the path/filename while avoiding false positives
 static BROAD_FOUR_DIGIT_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"\d{4}").unwrap()
+    Regex::new(r"(?:^|[/_])(\d{4})(?:[/_]|$)").unwrap()
 });
 
 /// Result of mod characteristics detection, includes mod type and detected heroes
@@ -49,6 +50,9 @@ pub struct ModCharacteristics {
     /// Pure mod category (e.g., "Audio", "Mesh", "VFX")
     /// Without character name prefix
     pub category: String,
+    /// Additional categories that can appear alongside the main category
+    /// e.g., Blueprint, Text - these are additive and don't override the main category
+    pub additional_categories: Vec<String>,
 }
 
 impl ModCharacteristics {
@@ -176,6 +180,19 @@ pub fn get_pak_characteristics_detailed(mod_contents: Vec<String>) -> ModCharact
         if path_lower.contains("/stringtable/") || path_lower.starts_with("stringtable/") || file_lower.contains("/stringtable/") || path_lower.contains("/data/stringtable/") {
             has_text = true;
         }
+        
+        // Blueprint: Common Blueprint patterns
+        // 1. BP_Something (Blueprint prefix)
+        // 2. Something_C (Blueprint class suffix)
+        // 3. SomethingBP (Blueprint suffix)
+        // 4. /Blueprints/ folder path
+        if (filename_lower.starts_with("bp_") || 
+            filename_lower.contains("_c.") ||
+            filename_lower.contains("bp.") ||
+            filename_lower.ends_with("bp") ||
+            path_lower.contains("/blueprints/")) && is_uasset {
+            has_blueprint = true;
+        }
 
         // Try to get skin-specific name from Characters paths
         let category = path.split('/').next().unwrap_or_default();
@@ -224,11 +241,11 @@ pub fn get_pak_characteristics_detailed(mod_contents: Vec<String>) -> ModCharact
             }
         }
         
-        // Broad fallback: Check for ANY 4-digit sequence in the entire file path
+        // Broad fallback: Check for 4-digit sequences that look like character IDs
         // This catches hero IDs in any position (e.g., /StringTable/Hero_ST/1048/, /Data/1048_CustomData/, etc.)
         // We validate each match against the character database to avoid false positives
         for caps in BROAD_FOUR_DIGIT_REGEX.captures_iter(file) {
-            if let Some(four_digits) = caps.get(0) {
+            if let Some(four_digits) = caps.get(1) {  // Get capture group 1 (the digits)
                 let potential_id = four_digits.as_str();
                 // Validate it's actually a character ID by checking the database
                 if let Some(name) = character_data::get_character_name_from_id(potential_id) {
@@ -243,12 +260,13 @@ pub fn get_pak_characteristics_detailed(mod_contents: Vec<String>) -> ModCharact
     heroes.sort();
 
     // Determine the pure category (without character name)
-    // Priority order: Audio/Movies/UI (pure) > Mesh > Static Mesh > VFX > Blueprint > Text > Audio (mixed) > Retexture
-    let category = if has_audio && !has_skeletal_mesh && !has_static_mesh && !has_texture && !has_material && !has_blueprint {
+    // Priority order: Audio/Movies/UI (pure) > Mesh > Static Mesh > VFX > Audio (mixed) > Retexture
+    // Note: Blueprint and Text are now additive categories and handled separately
+    let category = if has_audio && !has_skeletal_mesh && !has_static_mesh && !has_texture && !has_material {
         "Audio"
-    } else if has_movies && !has_skeletal_mesh && !has_static_mesh && !has_texture && !has_material && !has_blueprint {
+    } else if has_movies && !has_skeletal_mesh && !has_static_mesh && !has_texture && !has_material {
         "Movies"
-    } else if has_ui && !has_skeletal_mesh && !has_static_mesh && !has_texture && !has_material && !has_blueprint {
+    } else if has_ui && !has_skeletal_mesh && !has_static_mesh && !has_texture && !has_material {
         "UI"
     } else if has_skeletal_mesh {
         "Mesh"
@@ -256,14 +274,16 @@ pub fn get_pak_characteristics_detailed(mod_contents: Vec<String>) -> ModCharact
         "Static Mesh"
     } else if has_material {
         "VFX"
-    } else if has_blueprint {
-        "Blueprint"
-    } else if has_text {
-        "Text"
     } else if has_audio {
         "Audio"
     } else if has_texture {
         "Retexture"
+    } else if has_blueprint {
+        // Blueprint-only mod (no other primary category detected)
+        "Blueprint"
+    } else if has_text {
+        // Text-only mod (no other primary category detected)
+        "Text"
     } else {
         "Unknown"
     };
@@ -278,8 +298,18 @@ pub fn get_pak_characteristics_detailed(mod_contents: Vec<String>) -> ModCharact
         String::new()
     };
     
+    // Build additional categories list (Blueprint and Text are additive)
+    let mut additional_categories = Vec::new();
+    if has_blueprint {
+        additional_categories.push("Blueprint".to_string());
+    }
+    if has_text {
+        additional_categories.push("Text".to_string());
+    }
+    
     // Build the combined mod_type string with " - " separator for easy splitting
-    let mod_type = if !display_character_name.is_empty() {
+    // Include additional categories in the display string
+    let base_type = if !display_character_name.is_empty() {
         // Character detected - combine with " - " separator
         format!("{} - {}", display_character_name, category)
     } else if heroes.len() > 1 {
@@ -290,11 +320,19 @@ pub fn get_pak_characteristics_detailed(mod_contents: Vec<String>) -> ModCharact
         category.to_string()
     };
     
+    // Append additional categories to the mod_type string
+    let mod_type = if !additional_categories.is_empty() {
+        format!("{} [{}]", base_type, additional_categories.join(", "))
+    } else {
+        base_type
+    };
+    
     ModCharacteristics {
         mod_type,
         heroes,
         character_name: display_character_name,
         category: category.to_string(),
+        additional_categories,
     }
 }
 
