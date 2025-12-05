@@ -343,7 +343,7 @@ impl<LogProvider: Logger> PatchFixer<LogProvider> {
 
 /// Public API for processing mesh files
 pub fn process_mesh_file(uasset_path: &Path, uexp_path: &Path) -> Result<(), io::Error> {
-    let mut logger = PrintLogger;
+    let logger = PrintLogger;
     let mut fixer = PatchFixer { logger };
     
     // Read the uasset file

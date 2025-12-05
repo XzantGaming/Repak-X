@@ -978,81 +978,6 @@ input[type="text"]:focus {
   border-top: 1px solid var(--panel-border);
 }
 
-/* Details Panel */
-.details-panel {
-  width: 300px;
-  background: var(--panel-bg);
-  border-left: 1px solid var(--panel-border);
-  display: flex;
-  flex-direction: column;
-}
-
-.details-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem;
-  border-bottom: 1px solid var(--panel-border);
-}
-
-.details-header h2 {
-  font-size: 1rem;
-  font-weight: 500;
-}
-
-.close-btn {
-  background: transparent;
-  border: none;
-  font-size: 1.5rem;
-  color: #999;
-  cursor: pointer;
-  padding: 0;
-}
-
-.close-btn:hover {
-  color: #e0e0e0;
-}
-
-.details-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 1rem;
-}
-
-.detail-section {
-  margin-bottom: 1.5rem;
-}
-
-.detail-section h3 {
-  font-size: 0.875rem;
-  color: #999;
-  margin-bottom: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.detail-item {
-  display: flex;
-  justify-content: space-between;
-  padding: 0.5rem 0;
-  font-size: 0.875rem;
-}
-
-.detail-label {
-  color: #999;
-}
-
-.detail-value {
-  color: #e0e0e0;
-  text-align: right;
-}
-
-.tags-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
 .action-buttons {
   display: flex;
   flex-direction: column;
@@ -1100,27 +1025,7 @@ input[type="text"]:focus {
   margin-top: 0.5rem;
 }
 
-/* Character/Category badges */
-.character-badge,
-.category-badge {
-  display: inline-block;
-  padding: 0.4rem 0.75rem;
-  border-radius: 999px;
-  font-weight: 600;
-  font-size: 0.85rem;
-}
-
-.character-badge {
-  background: rgba(255,255,255,0.08);
-  color: var(--text-primary);
-  border: 1px solid var(--panel-border);
-}
-
-.category-badge {
-  background: #4a9eff20;
-  color: var(--accent-primary, #4a9eff);
-  border: 1px solid rgba(74,158,255,0.35);
-}
+/* Character/Category badges moved to styles/Badges.css */
 
 /* File List */
 .file-list {
@@ -1476,6 +1381,19 @@ input[type="text"]:focus {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+  font-size: 0.85rem;
+}
+
+.log-line {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.log-empty {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-style: italic;
+  padding: 0.5rem;
 }
 
 .drawer-resize-handle {

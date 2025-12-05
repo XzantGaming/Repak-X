@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! P2P Manager - File Hosting Implementation
 //! Uses free file hosting (0x0.st) for reliable mod sharing
 
@@ -7,8 +8,8 @@ use log::{info, error};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use parking_lot::Mutex;
 use std::io::Write;
+use parking_lot::Mutex;
 use tauri::{Emitter, Window};
 
 pub struct UnifiedP2PManager {

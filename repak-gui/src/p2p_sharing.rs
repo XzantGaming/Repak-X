@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Secure P2P Mod Sharing Module
 //! 
 //! Provides secure peer-to-peer mod pack sharing functionality with:

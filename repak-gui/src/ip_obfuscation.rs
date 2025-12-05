@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! IP Address Obfuscation Utilities
 //!
 //! Provides functions to obfuscate IP addresses and multiaddresses
@@ -61,7 +62,7 @@ pub fn obfuscate_multiaddr(addr: &str) -> String {
     let parts: Vec<&str> = addr.split('/').collect();
     let mut obfuscated_parts = Vec::new();
     let mut found_ip = false;
-    let mut ip_value = String::new();
+    let mut ip_value;
     
     for (i, part) in parts.iter().enumerate() {
         if *part == "ip4" || *part == "ip6" {

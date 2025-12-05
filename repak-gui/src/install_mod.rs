@@ -4,7 +4,7 @@ use crate::install_mod::install_mod_logic::archives::{extract_zip, extract_rar, 
 use crate::uasset_detection::{detect_mesh_files, detect_texture_files};
 use crate::utils::{collect_files, get_current_pak_characteristics};
 use crate::utoc_utils::read_utoc;
-use log::{debug, error, warn};
+use log::{debug, error};
 use repak::utils::AesKey;
 use repak::Compression::Oodle;
 use repak::{Compression, PakReader};
@@ -71,448 +71,6 @@ impl Default for InstallableMod {
     }
 }
 
-/* Legacy egui ModInstallRequest - removed for Tauri build
-   Original egui implementation:
-    pub fn new_mod_dialog(&mut self, ctx: &egui::Context, show_callback: &mut bool) {
-        let viewport_options = egui::ViewportBuilder::default()
-            .with_title("Install mods")
-            .with_icon(ICON.clone())
-            .with_inner_size([1000.0, 800.0])
-            .with_always_on_top();
-
-        Context::show_viewport_immediate(
-            ctx,
-            egui::ViewportId::from_hash_of("immediate_viewport"),
-            viewport_options,
-            |ctx, class| {
-                assert!(
-                    class == egui::ViewportClass::Immediate,
-                    "This egui backend doesn't support multiple viewports"
-                );
-
-                setup_custom_style(ctx);
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    ui.label("Mods to install");
-                    
-                    // Add filtering UI
-                    self.show_filter_ui(ui);
-                    ui.separator();
-                    
-                    self.table_ui(ui);
-                });
-                egui::TopBottomPanel::bottom("bottom_panel")
-                    .min_height(50.)
-                    .show(ctx, |ui| {
-                        Flex::horizontal()
-                            .align_items(FlexAlign::Center)
-                            .w_auto()
-                            .h_auto()
-                            .show(ui, |ui| {
-                                let selection_bg_color = ctx.style().visuals.selection.bg_fill;
-
-                                let install_mod = ui.add(
-                                    item(),
-                                    egui::Button::new("Install mod").fill(selection_bg_color),
-                                );
-
-                                let cancel = ui.add(item(), egui::Button::new("Cancel"));
-                                cancel.clicked().then(|| {
-                                    self.stop_thread.store(true, SeqCst);
-                                    *show_callback = false;
-                                });
-
-                                if install_mod.clicked() {
-                                    let mut mods = self.mods.to_vec(); // clone
-
-                                    let dir = self.mod_directory.clone();
-                                    let new_atomic = self.installed_mods_cbk.clone();
-                                    let new_stop_thread = self.stop_thread.clone();
-                                    self.joined_thread = Some(std::thread::spawn(move || {
-                                        install_mods_in_viewport(
-                                            &mut mods,
-                                            &dir,
-                                            &new_atomic,
-                                            &new_stop_thread,
-                                        );
-                                    }));
-                                    self.animate = true;
-                                }
-                            });
-
-                        let total_mods = self.total_mods;
-                        let installed = self
-                            .installed_mods_cbk
-                            .load(std::sync::atomic::Ordering::SeqCst);
-                        let mut percentage = installed as f32 / total_mods;
-                        if installed == -255 {
-                            percentage = 1.0;
-                        }
-                        ui.add(
-                            egui::ProgressBar::new(percentage)
-                                .text("Installing mods...")
-                                .animate(self.animate)
-                                .show_percentage(),
-                        );
-
-                        if installed == -255 {
-                            self.animate = false;
-                            *show_callback = false;
-                        }
-                    });
-                if ctx.input(|i| i.viewport().close_requested()) {
-                    // Tell parent viewport that we should not show next frame:
-                    *show_callback = false;
-                }
-            },
-        );
-        self.show_unknown_tagging_dialog(ctx);
-    }
-
-    fn show_filter_ui(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
-            ui.checkbox(&mut self.filter_enabled, "Enable filtering");
-            
-            if self.filter_enabled {
-                ui.separator();
-                ui.label("Show types:");
-                
-                // Get all unique mod types from current mods
-                let all_types: std::collections::HashSet<String> = self.mods
-                    .iter()
-                    .map(|m| m.mod_type.clone())
-                    .collect();
-                
-                // Create checkboxes for each mod type
-                for mod_type in &all_types {
-                    let mut is_selected = self.selected_filter_types.contains(mod_type);
-                    if ui.checkbox(&mut is_selected, mod_type).changed() {
-                        if is_selected {
-                            self.selected_filter_types.insert(mod_type.clone());
-                        } else {
-                            self.selected_filter_types.remove(mod_type);
-                        }
-                    }
-                }
-                
-                ui.separator();
-                if ui.button("Select All").clicked() {
-                    self.selected_filter_types = all_types.clone();
-                }
-                if ui.button("Clear All").clicked() {
-                    self.selected_filter_types.clear();
-                }
-            }
-        });
-    }
-
-    fn show_unknown_tagging_dialog(&mut self, ctx: &egui::Context) {
-        if self.show_unknown_tagging_dialog {
-            let viewport_options = egui::ViewportBuilder::default()
-                .with_title("Tag Unknown Mod")
-                .with_icon(ICON.clone())
-                .with_inner_size([400.0, 200.0])
-                .with_always_on_top();
-
-            Context::show_viewport_immediate(
-                ctx,
-                egui::ViewportId::from_hash_of("tag_unknown_mod"),
-                viewport_options,
-                |ctx, class| {
-                    setup_custom_style(ctx);
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        if let Some(mod_index) = self.unknown_mod_being_tagged {
-                            if let Some(mod_item) = self.mods.get(mod_index) {
-                                ui.label(format!("Mod: {}", mod_item.mod_name));
-                                ui.label("This mod is currently tagged as 'Unknown'.");
-                                ui.label("Please select an appropriate category:");
-                                 
-                                ui.separator();
-                                 
-                                // Predefined categories based on existing system
-                                let categories = vec![
-                                    "Character".to_string(),
-                                    "UI".to_string(),
-                                    "Audio".to_string(),
-                                    "Movies".to_string(),
-                                    "VFX".to_string(),
-                                    "Map".to_string(),
-                                    "Texture".to_string(),
-                                    "Mesh".to_string(),
-                                    "Animation".to_string(),
-                                    "Other".to_string(),
-                                ];
-                                 
-                                for category in &categories {
-                                    if ui.button(category).clicked() {
-                                        if let Some(mod_item) = self.mods.get_mut(mod_index) {
-                                            mod_item.mod_type = category.clone();
-                                        }
-                                        self.show_unknown_tagging_dialog = false;
-                                        self.unknown_mod_being_tagged = None;
-                                    }
-                                }
-                                 
-                                ui.separator();
-                                if ui.button("Cancel").clicked() {
-                                    self.show_unknown_tagging_dialog = false;
-                                    self.unknown_mod_being_tagged = None;
-                                    self.new_tag_input.clear();
-                                }
-                            }
-                        }
-                    });
-                }
-            );
-        }
-    }
-
-    fn table_ui(&mut self, ui: &mut egui::Ui) {
-        let available_height = ui.available_height();
-        ui.separator();
-
-        let table = TableBuilder::new(ui)
-            .striped(true)
-            .cell_layout(egui::Layout::left_to_right(egui::Align::LEFT))
-            .column(Column::auto())
-            .column(Column::auto())
-            .column(Column::remainder().at_least(400.)) // mod name
-            .column(Column::auto()) // Character
-            .column(Column::auto()) // type
-            .column(Column::remainder()) // options
-            .min_scrolled_height(0.0)
-            .max_scroll_height(available_height);
-
-        table
-            .header(20., |mut header| {
-                header.col(|ui| {
-                    ui.label("Enabled");
-                });
-
-                header.col(|ui| {
-                    ui.label("Row");
-                });
-
-                header.col(|ui| {
-                    ui.label("Name");
-                });
-
-                header.col(|ui| {
-                    ui.label("Category");
-                });
-
-                header.col(|ui| {
-                    ui.label("Mod type");
-                });
-                header.col(|ui| {
-                    ui.label("Options");
-                });
-            })
-            .body(|mut body| {
-                let mut visible_row_idx = 0;
-                for (rowidx, mods) in self.mods.iter_mut().enumerate() {
-                    // Apply filtering if enabled
-                    if self.filter_enabled {
-                        // If no filters are selected, show all mods
-                        if !self.selected_filter_types.is_empty() {
-                            if !self.selected_filter_types.contains(&mods.mod_type) {
-                                continue; // Skip this mod if it doesn't match the filter
-                            }
-                        }
-                    }
-                    
-                    visible_row_idx += 1;
-                    body.row(20., |mut row| {
-                        row.col(|ui|{
-                            ui.add(Checkbox::new(&mut mods.enabled,""));
-                        });
-
-                        row.col(|ui| {
-                            ui.add(Label::new(format!("{})", visible_row_idx)).halign(Align::RIGHT));
-                        });
-                        // name field
-                        row.col(|ui| {
-                            ui.horizontal(|ui| {
-                                if mods.editing {
-                                    ui.set_width(ui.available_width() * 0.8); // padding for edit
-                                    let text_edit = ui.add(
-                                        egui::TextEdit::singleline(&mut mods.mod_name)
-                                            .clip_text(true),
-                                    );
-                                    // Proactively ensure the text edit has focus while editing
-                                    if !text_edit.has_focus() {
-                                        text_edit.request_focus();
-                                    }
-
-                                    let mut finish_edit = false;
-                                    let mut finished_now = false;
-                                    if text_edit.lost_focus()
-                                        || ui.input(|i| i.key_pressed(egui::Key::Enter))
-                                    {
-                                        finish_edit = true;
-                                    }
-                                    // Render the confirm/edit button aligned to the right and
-                                    // coordinate with finish_edit state.
-                                    ui.with_layout(
-                                        egui::Layout::right_to_left(egui::Align::Center),
-                                        |ui| {
-                                            if ui.button("✔").clicked() {
-                                                finish_edit = true;
-                                            }
-                                        },
-                                    );
-                                    if finish_edit {
-                                        // Explicitly release focus from the text field to avoid
-                                        // immediate re-triggering of edit state on the next frame.
-                                        text_edit.surrender_focus();
-                                        mods.editing = false;
-                                        finished_now = true;
-                                    }
-                                } else {
-                                    ui.add(
-                                        Label::new(&mods.mod_name).halign(Align::LEFT).truncate(),
-                                    );
-                                }
-                                // align button right (only the edit button when not editing)
-                                if !mods.editing {
-                                    ui.with_layout(
-                                        egui::Layout::right_to_left(egui::Align::Center),
-                                        |ui| {
-                                            if ui.button("✏").clicked() {
-                                                mods.editing = true;
-                                            }
-                                        },
-                                    );
-                                }
-                            });
-                        });
-                        row.col(|ui| {
-                            ui.horizontal(|ui| {
-                                ui.label(&mods.mod_type);
-                                // Add "Tag" button for Unknown mods
-                                if mods.mod_type == "Unknown" || mods.mod_type.contains("(Unknown)") {
-                                    if ui.small_button("🏷 Tag").clicked() {
-                                        self.show_unknown_tagging_dialog = true;
-                                        self.unknown_mod_being_tagged = Some(rowidx);
-                                    }
-                                }
-                            });
-                        });
-                        row.col(|ui| {
-                            let label = if mods.is_dir{
-                                "Directory"
-                            }
-                            else if mods.iostore {
-                                "Iostore"
-                            }
-                            else {
-                                "Pakfile"
-                            };
-                            ui.label(label);
-                        });
-                        row.col(|ui| {
-                            ui.collapsing("Options", |ui| {
-                                ui.add_enabled(
-                                    !mods.is_dir,
-                                    Checkbox::new(&mut mods.repak, "To repak"),
-                                );
-                                ui.add_enabled(
-                                    mods.is_dir || mods.repak,
-                                    Checkbox::new(&mut mods.fix_mesh, "Fix mesh"),
-                                );
-                                ui.add_enabled(
-                                    mods.is_dir || mods.repak,
-                                    Checkbox::new(&mut mods.fix_textures, "Fix textures (NoMipmaps)"),
-                                );
-
-                                let text_edit = TextEdit::singleline(&mut mods.mount_point);
-                                ui.add(text_edit.hint_text("Enter mount point..."));
-
-                                // Text edit for path_hash_seed with hint
-                                let text_edit = TextEdit::singleline(&mut mods.path_hash_seed);
-                                ui.add(text_edit.hint_text("Enter path hash seed..."));
-
-                                ComboBox::new("comp_level", "Compression Algorithm")
-                                    .selected_text(format!("{:?}", mods.compression))
-                                    .show_ui(ui, |ui| {
-                                        ui.selectable_value(
-                                            &mut mods.compression,
-                                            Compression::Zlib,
-                                            "Zlib",
-                                        );
-                                        ui.selectable_value(
-                                            &mut mods.compression,
-                                            Compression::Gzip,
-                                            "Gzip",
-                                        );
-                                        ui.selectable_value(
-                                            &mut mods.compression,
-                                            Compression::Oodle,
-                                            "Oodle",
-                                        );
-                                        ui.selectable_value(
-                                            &mut mods.compression,
-                                            Compression::Zstd,
-                                            "Zstd",
-                                        );
-                                        ui.selectable_value(
-                                            &mut mods.compression,
-                                            Compression::LZ4,
-                                            "LZ4",
-                                        );
-                                    });
-
-                                ui.separator();
-                                ui.label("Custom Tags");
-                                // Show tag chips with remove buttons
-                                if !mods.custom_tags.is_empty() {
-                                    ui.horizontal_wrapped(|ui| {
-                                        let mut to_remove: Option<String> = None;
-                                        for t in &mods.custom_tags {
-                                            let resp = ui.add(egui::Button::new(format!("{} ✕", t)).small());
-                                            if resp.clicked() { to_remove = Some(t.clone()); }
-                                        }
-                                        if let Some(rem) = to_remove { mods.custom_tags.retain(|x| x != &rem); }
-                                    });
-                                }
-                                // Add from existing global tags (from config and pending)
-                                let existing_tags = read_global_custom_tags();
-                                if !existing_tags.is_empty() {
-                                    ComboBox::new(format!("existing_tag_picker_{}", rowidx), "Add existing")
-                                        .selected_text("Select tag")
-                                        .show_ui(ui, |ui| {
-                                            for t in &existing_tags {
-                                                if ui.selectable_label(false, t).clicked() {
-                                                    if !mods.custom_tags.contains(t) {
-                                                        mods.custom_tags.push(t.clone());
-                                                        mods.custom_tags.sort();
-                                                        mods.custom_tags.dedup();
-                                                    }
-                                                }
-                                            }
-                                        });
-                                }
-
-                                ui.horizontal(|ui| {
-                                    let resp = ui.add(TextEdit::singleline(&mut mods.custom_tag_input).hint_text("Add tag"));
-                                    let enter = resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-                                    if (enter || ui.button("Add").clicked()) && !mods.custom_tag_input.trim().is_empty() {
-                                        let tag = mods.custom_tag_input.trim().to_string();
-                                        if !mods.custom_tags.contains(&tag) {
-                                            mods.custom_tags.push(tag);
-                                            mods.custom_tags.sort();
-                                            mods.custom_tags.dedup();
-                                        }
-                                        mods.custom_tag_input.clear();
-                                    }
-                                });
-                            });
-                        });
-                    })
-                }
-            });
-    }
-    */ // End of legacy egui implementation
-
 pub static AES_KEY: LazyLock<AesKey> = LazyLock::new(|| {
     AesKey::from_str("0C263D8C22DCB085894899C3A3796383E9BF9DE0CBFB08C9BF2DEF2E84F29D74")
         .expect("Unable to initialise AES_KEY")
@@ -521,13 +79,16 @@ pub static AES_KEY: LazyLock<AesKey> = LazyLock::new(|| {
 fn find_mods_from_archive(path: &str) -> Vec<InstallableMod> {
     let mut new_mods = Vec::<InstallableMod>::new();
     let mut processed_mods = std::collections::HashSet::new();
+    let mut found_pak_files = false;
     
+    // First pass: look for .pak files (existing behavior)
     for entry in WalkDir::new(path) {
         let entry = entry.expect("Failed to read directory entry");
         let file_path = entry.path();
         
         // Only process .pak files
         if file_path.is_file() && file_path.extension().and_then(|s| s.to_str()) == Some("pak") {
+            found_pak_files = true;
             let mod_base_name = file_path.file_stem().unwrap().to_str().unwrap().to_string();
             
             // Skip if we've already processed this mod
@@ -553,18 +114,13 @@ fn find_mods_from_archive(path: &str) -> Vec<InstallableMod> {
                         .map(|x| x.file_path.clone())
                         .collect::<Vec<_>>();
                     let len = files.len();
-                    let modtype = get_current_pak_characteristics(files.clone());
-                    
-                    // Auto-detect mesh and texture files even in IoStore mods
-                    let auto_fix_mesh = detect_mesh_files(&files);
-                    let auto_fix_textures = detect_texture_files(&files);
+                    let modtype = get_current_pak_characteristics(files);
 
                     let installable_mod = InstallableMod {
                         mod_name: mod_base_name,
-                        mod_type: format!("{} (IoStore)", modtype),  // Add IoStore indicator to type
+                        mod_type: modtype.to_string(),
                         repak: false,  // Don't use repak workflow for iostore mods
-                        fix_mesh: auto_fix_mesh,
-                        fix_textures: auto_fix_textures,
+                        fix_mesh: false,
                         is_dir: false,
                         reader: Some(builder),
                         mod_path: file_path.to_path_buf(),
@@ -593,23 +149,15 @@ fn find_mods_from_archive(path: &str) -> Vec<InstallableMod> {
                     let modtype = get_current_pak_characteristics(files.clone());
                     
                     // Check if this is an Audio or Movies mod (these should skip repak workflow)
-                    // TODO: Implement proper detection criteria for Audio/Movie mods
                     let is_audio_or_movie = modtype.contains("Audio") || modtype.contains("Movies");
                     
                     // Auto-detect mesh and texture files
                     let auto_fix_mesh = detect_mesh_files(&files);
                     let auto_fix_textures = detect_texture_files(&files);
-                    
-                    // Add indicator to mod type for PAK-only mods
-                    let display_type = if is_audio_or_movie {
-                        format!("{} (PAK Only)", modtype)
-                    } else {
-                        modtype.to_string()
-                    };
 
                     let installable_mod = InstallableMod {
                         mod_name: mod_base_name,
-                        mod_type: display_type,
+                        mod_type: modtype.to_string(),
                         repak: !is_audio_or_movie,  // Only use repak if NOT Audio/Movies
                         fix_mesh: auto_fix_mesh,
                         fix_textures: auto_fix_textures,
@@ -632,6 +180,137 @@ fn find_mods_from_archive(path: &str) -> Vec<InstallableMod> {
         }
     }
 
+    // Second pass: if no .pak files found, look for content folders with .uasset files
+    // This handles archives that contain loose mod files (folders) instead of pre-packed .pak files
+    if !found_pak_files {
+        debug!("No .pak files found in archive, looking for content folders...");
+        
+        // Find directories that contain .uasset files (these are mod content folders)
+        let archive_root = std::path::Path::new(path);
+        
+        // Check immediate subdirectories of the archive root
+        if let Ok(entries) = std::fs::read_dir(archive_root) {
+            for entry in entries.flatten() {
+                let entry_path = entry.path();
+                
+                // Check if this is a directory that contains content
+                if entry_path.is_dir() {
+                    let mut has_content = false;
+                    let mut content_files = Vec::new();
+                    
+                    // Recursively collect files and check for .uasset content
+                    if collect_files(&mut content_files, &entry_path).is_ok() {
+                        for file in &content_files {
+                            if let Some(ext) = file.extension().and_then(|s| s.to_str()) {
+                                if ext == "uasset" || ext == "uexp" || ext == "ubulk" || ext == "bnk" || ext == "wem" {
+                                    has_content = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    
+                    if has_content {
+                        let mod_name = entry_path.file_name()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or("Unknown")
+                            .to_string();
+                        
+                        debug!("Found content folder in archive: {} ({} files)", mod_name, content_files.len());
+                        
+                        // Get file paths as strings for mod type detection
+                        let file_strings: Vec<String> = content_files
+                            .iter()
+                            .map(|p| p.to_string_lossy().to_string())
+                            .collect();
+                        
+                        let modtype = get_current_pak_characteristics(file_strings.clone());
+                        let is_audio_or_movies = modtype.contains("Audio") || modtype.contains("Movies");
+                        
+                        // Auto-detect mesh and texture files
+                        let auto_fix_mesh = detect_mesh_files(&file_strings);
+                        let auto_fix_textures = detect_texture_files(&file_strings);
+                        
+                        let installable_mod = InstallableMod {
+                            mod_name,
+                            mod_type: modtype.to_string(),
+                            repak: !is_audio_or_movies,  // Will go through convert_to_iostore_directory
+                            fix_mesh: auto_fix_mesh,
+                            fix_textures: auto_fix_textures,
+                            is_dir: true,  // Mark as directory so it uses convert_to_iostore_directory
+                            reader: None,
+                            mod_path: entry_path,
+                            mount_point: "../../../".to_string(),
+                            path_hash_seed: "00000000".to_string(),
+                            total_files: content_files.len(),
+                            iostore: false,
+                            is_archived: false,
+                            editing: false,
+                            compression: Oodle,
+                            ..Default::default()
+                        };
+                        
+                        new_mods.push(installable_mod);
+                    }
+                }
+            }
+        }
+        
+        // If still no mods found, check if the archive root itself contains content files directly
+        if new_mods.is_empty() {
+            let mut content_files = Vec::new();
+            if collect_files(&mut content_files, archive_root).is_ok() {
+                let has_content = content_files.iter().any(|f| {
+                    f.extension()
+                        .and_then(|s| s.to_str())
+                        .map(|ext| ext == "uasset" || ext == "uexp" || ext == "ubulk" || ext == "bnk" || ext == "wem")
+                        .unwrap_or(false)
+                });
+                
+                if has_content {
+                    // Use the archive folder name as mod name
+                    let mod_name = archive_root.file_name()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("ExtractedMod")
+                        .to_string();
+                    
+                    debug!("Archive root contains content files: {} ({} files)", mod_name, content_files.len());
+                    
+                    let file_strings: Vec<String> = content_files
+                        .iter()
+                        .map(|p| p.to_string_lossy().to_string())
+                        .collect();
+                    
+                    let modtype = get_current_pak_characteristics(file_strings.clone());
+                    let is_audio_or_movies = modtype.contains("Audio") || modtype.contains("Movies");
+                    let auto_fix_mesh = detect_mesh_files(&file_strings);
+                    let auto_fix_textures = detect_texture_files(&file_strings);
+                    
+                    let installable_mod = InstallableMod {
+                        mod_name,
+                        mod_type: modtype.to_string(),
+                        repak: !is_audio_or_movies,
+                        fix_mesh: auto_fix_mesh,
+                        fix_textures: auto_fix_textures,
+                        is_dir: true,
+                        reader: None,
+                        mod_path: archive_root.to_path_buf(),
+                        mount_point: "../../../".to_string(),
+                        path_hash_seed: "00000000".to_string(),
+                        total_files: content_files.len(),
+                        iostore: false,
+                        is_archived: false,
+                        editing: false,
+                        compression: Oodle,
+                        ..Default::default()
+                    };
+                    
+                    new_mods.push(installable_mod);
+                }
+            }
+        }
+    }
+
     new_mods
 }
 
@@ -641,24 +320,25 @@ fn map_to_mods_internal(paths: &[PathBuf]) -> Vec<InstallableMod> {
         .iter()
         .map(|path| {
             let is_dir = path.clone().is_dir();
-            let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+            let extension = path.extension().unwrap_or_default();
             let is_archive = extension == "zip" || extension == "rar" || extension == "7z";
+            
+            // Check if this is an IoStore package (has .utoc and .ucas companions)
+            let is_iostore = if extension == "pak" {
+                let utoc_path = path.with_extension("utoc");
+                let ucas_path = path.with_extension("ucas");
+                utoc_path.exists() && ucas_path.exists()
+            } else {
+                false
+            };
 
             let mut modtype = "Unknown".to_string();
             let mut pak = None;
             let mut len = 1;
             let mut auto_fix_mesh = false;
             let mut auto_fix_textures = false;
-            let mut is_iostore = false;
 
             if !is_dir && !is_archive {
-                // Check if this is an IoStore mod (has .utoc and .ucas companions)
-                if extension == "pak" {
-                    let utoc_path = path.with_extension("utoc");
-                    let ucas_path = path.with_extension("ucas");
-                    is_iostore = utoc_path.exists() && ucas_path.exists();
-                }
-                
                 let builder = repak::PakBuilder::new()
                     .key(AES_KEY.clone().0)
                     .reader(&mut BufReader::new(File::open(path.clone()).unwrap()));
@@ -666,34 +346,25 @@ fn map_to_mods_internal(paths: &[PathBuf]) -> Vec<InstallableMod> {
                     Ok(builder) => {
                         pak = Some(builder.clone());
                         
-                        // If it's IoStore, read files from .utoc
+                        // For IoStore packages, read from .utoc file
                         let files = if is_iostore {
                             let utoc_path = path.with_extension("utoc");
                             let utoc_files = read_utoc(&utoc_path, &builder, path);
-                            utoc_files.iter().map(|x| x.file_path.clone()).collect::<Vec<_>>()
+                            len = utoc_files.len();
+                            utoc_files.iter().map(|f| f.file_path.clone()).collect()
                         } else {
-                            builder.files()
+                            let files = builder.files();
+                            len = files.len();
+                            files
                         };
                         
-                        let base_modtype = get_current_pak_characteristics(files.clone());
-                        len = files.len();
+                        modtype = get_current_pak_characteristics(files.clone());
                         
-                        // Auto-detect mesh and texture files in pak files
-                        auto_fix_mesh = detect_mesh_files(&files);
-                        auto_fix_textures = detect_texture_files(&files);
-                        
-                        // Add indicators to mod type
-                        if is_iostore {
-                            modtype = format!("{} (IoStore)", base_modtype);
-                        } else {
-                            // Check if this is an Audio or Movies mod (PAK Only)
-                            // TODO: Implement proper detection criteria for Audio/Movie mods
-                            let is_audio_or_movie = base_modtype.contains("Audio") || base_modtype.contains("Movies");
-                            modtype = if is_audio_or_movie {
-                                format!("{} (PAK Only)", base_modtype)
-                            } else {
-                                base_modtype
-                            };
+                        // IoStore packages should not have auto-fixes enabled
+                        if !is_iostore {
+                            // Auto-detect mesh and texture files in pak files
+                            auto_fix_mesh = detect_mesh_files(&files);
+                            auto_fix_textures = detect_texture_files(&files);
                         }
                     }
                     Err(e) => {
@@ -741,10 +412,15 @@ fn map_to_mods_internal(paths: &[PathBuf]) -> Vec<InstallableMod> {
                 extensible_vec.append(&mut new_mods);
             }
 
+            // Determine if we should repak this mod
+            // Don't repak if: it's a directory, IoStore package, or Audio/Movies mod
+            let is_audio_or_movies = modtype.contains("Audio") || modtype.contains("Movies");
+            let should_repak = !is_dir && !is_iostore && !is_audio_or_movies;
+            
             Ok(InstallableMod {
                 mod_name: path.file_stem().unwrap().to_str().unwrap().to_string(),
                 mod_type: modtype,
-                repak: !is_dir && !is_iostore,  // Don't repak IoStore mods
+                repak: should_repak,
                 fix_mesh: auto_fix_mesh,
                 fix_textures: auto_fix_textures,
                 is_dir,
@@ -753,8 +429,8 @@ fn map_to_mods_internal(paths: &[PathBuf]) -> Vec<InstallableMod> {
                 mount_point: "../../../".to_string(),
                 path_hash_seed: "00000000".to_string(),
                 total_files: len,
+                iostore: is_iostore,  // Mark as IoStore package
                 is_archived: is_archive,
-                iostore: is_iostore,  // Mark as IoStore so it gets copied directly
                 ..Default::default()
             })
         })
@@ -769,37 +445,7 @@ fn map_to_mods_internal(paths: &[PathBuf]) -> Vec<InstallableMod> {
 }
 
 pub fn map_paths_to_mods(paths: &[PathBuf]) -> Vec<InstallableMod> {
-    // Pre-process paths to handle .utoc/.ucas files
-    let mut processed_paths = Vec::new();
-    let mut seen_bases = std::collections::HashSet::new();
-    
-    for path in paths {
-        let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
-        
-        // If it's a .utoc or .ucas file, find the .pak file instead
-        if extension == "utoc" || extension == "ucas" {
-            let pak_path = path.with_extension("pak");
-            if pak_path.exists() {
-                let base_name = pak_path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-                if !seen_bases.contains(base_name) {
-                    seen_bases.insert(base_name.to_string());
-                    processed_paths.push(pak_path);
-                }
-            } else {
-                // If no .pak file exists, skip this file
-                warn!("Skipping {} - no companion .pak file found", path.display());
-            }
-        } else {
-            // For other files (including .pak), add them normally
-            let base_name = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-            if !seen_bases.contains(base_name) {
-                seen_bases.insert(base_name.to_string());
-                processed_paths.push(path.clone());
-            }
-        }
-    }
-    
-    let installable_mods = map_to_mods_internal(&processed_paths);
+    let installable_mods = map_to_mods_internal(paths);
     installable_mods
 }
 

@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Stream Abstraction Layer
 //!
 //! Provides a unified interface for both TCP and libp2p streams,

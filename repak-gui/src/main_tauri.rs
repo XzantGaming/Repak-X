@@ -17,7 +17,7 @@ mod p2p_stream;
 mod p2p_protocol;
 mod ip_obfuscation;
 
-use uasset_detection::{detect_mesh_files_async, detect_texture_files_async, detect_static_mesh_files_async, detect_blueprint_files_async};
+use uasset_detection::{detect_mesh_files_async, detect_texture_files_async, detect_static_mesh_files_async};
 use log::{info, warn, error};
 use serde::{Deserialize, Serialize};
 use simplelog::{ColorChoice, CombinedLogger, Config, TermLogger, TerminalMode, WriteLogger};
@@ -36,6 +36,7 @@ use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 
 struct WatcherState {
     watcher: Mutex<Option<RecommendedWatcher>>,
+    #[allow(dead_code)]
     last_event_time: Mutex<std::time::Instant>,
 }
 
@@ -396,8 +397,6 @@ struct InstallableModInfo {
     auto_fix_texture: bool,
     auto_fix_serialize_size: bool,
     auto_to_repak: bool,
-    iostore: bool,  // True if this is an IoStore mod (.pak + .utoc + .ucas)
-    repak: bool,    // True if this should go through repak workflow
 }
 
 #[tauri::command]
@@ -440,7 +439,19 @@ async fn parse_dropped_files(
     
     let mut mods = Vec::new();
     
-    for path_str in paths {
+    // Filter out .utoc and .ucas files - they will be handled with their .pak file
+    let filtered_paths: Vec<String> = paths.into_iter()
+        .filter(|p| {
+            let path = PathBuf::from(p);
+            if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+                ext != "utoc" && ext != "ucas"
+            } else {
+                true
+            }
+        })
+        .collect();
+    
+    for path_str in filtered_paths {
         let path = PathBuf::from(&path_str);
         
         if !path.exists() {
@@ -513,11 +524,13 @@ async fn parse_dropped_files(
                     if extract_result.is_ok() {
                         let _ = window.emit("install_log", format!("[Detection] Archive extracted, analyzing contents..."));
                         
-                        // Find first .pak file in extracted contents
+                        // First, look for .pak files in extracted contents
+                        let mut found_pak = false;
                         for entry in WalkDir::new(temp_path) {
                             if let Ok(entry) = entry {
                                 let entry_path = entry.path();
                                 if entry_path.is_file() && entry_path.extension().and_then(|s| s.to_str()) == Some("pak") {
+                                    found_pak = true;
                                     // Found a pak file, analyze it
                                     if let Ok(file) = File::open(entry_path) {
                                         if let Ok(aes_key) = AesKey::from_str("0C263D8C22DCB085894899C3A3796383E9BF9DE0CBFB08C9BF2DEF2E84F29D74") {
@@ -631,14 +644,6 @@ async fn parse_dropped_files(
                                                 drop(uasset_temp_dir);
                                                 drop(temp_dir);
                                                 
-                                                // Check if archive contains IoStore files
-                                                let utoc_exists = entry_path.with_extension("utoc").exists();
-                                                let ucas_exists = entry_path.with_extension("ucas").exists();
-                                                let is_iostore_archive = utoc_exists && ucas_exists;
-                                                
-                                                // Check if it's Audio/Movie mod
-                                                let is_audio_or_movie = mod_type.contains("Audio") || mod_type.contains("Movies");
-                                                
                                                 // Return the detected type and flags
                                                 return Ok(vec![InstallableModInfo {
                                                     mod_name,
@@ -648,14 +653,76 @@ async fn parse_dropped_files(
                                                     auto_fix_mesh: has_skeletal_mesh,
                                                     auto_fix_texture: has_texture,
                                                     auto_fix_serialize_size: has_static_mesh,
-                                                    auto_to_repak: !is_iostore_archive && !is_audio_or_movie,
-                                                    iostore: is_iostore_archive,
-                                                    repak: !is_iostore_archive && !is_audio_or_movie,
+                                                    auto_to_repak: true,
                                                 }]);
                                             }
                                         }
                                     }
                                     break; // Only analyze first pak file
+                                }
+                            }
+                        }
+                        
+                        // If no .pak files found, look for content folders with loose assets
+                        if !found_pak {
+                            let _ = window.emit("install_log", "[Detection] No PAK files found in archive, looking for content folders...");
+                            
+                            use crate::utils::collect_files;
+                            
+                            // Collect all files from the extracted archive
+                            let mut all_files = Vec::new();
+                            let temp_path_buf = PathBuf::from(temp_path);
+                            if collect_files(&mut all_files, &temp_path_buf).is_ok() {
+                                // Check if there are content files (.uasset, .uexp, .ubulk, etc.)
+                                let content_files: Vec<String> = all_files.iter()
+                                    .filter(|f| {
+                                        if let Some(ext) = f.extension().and_then(|s| s.to_str()) {
+                                            matches!(ext, "uasset" | "uexp" | "ubulk" | "bnk" | "wem")
+                                        } else {
+                                            false
+                                        }
+                                    })
+                                    .map(|p| p.to_string_lossy().to_string())
+                                    .collect();
+                                
+                                if !content_files.is_empty() {
+                                    let _ = window.emit("install_log", format!("[Detection] Found {} content files in archive folder", content_files.len()));
+                                    
+                                    // Get mod type from content
+                                    let mod_type = get_current_pak_characteristics(content_files.clone());
+                                    
+                                    // Run UAsset detection on the content files
+                                    let _ = window.emit("install_log", "[Detection] Checking for SkeletalMesh assets...");
+                                    let has_skeletal_mesh = detect_mesh_files_async(&content_files).await;
+                                    let _ = window.emit("install_log", format!("[Detection] SkeletalMesh result: {}", has_skeletal_mesh));
+                                    
+                                    let _ = window.emit("install_log", "[Detection] Checking for StaticMesh assets...");
+                                    let has_static_mesh = detect_static_mesh_files_async(&content_files).await;
+                                    let _ = window.emit("install_log", format!("[Detection] StaticMesh result: {}", has_static_mesh));
+                                    
+                                    let _ = window.emit("install_log", "[Detection] Checking for Texture assets with .ubulk...");
+                                    let has_texture = detect_texture_files_async(&content_files).await;
+                                    let _ = window.emit("install_log", format!("[Detection] Texture result: {}", has_texture));
+                                    
+                                    let summary = format!("[Detection] Archive folder results: skeletal={}, static={}, texture={}", 
+                                          has_skeletal_mesh, has_static_mesh, has_texture);
+                                    info!("{}", summary);
+                                    let _ = window.emit("install_log", &summary);
+                                    
+                                    // Clean up temp dir
+                                    drop(temp_dir);
+                                    
+                                    // Return as a directory mod (will be converted to IoStore)
+                                    return Ok(vec![InstallableModInfo {
+                                        mod_name,
+                                        mod_type,
+                                        is_dir: true,  // Mark as directory so it goes through convert_to_iostore_directory
+                                        path: path_str,
+                                        auto_fix_mesh: has_skeletal_mesh,
+                                        auto_fix_texture: has_texture,
+                                        auto_fix_serialize_size: has_static_mesh,
+                                        auto_to_repak: true,
+                                    }]);
                                 }
                             }
                         }
@@ -665,14 +732,53 @@ async fn parse_dropped_files(
                 // Fallback if extraction/analysis failed
                 ("Archive".to_string(), false, false, false)
             } else if ext == "pak" {
-            // Try to read PAK and determine type
-            if let Ok(file) = File::open(&path) {
+            // Check if this is an IoStore package (has .utoc and .ucas companions)
+            let utoc_path = path.with_extension("utoc");
+            let ucas_path = path.with_extension("ucas");
+            let is_iostore = utoc_path.exists() && ucas_path.exists();
+            
+            if is_iostore {
+                // IoStore package detected - just copy files, no processing
+                let _ = window.emit("install_log", format!("[Detection] IoStore package detected: {} (will copy directly)", mod_name));
+                
+                // Read file list for mod type detection only
+                let mod_type = if let Ok(file) = File::open(&path) {
+                    if let Ok(aes_key) = AesKey::from_str("0C263D8C22DCB085894899C3A3796383E9BF9DE0CBFB08C9BF2DEF2E84F29D74") {
+                        let mut reader = BufReader::new(file);
+                        if let Ok(pak) = PakBuilder::new().key(aes_key.0).reader(&mut reader) {
+                            use crate::utoc_utils::read_utoc;
+                            let files = read_utoc(&utoc_path, &pak, &path);
+                            let file_paths: Vec<String> = files.iter().map(|f| f.file_path.clone()).collect();
+                            get_current_pak_characteristics(file_paths)
+                        } else {
+                            "IoStore Package".to_string()
+                        }
+                    } else {
+                        "IoStore Package".to_string()
+                    }
+                } else {
+                    "IoStore Package".to_string()
+                };
+                
+                let _ = window.emit("install_log", format!("[Detection] IoStore mod type: {}", mod_type));
+                
+                // IoStore packages: no fixes, no repak
+                (mod_type, false, false, false)
+            } else if let Ok(file) = File::open(&path) {
+                // Regular PAK file (not IoStore) - process normally
                 // Create AES key for each file
                 if let Ok(aes_key) = AesKey::from_str("0C263D8C22DCB085894899C3A3796383E9BF9DE0CBFB08C9BF2DEF2E84F29D74") {
                     let mut reader = BufReader::new(file);
                     if let Ok(pak) = PakBuilder::new().key(aes_key.0).reader(&mut reader) {
                         let files: Vec<String> = pak.files();
                         let mod_type = get_current_pak_characteristics(files.clone());
+                        
+                        // Check if this might be an IoStore mod with missing companion files
+                        let is_audio_or_movies = mod_type.contains("Audio") || mod_type.contains("Movies");
+                        if !is_audio_or_movies {
+                            // This is NOT an Audio/Movies mod, so it might need .utoc/.ucas files
+                            let _ = window.emit("install_log", format!("[WARNING] {} appears to be a {} mod without .utoc/.ucas files. If this is an IoStore mod, please drag all 3 files (.pak, .utoc, .ucas) together!", mod_name, mod_type));
+                        }
                         
                         // Get uasset files for extraction (also extract matching .uexp files)
                         let uasset_files: Vec<&String> = files.iter()
@@ -788,49 +894,33 @@ async fn parse_dropped_files(
                         ("Unknown".to_string(), false, false, false)
                     }
                 } else {
-                    mods.push(InstallableModInfo {
-                        mod_name,
-                        mod_type: "Unknown".to_string(),
-                        is_dir: path.is_dir(),
-                        path: path_str,
-                        auto_fix_mesh: false,
-                        auto_fix_texture: false,
-                        auto_fix_serialize_size: false,
-                        auto_to_repak: false,
-                        iostore: false,
-                        repak: false,
-                    });
+                    ("Unknown".to_string(), false, false, false)
                 }
             } else {
-                mods.push(InstallableModInfo {
-                    mod_name,
-                    mod_type: "Unknown".to_string(),
-                    is_dir: path.is_dir(),
-                    path: path_str,
-                    auto_fix_mesh: false,
-                    auto_fix_texture: false,
-                    auto_fix_serialize_size: false,
-                    auto_to_repak: false,
-                    iostore: false,
-                    repak: false,
-                });
+                ("Unknown".to_string(), false, false, false)
+            }
+            } else {
+                ("Unknown".to_string(), false, false, false)
             }
         } else {
-            mods.push(InstallableModInfo {
-                mod_name,
-                mod_type: "Unknown".to_string(),
-                is_dir: path.is_dir(),
-                path: path_str,
-                auto_fix_mesh: false,
-                auto_fix_texture: false,
-                auto_fix_serialize_size: false,
-                auto_to_repak: false,
-                iostore: false,
-                repak: false,
-            });
+            ("Unknown".to_string(), false, false, false)
         };
         
-        Ok(mods)
+        // For .pak files, auto-enable repak UNLESS it's an IoStore package
+        let is_pak = path.extension().and_then(|s| s.to_str()) == Some("pak");
+        let is_iostore_pkg = is_pak && path.with_extension("utoc").exists() && path.with_extension("ucas").exists();
+        let auto_to_repak = is_pak && !is_iostore_pkg;
+        
+        mods.push(InstallableModInfo {
+            mod_name,
+            mod_type,
+            is_dir: path.is_dir(),
+            path: path_str,
+            auto_fix_mesh,
+            auto_fix_texture,
+            auto_fix_serialize_size,
+            auto_to_repak,
+        });
     }
     
     Ok(mods)
@@ -859,7 +949,7 @@ async fn install_mods(
 ) -> Result<(), String> {
     use std::sync::atomic::{AtomicI32, AtomicBool};
     use std::sync::Arc as StdArc;
-    
+
     let state_guard = state.lock().unwrap();
     let mod_directory = state_guard.game_path.clone();
     let usmap_filename = state_guard.usmap_path.clone();
@@ -889,10 +979,28 @@ async fn install_mods(
 
     // Convert paths to properly initialized InstallableMods
     use crate::install_mod::map_paths_to_mods;
-    
+
     let paths: Vec<PathBuf> = mods.iter().map(|m| PathBuf::from(&m.path)).collect();
+
+    // Log the paths we're trying to install
+    for p in &paths {
+        info!("[Install] Processing path: {}", p.display());
+        let _ = window.emit("install_log", format!("[Install] Processing path: {}", p.display()));
+    }
+
     let mut installable_mods = map_paths_to_mods(&paths);
-    
+
+    // Check if we actually have mods to install
+    if installable_mods.is_empty() {
+        error!("[Install] No valid mods found from {} input path(s)", paths.len());
+        let _ = window.emit("install_log", "ERROR: No valid mods found to install!");
+        let _ = window.emit("install_log", "Possible causes:");
+        let _ = window.emit("install_log", "  - PAK file couldn't be read (wrong AES key or corrupted)");
+        let _ = window.emit("install_log", "  - Archive contains no .pak files or content folders");
+        let _ = window.emit("install_log", "  - Directory contains no valid content");
+        return Err("No valid mods found to install. Check the install logs for details.".to_string());
+    }
+
     // Apply user settings to each mod
     for (idx, mod_to_install) in mods.iter().enumerate() {
         if let Some(installable) = installable_mods.get_mut(idx) {
@@ -902,7 +1010,7 @@ async fn install_mods(
                     installable.mod_name = custom.clone();
                 }
             }
-            
+
             // Apply fix settings
             installable.fix_mesh = mod_to_install.fix_mesh;
             installable.fix_textures = mod_to_install.fix_texture;
@@ -915,7 +1023,7 @@ async fn install_mods(
     // Use existing installation logic
     let installed_counter = StdArc::new(AtomicI32::new(0));
     let stop_flag = StdArc::new(AtomicBool::new(false));
-    
+
     let total = installable_mods.len() as i32;
     let counter_clone = installed_counter.clone();
     let _stop_clone = stop_flag.clone();
@@ -1846,7 +1954,7 @@ struct ModDetails {
 }
 
 #[tauri::command]
-async fn get_mod_details(mod_path: String, detect_blueprint: Option<bool>) -> Result<ModDetails, String> {
+async fn get_mod_details(mod_path: String, _detect_blueprint: Option<bool>) -> Result<ModDetails, String> {
     use repak::PakBuilder;
     use repak::utils::AesKey;
     use std::str::FromStr;
@@ -1904,7 +2012,7 @@ async fn get_mod_details(mod_path: String, detect_blueprint: Option<bool>) -> Re
     
     // Determine mod type using the detailed function
     use crate::utils::get_pak_characteristics_detailed;
-    let mut characteristics = get_pak_characteristics_detailed(files.clone());
+    let characteristics = get_pak_characteristics_detailed(files.clone());
     info!("Detected mod type: {}", characteristics.mod_type);
     info!("Character name: {}", characteristics.character_name);
     info!("Category: {}", characteristics.category);

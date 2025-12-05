@@ -1,3 +1,13 @@
+#![allow(elided_lifetimes_in_paths)]
+#![allow(clippy::unnecessary_parentheses)]
+#![allow(unused_parens)]
+#![allow(unused_variables)]
+#![allow(dead_code)]
+#![allow(private_interfaces)]
+#![allow(hidden_glob_reexports)]
+#![allow(unused_must_use)]
+#![allow(mismatched_lifetime_syntaxes)]
+
 mod asset_conversion;
 mod compact_binary;
 mod compression;

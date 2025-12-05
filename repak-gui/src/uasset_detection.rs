@@ -1,82 +1,14 @@
-use std::path::{Path, PathBuf};
-use std::fs;
+//! UAsset detection using UAssetAPI (via UAssetBridge)
+//! 
+//! All detection is done via UAssetAPI - no heuristic fallbacks.
+//! If UAssetAPI fails (e.g., missing USMAP), detection returns false.
+
 use log::info;
-
-/// Heuristic detection for SKELETAL mesh UAsset files (NOT Static Meshes)
-/// This is for "Fix Mesh" which applies to SK_* files
-/// Static Meshes (SM_*) are handled separately by detect_static_mesh_files()
-pub fn is_mesh_uasset_heuristic(path: &Path) -> bool {
-    let file_name = path.file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("")
-        .to_lowercase();
-    
-    let path_str = path.to_string_lossy().to_lowercase();
-    
-    // ONLY Skeletal Mesh indicators (SK_* prefix)
-    // Exclude Static Meshes (SM_* prefix) - they have their own fixer
-    let skeletal_mesh_indicators = [
-        "sk_", "skeletal", "_sk"
-    ];
-    
-    // Pattern matching for Skeletal Meshes only
-    let has_skeletal_pattern = skeletal_mesh_indicators.iter().any(|indicator| {
-        file_name.contains(indicator) || path_str.contains(indicator)
-    });
-    
-    // Explicitly exclude Static Meshes (SM_* prefix)
-    let is_static_mesh = file_name.starts_with("sm_");
-    
-    has_skeletal_pattern && !is_static_mesh
-}
-
-/// Heuristic detection for texture UAsset files
-pub fn is_texture_uasset_heuristic(path: &Path) -> bool {
-    let path_str = path.to_string_lossy().to_lowercase();
-    
-    // Path-based indicators
-    let path_indicates_texture = 
-        path_str.contains("texture") ||
-        path_str.contains("/textures/") ||
-        path_str.contains("\\textures\\") ||
-        path_str.contains("_t.") ||      // UE naming convention
-        path_str.contains("_diffuse") ||
-        path_str.contains("_normal") ||
-        path_str.contains("_specular") ||
-        path_str.contains("_albedo") ||
-        path_str.contains("_roughness") ||
-        path_str.contains("_metallic");
-    
-    if path_indicates_texture {
-        return true;
-    }
-    
-    // Binary analysis fallback
-    analyze_uasset_for_texture_class(path).unwrap_or(false)
-}
-
-/// Analyzes UAsset binary for texture class references
-fn analyze_uasset_for_texture_class(path: &Path) -> Result<bool, Box<dyn std::error::Error>> {
-    let data = fs::read(path)?;
-    let data_str = String::from_utf8_lossy(&data);
-    
-    // Look for UTexture2D class references
-    let has_texture_class = 
-        data_str.contains("UTexture2D") ||
-        data_str.contains("TextureSource") ||
-        data_str.contains("MipGenSettings") ||
-        data_str.contains("TMGS_");
-    
-    Ok(has_texture_class)
-}
-
 use uasset_toolkit::{UAssetToolkit, UAssetToolkitSync};
 
-/// Detects SKELETAL mesh files in a list of mod contents using UAssetAPI (persistent process)
+/// Detects SKELETAL mesh files using UAssetAPI batch detection
 /// Async version for use in Tauri commands
 pub async fn detect_mesh_files_async(mod_contents: &[String]) -> bool {
-    use log::info;
-    
     let uasset_files: Vec<String> = mod_contents.iter()
         .filter(|f| f.to_lowercase().ends_with(".uasset"))
         .cloned()
@@ -87,136 +19,79 @@ pub async fn detect_mesh_files_async(mod_contents: &[String]) -> bool {
         return false;
     }
     
-    // Try batch detection first (much faster - single request for all files)
+    // Use UAssetAPI batch detection
     if let Ok(toolkit) = UAssetToolkit::new(None) {
-        info!("[Detection] Using batch detection for SkeletalMesh");
+        info!("[Detection] Using UAssetAPI batch detection for SkeletalMesh");
         match toolkit.batch_detect_skeletal_mesh(&uasset_files).await {
             Ok(true) => {
-                info!("[Detection] FOUND SkeletalMesh (batch UAssetAPI)");
+                info!("[Detection] FOUND SkeletalMesh (UAssetAPI)");
                 return true;
             }
             Ok(false) => {
-                info!("[Detection] No SkeletalMesh found via batch UAssetAPI");
+                info!("[Detection] No SkeletalMesh found (UAssetAPI)");
                 return false;
             }
             Err(e) => {
-                let err_str = e.to_string();
-                if !err_str.contains("File not found") {
-                    info!("[Detection] Batch detection error: {}", e);
-                }
+                info!("[Detection] UAssetAPI error (check USMAP config): {}", e);
             }
         }
+    } else {
+        info!("[Detection] UAssetAPI unavailable - cannot detect SkeletalMesh");
     }
 
-    // Fallback to heuristic detection (for PAK files where paths are virtual)
-    info!("[Detection] Using heuristic fallback for SkeletalMesh detection");
-    let result = mod_contents.iter().any(|file| {
-        let path = PathBuf::from(file);
-        if path.extension().and_then(|e| e.to_str()) == Some("uasset") {
-            let is_mesh = is_mesh_uasset_heuristic(&path);
-            if is_mesh {
-                let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown");
-                info!("[Detection] FOUND SkeletalMesh (heuristic): {}", filename);
-            }
-            return is_mesh;
-        }
-        false
-    });
-    
-    if !result {
-        info!("[Detection] No SkeletalMesh found via heuristic in {} files", uasset_files.len());
-    }
-    result
+    false
 }
 
-/// Detects texture files in a list of mod contents using UAssetAPI (persistent process)
+/// Detects texture files that need the texture fix (Texture2D with .ubulk companion)
+/// Uses UAssetAPI batch detection to find Texture2D assets that need MipGen fixing,
+/// but only returns true if there's also a .ubulk file (bulk texture data)
 /// Async version for use in Tauri commands
 pub async fn detect_texture_files_async(mod_contents: &[String]) -> bool {
-    use log::info;
+    // First check: do we have any .ubulk files at all?
+    // If not, no texture fix is needed regardless of Texture2D presence
+    let has_ubulk = mod_contents.iter().any(|f| f.to_lowercase().ends_with(".ubulk"));
+    if !has_ubulk {
+        info!("[Detection] No .ubulk files found - texture fix NOT needed");
+        return false;
+    }
     
     let uasset_files: Vec<String> = mod_contents.iter()
         .filter(|f| f.to_lowercase().ends_with(".uasset"))
         .cloned()
         .collect();
-    info!("[Detection] Scanning {} uasset files for Texture", uasset_files.len());
-    
-    // Check for raw image files first (always works, even for PAK paths)
-    for file in mod_contents {
-        let lower_file = file.to_lowercase();
-        if lower_file.ends_with(".png") ||
-           lower_file.ends_with(".jpg") ||
-           lower_file.ends_with(".jpeg") ||
-           lower_file.ends_with(".dds") ||
-           lower_file.ends_with(".tga") {
-            let path = PathBuf::from(file);
-            let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown");
-            info!("[Detection] FOUND raw image file: {}", filename);
-            return true;
-        }
-    }
+    info!("[Detection] Scanning {} uasset files for Texture2D needing MipGen fix (has .ubulk)", uasset_files.len());
     
     if uasset_files.is_empty() {
         return false;
     }
     
-    // Try batch detection first (much faster - single request for all files)
+    // Use UAssetAPI batch detection - checks if texture needs MipGen fix
+    // (is Texture2D AND MipGenSettings != NoMipmaps)
     if let Ok(toolkit) = UAssetToolkit::new(None) {
-        info!("[Detection] Using batch detection for Texture");
+        info!("[Detection] Using UAssetAPI batch detection for Texture2D");
         match toolkit.batch_detect_texture(&uasset_files).await {
             Ok(true) => {
-                info!("[Detection] FOUND Texture (batch UAssetAPI)");
+                info!("[Detection] FOUND Texture2D needing MipGen fix with .ubulk - texture fix ENABLED");
                 return true;
             }
             Ok(false) => {
-                info!("[Detection] No Texture found via batch UAssetAPI");
+                info!("[Detection] No Texture2D needing MipGen fix found (UAssetAPI)");
                 return false;
             }
             Err(e) => {
-                let err_str = e.to_string();
-                if !err_str.contains("File not found") {
-                    info!("[Detection] Batch texture detection error: {}", e);
-                }
+                info!("[Detection] UAssetAPI error (check USMAP config): {}", e);
             }
         }
+    } else {
+        info!("[Detection] UAssetAPI unavailable - cannot detect Texture2D");
     }
 
-    // Fallback to heuristic detection (for PAK files where paths are virtual)
-    info!("[Detection] Using heuristic fallback for Texture detection");
-    let result = mod_contents.iter().any(|file| {
-        let path = PathBuf::from(file);
-        if path.extension().and_then(|e| e.to_str()) == Some("uasset") {
-            let is_texture = is_texture_uasset_heuristic(&path);
-            if is_texture {
-                let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown");
-                info!("[Detection] FOUND Texture (heuristic): {}", filename);
-            }
-            return is_texture;
-        }
-        false
-    });
-    
-    if !result {
-        info!("[Detection] No Texture found via heuristic in {} files", uasset_files.len());
-    }
-    result
+    false
 }
 
-/// Heuristic detection for static mesh UAsset files
-pub fn is_static_mesh_uasset_heuristic(path: &Path) -> bool {
-    let file_name = path.file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("")
-        .to_lowercase();
-    
-    // SM_* prefix is the standard UE naming convention for Static Meshes
-    file_name.starts_with("sm_")
-}
-
-/// Detects Static Mesh files in a list of mod contents using UAssetAPI (persistent process)
+/// Detects Static Mesh files using UAssetAPI batch detection
 /// Async version for use in Tauri commands
 pub async fn detect_static_mesh_files_async(mod_contents: &[String]) -> bool {
-    use log::info;
-    
     let uasset_files: Vec<String> = mod_contents.iter()
         .filter(|f| f.to_lowercase().ends_with(".uasset"))
         .cloned()
@@ -227,53 +102,33 @@ pub async fn detect_static_mesh_files_async(mod_contents: &[String]) -> bool {
         return false;
     }
     
-    // Try batch detection first (much faster - single request for all files)
+    // Use UAssetAPI batch detection
     if let Ok(toolkit) = UAssetToolkit::new(None) {
-        info!("[Detection] Using batch detection for StaticMesh");
+        info!("[Detection] Using UAssetAPI batch detection for StaticMesh");
         match toolkit.batch_detect_static_mesh(&uasset_files).await {
             Ok(true) => {
-                info!("[Detection] FOUND StaticMesh (batch UAssetAPI)");
+                info!("[Detection] FOUND StaticMesh (UAssetAPI)");
                 return true;
             }
             Ok(false) => {
-                info!("[Detection] No StaticMesh found via batch UAssetAPI");
+                info!("[Detection] No StaticMesh found (UAssetAPI)");
                 return false;
             }
             Err(e) => {
-                let err_str = e.to_string();
-                if !err_str.contains("File not found") {
-                    info!("[Detection] Batch static mesh detection error: {}", e);
-                }
+                info!("[Detection] UAssetAPI error (check USMAP config): {}", e);
             }
         }
+    } else {
+        info!("[Detection] UAssetAPI unavailable - cannot detect StaticMesh");
     }
 
-    // Fallback to heuristic detection (for PAK files where paths are virtual)
-    info!("[Detection] Using heuristic fallback for StaticMesh detection");
-    let result = mod_contents.iter().any(|file| {
-        let path = PathBuf::from(file);
-        if path.extension().and_then(|e| e.to_str()) == Some("uasset") {
-            let is_static = is_static_mesh_uasset_heuristic(&path);
-            if is_static {
-                let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown");
-                info!("[Detection] FOUND StaticMesh (heuristic): {}", filename);
-            }
-            return is_static;
-        }
-        false
-    });
-    
-    if !result {
-        info!("[Detection] No StaticMesh found via heuristic in {} files", uasset_files.len());
-    }
-    result
+    false
 }
 
-/// Detects Blueprint files in a list of mod contents using UAssetAPI (persistent process)
+/// Detects Blueprint files using UAssetAPI batch detection
 /// Async version for use in Tauri commands
+#[allow(dead_code)]
 pub async fn detect_blueprint_files_async(mod_contents: &[String]) -> bool {
-    use log::info;
-    
     let uasset_files: Vec<String> = mod_contents.iter()
         .filter(|f| f.to_lowercase().ends_with(".uasset"))
         .cloned()
@@ -284,106 +139,85 @@ pub async fn detect_blueprint_files_async(mod_contents: &[String]) -> bool {
         return false;
     }
     
-    // Try batch detection first (much faster - single request for all files)
+    // Use UAssetAPI batch detection
     if let Ok(toolkit) = UAssetToolkit::new(None) {
-        info!("[Detection] Using batch detection for Blueprint");
+        info!("[Detection] Using UAssetAPI batch detection for Blueprint");
         match toolkit.batch_detect_blueprint(&uasset_files).await {
             Ok(true) => {
-                info!("[Detection] FOUND Blueprint (batch UAssetAPI)");
+                info!("[Detection] FOUND Blueprint (UAssetAPI)");
                 return true;
             }
             Ok(false) => {
-                info!("[Detection] No Blueprint found via batch UAssetAPI");
+                info!("[Detection] No Blueprint found (UAssetAPI)");
                 return false;
             }
             Err(e) => {
-                let err_str = e.to_string();
-                if !err_str.contains("File not found") {
-                    info!("[Detection] Batch blueprint detection error: {}", e);
-                }
+                info!("[Detection] UAssetAPI error (check USMAP config): {}", e);
             }
         }
+    } else {
+        info!("[Detection] UAssetAPI unavailable - cannot detect Blueprint");
     }
 
     false
 }
 
-/// Detects SKELETAL mesh files in a list of mod contents using UAssetAPI (persistent process)
-/// This is for "Fix Mesh" auto-enable which applies to SK_* files only
+/// Detects SKELETAL mesh files using UAssetAPI
+/// Sync version for use in install_mod.rs
 pub fn detect_mesh_files(mod_contents: &[String]) -> bool {
-    // Try to use UAssetToolkit with persistent process for batch scanning
-    if let Ok(toolkit) = UAssetToolkitSync::new(None) {
-        for file in mod_contents {
-            let path = PathBuf::from(file);
-            if path.extension().and_then(|e| e.to_str()) == Some("uasset") {
-                if let Ok(true) = toolkit.is_skeletal_mesh_uasset(file) {
-                    return true;
-                }
-            }
-        }
+    let uasset_files: Vec<&String> = mod_contents.iter()
+        .filter(|f| f.to_lowercase().ends_with(".uasset"))
+        .collect();
+    
+    if uasset_files.is_empty() {
         return false;
     }
-
-    // Fallback to heuristic if toolkit unavailable
-    /*
-    mod_contents.iter().any(|file| {
-        let path = PathBuf::from(file);
-        if path.extension().and_then(|e| e.to_str()) == Some("uasset") {
-            return is_mesh_uasset_heuristic(&path);
-        }
-        false
-    })
-    */
-    false
-}
-
-/// Detects texture files in a list of mod contents using UAssetAPI (persistent process)
-pub fn detect_texture_files(mod_contents: &[String]) -> bool {
-    // Try to use UAssetToolkit with persistent process for batch scanning
+    
+    // Use UAssetAPI for detection
     if let Ok(toolkit) = UAssetToolkitSync::new(None) {
-        for file in mod_contents {
-            let lower_file = file.to_lowercase();
-            // Image file extensions
-            if lower_file.ends_with(".png") ||
-               lower_file.ends_with(".jpg") ||
-               lower_file.ends_with(".jpeg") ||
-               lower_file.ends_with(".dds") ||
-               lower_file.ends_with(".tga") {
+        for file in uasset_files {
+            if let Ok(true) = toolkit.is_skeletal_mesh_uasset(file) {
                 return true;
             }
-            
-            if lower_file.ends_with(".uasset") {
-                if let Ok(true) = toolkit.is_texture_uasset(file) {
-                    return true;
-                }
-            }
         }
-        return false;
     }
 
-    // Fallback to heuristic
-    /*
-    mod_contents.iter().any(|file| {
-        let lower_file = file.to_lowercase();
-        
-        // Image file extensions
-        if lower_file.ends_with(".png") ||
-           lower_file.ends_with(".jpg") ||
-           lower_file.ends_with(".jpeg") ||
-           lower_file.ends_with(".dds") ||
-           lower_file.ends_with(".tga") {
-            return true;
+    // UAssetAPI unavailable or no matches found
+    false
+}
+
+/// Detects texture files that need the texture fix (Texture2D with .ubulk companion)
+/// Uses UAssetAPI to find Texture2D assets that need MipGen fixing,
+/// but only returns true if there's also a .ubulk file (bulk texture data)
+/// Sync version for use in install_mod.rs
+pub fn detect_texture_files(mod_contents: &[String]) -> bool {
+    // First check: do we have any .ubulk files at all?
+    // If not, no texture fix is needed regardless of Texture2D presence
+    let has_ubulk = mod_contents.iter().any(|f| f.to_lowercase().ends_with(".ubulk"));
+    
+    if !has_ubulk {
+        return false;
+    }
+    
+    let uasset_files: Vec<&String> = mod_contents.iter()
+        .filter(|f| f.to_lowercase().ends_with(".uasset"))
+        .collect();
+    
+    if uasset_files.is_empty() {
+        return false;
+    }
+    
+    // Use UAssetAPI to detect Texture2D assets needing MipGen fix
+    if let Ok(toolkit) = UAssetToolkitSync::new(None) {
+        for file in uasset_files {
+            if let Ok(true) = toolkit.is_texture_uasset(file) {
+                // UAssetAPI found a texture needing fix, and we already confirmed .ubulk exists
+                return true;
+            }
         }
-        
-        // UAsset files
-        if lower_file.ends_with(".uasset") {
-            let path = PathBuf::from(file);
-            return is_texture_uasset_heuristic(&path);
-        }
-        
-        false
-    })
-    */
+    }
+
+    // UAssetAPI unavailable or no matches found
     false
 }
 

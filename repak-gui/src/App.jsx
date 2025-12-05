@@ -21,14 +21,64 @@ import {
 import ModDetailsPanel from './components/ModDetailsPanel'
 import InstallModPanel from './components/InstallModPanel'
 import SettingsPanel from './components/SettingsPanel'
-import P2PSharingPanel from './components/P2PSharingPanel'
+import SharingPanel from './components/SharingPanel'
 import FileTree from './components/FileTree'
 import ContextMenu from './components/ContextMenu'
+import characterData from './data/character_data.json'
 import './App.css'
 import './styles/theme.css'
+import './styles/Badges.css'
+import './styles/Fonts.css'
 import logo from './assets/RepakIcon-x256.png'
 
 const toTagArray = (tags) => Array.isArray(tags) ? tags : (tags ? [tags] : [])
+
+function detectHeroes(files) {
+  const heroIds = new Set()
+  
+  // Regex patterns matching backend logic
+  const pathRegex = /(?:Characters|Hero_ST|Hero)\/(\d{4})/
+  const filenameRegex = /[_/](10[1-6]\d)(\d{3})/
+  
+  files.forEach(file => {
+    // Check path
+    const pathMatch = file.match(pathRegex)
+    if (pathMatch) {
+      heroIds.add(pathMatch[1])
+    }
+    
+    // Check filename
+    const filenameMatch = file.match(filenameRegex)
+    if (filenameMatch) {
+      heroIds.add(filenameMatch[1])
+    }
+  })
+  
+  // Map IDs to names
+  const heroNames = new Set()
+  heroIds.forEach(id => {
+    const char = characterData.find(c => c.id === id)
+    if (char) {
+      heroNames.add(char.name)
+    }
+  })
+  
+  return Array.from(heroNames)
+}
+
+function getAdditionalCategories(details) {
+  if (!details) return []
+  if (details.additional_categories && details.additional_categories.length > 0) {
+    return details.additional_categories
+  }
+  if (typeof details.mod_type === 'string') {
+    const match = details.mod_type.match(/\[(.*?)\]/)
+    if (match && match[1]) {
+      return match[1].split(',').map(s => s.trim())
+    }
+  }
+  return []
+}
 
 // Mod Item Component
 function ModItem({ mod, selectedMod, selectedMods, setSelectedMod, handleToggleModSelection, handleToggleMod, handleDeleteMod, handleRemoveTag, formatFileSize, hideSuffix, onContextMenu }) {
@@ -167,7 +217,7 @@ function App() {
   const [theme, setTheme] = useState('dark');
   const [accentColor, setAccentColor] = useState('#4a9eff');
   const [showSettings, setShowSettings] = useState(false);
-  const [showP2PPanel, setShowP2PPanel] = useState(false);
+  const [showSharingPanel, setShowSharingPanel] = useState(false);
 
   const [gamePath, setGamePath] = useState('')
   const [mods, setMods] = useState([])
@@ -418,6 +468,8 @@ function App() {
       const d = detailsMap[m.path]
       if (!d) return
       if (d.category) catSet.add(d.category)
+      const adds = getAdditionalCategories(d)
+      adds.forEach(cat => catSet.add(cat))
     })
     setAvailableCharacters(Array.from(charSet).sort((a,b)=>a.localeCompare(b)))
     setAvailableCategories(Array.from(catSet).sort((a,b)=>a.localeCompare(b)))
@@ -788,15 +840,29 @@ function App() {
     if (hasCharFilter || hasCatFilter) {
       const d = modDetails[mod.path]
       if (!d) return false // wait for details when filters active
-      if (hasCatFilter && !selectedCategories.has(d.category)) return false
+      
+      if (hasCatFilter) {
+        const mainCatMatch = d.category && selectedCategories.has(d.category)
+        const adds = getAdditionalCategories(d)
+        const addCatMatch = adds.some(cat => selectedCategories.has(cat))
+        if (!mainCatMatch && !addCatMatch) return false
+      }
 
       if (hasCharFilter) {
         const isMulti = typeof d.mod_type === 'string' && d.mod_type.startsWith('Multiple Heroes')
         const isGeneric = !d.character_name && !isMulti
+        
+        let multiMatch = false
+        if (isMulti && d.files) {
+          const heroes = detectHeroes(d.files)
+          multiMatch = heroes.some(h => selectedCharacters.has(h))
+        }
+
         const match = (
           (d.character_name && selectedCharacters.has(d.character_name)) ||
           (isMulti && selectedCharacters.has('__multi')) ||
-          (isGeneric && selectedCharacters.has('__generic'))
+          (isGeneric && selectedCharacters.has('__generic')) ||
+          multiMatch
         )
         if (!match) return false
       }
@@ -912,13 +978,14 @@ function App() {
         />
       )}
 
-      <P2PSharingPanel 
-        isOpen={showP2PPanel}
-        onClose={() => setShowP2PPanel(false)}
-        installedMods={mods}
-        selectedMods={selectedMods}
-        gamePath={gamePath}
-      />
+      {showSharingPanel && (
+        <SharingPanel 
+          onClose={() => setShowSharingPanel(false)}
+          gamePath={gamePath}
+          installedMods={mods}
+          selectedMods={selectedMods}
+        />
+      )}
 
       <header className="header" style={{ display: 'flex', alignItems: 'center' }}>
         <img src={logo} alt="Repak Icon" className="repak-icon" style={{ width: '50px', height: '50px', marginRight: '10px' }} />
@@ -936,11 +1003,11 @@ function App() {
             <span style={{ fontSize: '0.8rem', color: '#ff6b6b', fontWeight: 'bold' }}>DEV: Game Running</span>
           </label>
           <button 
-            onClick={() => setShowP2PPanel(true)} 
+            onClick={() => setShowSharingPanel(true)} 
             className="btn-settings"
-            title="P2P Mod Sharing"
+            title="Share Mods"
           >
-            <WifiIcon /> P2P Share
+            <WifiIcon /> Share
           </button>
           <button 
             onClick={() => setShowSettings(true)} 
@@ -1259,6 +1326,7 @@ function App() {
                 <div style={{ flex: 1 }}>
                   <ModDetailsPanel 
                     mod={selectedMod}
+                    initialDetails={modDetails[selectedMod.path]}
                     onClose={() => setSelectedMod(null)}
                   />
                 </div>

@@ -1,11 +1,12 @@
-use std:: sync::OnceLock;
 use std::fs::File;
-use std::io:: Write;
+use std::io::Write;
+use std::sync::OnceLock;
 
 type Result<T, E = Error> = std::result::Result<T, E>;
 
 pub use oodle_lz::{CompressionLevel, Compressor};
 
+#[allow(non_snake_case)]
 mod oodle_lz {
     #[derive(Debug, Clone, Copy)]
     #[repr(i32)]

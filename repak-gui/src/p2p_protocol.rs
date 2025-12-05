@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! P2P File Transfer Protocol for libp2p
 //!
 //! Defines the request/response protocol for file transfers over libp2p streams.
@@ -5,7 +6,7 @@
 use libp2p::request_response::{
     Codec, ProtocolSupport, ResponseChannel,
 };
-use libp2p::{StreamProtocol, PeerId};
+use libp2p::PeerId;
 use libp2p::request_response as req_resp;
 use async_trait::async_trait;
 use futures::prelude::*;

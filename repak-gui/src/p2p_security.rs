@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Enhanced Security Module for Internet-Wide P2P
 //!
 //! Provides multiple layers of security against hijacking and tampering:
@@ -153,7 +154,7 @@ impl SignedModPack {
         // Hash the message
         let mut hasher = Sha256::new();
         hasher.update(&message);
-        let message_hash = hasher.finalize();
+        let _message_hash = hasher.finalize();
 
         // Sign with ed25519 (libp2p uses this)
         // In real implementation, use libp2p's keypair.sign()
@@ -168,7 +169,7 @@ impl SignedModPack {
     }
 
     /// Verify the signature
-    pub fn verify(&self, public_key: &[u8]) -> bool {
+    pub fn verify(&self, _public_key: &[u8]) -> bool {
         // Reconstruct the message
         let mut message = Vec::new();
         message.extend_from_slice(self.pack_data.as_bytes());
@@ -178,7 +179,7 @@ impl SignedModPack {
         // Hash the message
         let mut hasher = Sha256::new();
         hasher.update(&message);
-        let message_hash = hasher.finalize();
+        let _message_hash = hasher.finalize();
 
         // Verify signature with ed25519
         // In real implementation, use libp2p's public_key.verify()

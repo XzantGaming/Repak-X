@@ -207,7 +207,7 @@
     "C:\\Users\\BNnik\\.nuget\\packages\\": {}
   },
   "project": {
-    "version": "2.6.4",
+    "version": "1.0.0",
     "restore": {
       "projectUniqueName": "C:\\WindsurfCoding\\Repak-Gui-Revamped\\Repak-Gui-Revamped\\UAssetAPI\\StaticMeshSerializeSizeFixer\\StaticMeshSerializeSizeFixer.csproj",
       "projectName": "StaticMeshSerializeSizeFixer",

@@ -7,6 +7,7 @@ use tokio::io::{BufReader, AsyncBufReadExt, AsyncWriteExt, Lines};
 use tokio::sync::Mutex;
 
 #[cfg(windows)]
+#[allow(unused_imports)]
 use std::os::windows::process::CommandExt;
 
 #[derive(Debug, Serialize, Deserialize)]

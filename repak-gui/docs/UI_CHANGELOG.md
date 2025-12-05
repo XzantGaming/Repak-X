@@ -1,5 +1,31 @@
 # Changelog - UI & Functionality Overhaul
 
+## Update - Sharing UI & Visual Polish (Dec 4, 2025)
+
+### Sharing Panel Overhaul
+- **Layout**: Redesigned the "Share Mods" tab into a side-by-side grid layout.
+  - **Left**: Pack details form (Name, Description, Creator).
+  - **Right**: Scrollable mod selection list with a new **Search Bar**.
+- **UX**: Cleaned up mod names in the selection list (hiding `_9999999_P` suffixes and extensions).
+- **Styling**: Moved sharing-specific styles to `src/components/SharingPanel.css`.
+
+### Additive Categories (Blueprint & Text)
+- **Logic**: Implemented frontend support for "Blueprint" and "Text" as additive categories.
+- **Parsing**: Added fallback logic to extract these categories from the `mod_type` string (e.g., "Blade - Mesh [Blueprint]") even if the backend metadata is incomplete.
+- **Filtering**: Updated the main filter system to correctly categorize mods with these additive tags.
+
+### Multi-Character Support
+- **Display**: Added support for mods affecting multiple heroes (e.g., "Multiple Heroes - Mesh").
+- **Tooltip**: Implemented a hover tooltip to list all affected characters when "Multiple Heroes" is detected.
+- **Styling**: Added specific styling for the multi-hero badge and tooltip in `ModDetailsPanel.css`.
+
+### Visual Polish & Refactoring
+- **Category Colors**: Implemented distinct color coding for all main mod categories (Mesh=Cyan, VFX=Orange, Audio=Green, UI=Pink, etc.) instead of using the generic accent color.
+- **Console Font**: Updated the installation log panel to use a monospace font (`Consolas`, `Monaco`) for better readability of file paths.
+- **CSS Architecture**:
+  - Extracted badge styles to `src/styles/Badges.css`.
+  - Extracted font definitions to `src/styles/Fonts.css`.
+
 ## Update - Nested Folders & Theming (Dec 2, 2025)
 
 ### Nested Folder Support (Proposal)
