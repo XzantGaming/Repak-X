@@ -90,5 +90,28 @@ fn main() {
         } else {
              println!("cargo:warning={} not found at {}", dll_name, dll_src.display());
         }
+
+        // 4) Copy character_data.json to data folder next to the executable
+        //    Required for runtime character data lookup
+        let char_data_src = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src").join("data").join("character_data.json");
+        let char_data_dest_dir = exe_dir.join("data");
+        let char_data_dest = char_data_dest_dir.join("character_data.json");
+        
+        if char_data_src.exists() {
+            if let Err(e) = fs::create_dir_all(&char_data_dest_dir) {
+                println!("cargo:warning=failed to create data directory {}: {}", char_data_dest_dir.display(), e);
+            } else {
+                match fs::copy(&char_data_src, &char_data_dest) {
+                    Ok(_) => {
+                        println!("cargo:warning=character_data.json copied to {}", char_data_dest.display());
+                    }
+                    Err(e) => {
+                        println!("cargo:warning=failed to copy character_data.json to {}: {}", char_data_dest.display(), e);
+                    }
+                }
+            }
+        } else {
+            println!("cargo:warning=character_data.json not found at {}", char_data_src.display());
+        }
     }
 }
