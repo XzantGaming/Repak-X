@@ -81,7 +81,7 @@ function getAdditionalCategories(details) {
 }
 
 // Mod Item Component
-function ModItem({ mod, selectedMod, selectedMods, setSelectedMod, handleToggleModSelection, handleToggleMod, handleDeleteMod, handleRemoveTag, formatFileSize, hideSuffix, onContextMenu }) {
+function ModItem({ mod, selectedMod, selectedMods, setSelectedMod, handleToggleModSelection, handleToggleMod, handleDeleteMod, handleRemoveTag, formatFileSize, hideSuffix, onContextMenu, handleSetPriority }) {
   const [isDeleteHolding, setIsDeleteHolding] = useState(false)
   const holdTimeoutRef = useRef(null)
   const rawName = mod.custom_name || mod.path.split('\\').pop()
@@ -174,6 +174,41 @@ function ModItem({ mod, selectedMod, selectedMods, setSelectedMod, handleToggleM
       )}
       
       <div className="mod-card-row mod-card-actions">
+        <div className="priority-control" onClick={e => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', marginRight: '8px' }}>
+          <span style={{ fontSize: '0.7rem', opacity: 0.7, marginRight: '4px' }}>Pri:</span>
+          <input
+            type="number"
+            min="0"
+            max="999"
+            defaultValue={mod.priority || 0}
+            onBlur={(e) => {
+              const val = parseInt(e.target.value, 10)
+              if (!isNaN(val) && val !== mod.priority) {
+                handleSetPriority(mod.path, val)
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                const val = parseInt(e.currentTarget.value, 10)
+                if (!isNaN(val) && val !== mod.priority) {
+                  handleSetPriority(mod.path, val)
+                }
+                e.currentTarget.blur()
+              }
+            }}
+            className="priority-input"
+            style={{ 
+              width: '40px', 
+              background: 'rgba(0,0,0,0.3)', 
+              border: '1px solid rgba(255,255,255,0.1)', 
+              color: 'white', 
+              borderRadius: '3px',
+              padding: '2px 4px',
+              fontSize: '0.8rem',
+              textAlign: 'center'
+            }}
+          />
+        </div>
         <Tooltip title={mod.enabled ? 'Disable mod' : 'Enable mod'}>
           <label
             className={`mod-switch ${mod.enabled ? 'is-on' : ''}`}
@@ -205,6 +240,37 @@ function ModItem({ mod, selectedMod, selectedMods, setSelectedMod, handleToggleM
         </Tooltip>
       </div>
     </motion.div>
+  )
+}
+
+function ClashPanel({ clashes, onClose }) {
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '800px', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+        <h2>Mod Conflicts ({clashes.length})</h2>
+        <div className="clash-list" style={{ overflowY: 'auto', flex: 1, padding: '1rem', background: 'rgba(0,0,0,0.2)', borderRadius: '4px' }}>
+          {clashes.length === 0 ? (
+            <p>No conflicts found!</p>
+          ) : (
+            clashes.map((clash, i) => (
+              <div key={i} className="clash-item" style={{ marginBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.5rem' }}>
+                <div className="clash-file" style={{ color: '#aaa', fontSize: '0.9rem', marginBottom: '0.25rem' }}>{clash.file_path}</div>
+                <div className="clash-mods" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  {clash.mod_paths.map(path => (
+                    <span key={path} className="tag" style={{ background: 'rgba(255, 100, 100, 0.2)', border: '1px solid rgba(255, 100, 100, 0.4)' }}>
+                      {path.split(/[/\\]/).pop()}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+        <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
+          <button className="btn-modern" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -256,6 +322,35 @@ function App() {
   // OPTIONAL: user-resizable height
   const [drawerHeight, setDrawerHeight] = useState(380)
   const resizingRef = useRef(false)
+  
+  const [clashes, setClashes] = useState([])
+  const [showClashPanel, setShowClashPanel] = useState(false)
+
+  const handleCheckClashes = async () => {
+    try {
+      setStatus('Checking for clashes...')
+      const result = await invoke('check_mod_clashes')
+      setClashes(result)
+      setShowClashPanel(true)
+      setStatus(`Found ${result.length} clashes`)
+    } catch (error) {
+      setStatus('Error checking clashes: ' + error)
+    }
+  }
+
+  const handleSetPriority = async (modPath, priority) => {
+    if (gameRunning) {
+      setStatus('Cannot change priority while game is running')
+      return
+    }
+    try {
+      await invoke('set_mod_priority', { modPath, priority })
+      setStatus(`Priority set to ${priority}`)
+      await loadMods()
+    } catch (error) {
+      setStatus('Error setting priority: ' + error)
+    }
+  }
 
   const handleContextMenu = (e, mod) => {
     e.preventDefault()
@@ -962,6 +1057,13 @@ function App() {
         />
       )}
 
+      {showClashPanel && (
+        <ClashPanel
+          clashes={clashes}
+          onClose={() => setShowClashPanel(false)}
+        />
+      )}
+
       {showSettings && (
         <SettingsPanel
           settings={{ globalUsmap, hideSuffix }}
@@ -1058,6 +1160,10 @@ function App() {
             <button onClick={handleInstallModClick} className="btn-install-large">
               <span className="install-icon">+</span>
               <span className="install-text">Install Mod</span>
+            </button>
+            
+            <button onClick={handleCheckClashes} className="btn-ghost" title="Check for conflicts">
+              ⚠️ Check Conflicts
             </button>
           </div>
         </div>
@@ -1305,6 +1411,7 @@ function App() {
                       formatFileSize={formatFileSize}
                       hideSuffix={hideSuffix}
                       onContextMenu={handleContextMenu}
+                      handleSetPriority={handleSetPriority}
                     />
                   ))
                 )}

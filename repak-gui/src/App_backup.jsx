@@ -12,20 +12,76 @@ import {
   Clear as ClearIcon,
   ExpandMore as ExpandMoreIcon,
   ChevronRight as ChevronRightIcon,
-  Folder as FolderIcon
+  Folder as FolderIcon,
+  GridView as GridViewIcon,
+  ViewModule as ViewModuleIcon,
+  ViewList as ViewListIcon,
+  Wifi as WifiIcon
 } from '@mui/icons-material'
 import ModDetailsPanel from './components/ModDetailsPanel'
 import InstallModPanel from './components/InstallModPanel'
 import SettingsPanel from './components/SettingsPanel'
+import SharingPanel from './components/SharingPanel'
 import FileTree from './components/FileTree'
+import ContextMenu from './components/ContextMenu'
+import characterData from './data/character_data.json'
 import './App.css'
 import './styles/theme.css'
+import './styles/Badges.css'
+import './styles/Fonts.css'
 import logo from './assets/RepakIcon-x256.png'
 
 const toTagArray = (tags) => Array.isArray(tags) ? tags : (tags ? [tags] : [])
 
+function detectHeroes(files) {
+  const heroIds = new Set()
+  
+  // Regex patterns matching backend logic
+  const pathRegex = /(?:Characters|Hero_ST|Hero)\/(\d{4})/
+  const filenameRegex = /[_/](10[1-6]\d)(\d{3})/
+  
+  files.forEach(file => {
+    // Check path
+    const pathMatch = file.match(pathRegex)
+    if (pathMatch) {
+      heroIds.add(pathMatch[1])
+    }
+    
+    // Check filename
+    const filenameMatch = file.match(filenameRegex)
+    if (filenameMatch) {
+      heroIds.add(filenameMatch[1])
+    }
+  })
+  
+  // Map IDs to names
+  const heroNames = new Set()
+  heroIds.forEach(id => {
+    const char = characterData.find(c => c.id === id)
+    if (char) {
+      heroNames.add(char.name)
+    }
+  })
+  
+  return Array.from(heroNames)
+}
+
+function getAdditionalCategories(details) {
+  if (!details) return []
+  if (details.additional_categories && details.additional_categories.length > 0) {
+    return details.additional_categories
+  }
+  if (typeof details.mod_type === 'string') {
+    const match = details.mod_type.match(/\[(.*?)\]/)
+    if (match && match[1]) {
+      return match[1].split(',').map(s => s.trim())
+    }
+  }
+  return []
+}
+
 // Mod Item Component
-function ModItem({ mod, selectedMod, selectedMods, setSelectedMod, handleToggleModSelection, handleToggleMod, handleDeleteMod, handleRemoveTag, formatFileSize, hideSuffix }) {
+function ModItem({ mod, selectedMod, selectedMods, setSelectedMod, handleToggleModSelection, handleToggleMod, handleDeleteMod, handleRemoveTag, formatFileSize, hideSuffix, onContextMenu }) {
   const [isDeleteHolding, setIsDeleteHolding] = useState(false)
   const holdTimeoutRef = useRef(null)
   const rawName = mod.custom_name || mod.path.split('\\').pop()
@@ -61,6 +117,7 @@ function ModItem({ mod, selectedMod, selectedMods, setSelectedMod, handleToggleM
       animate={{ opacity: mod.enabled ? 1 : 0.5 }}
       whileHover={{ scale: 1.01 }}
       transition={{ duration: 0.2 }}
+      onContextMenu={(e) => onContextMenu(e, mod)}
     >
       <div className="mod-card-row">
         <div className="mod-card-main">
@@ -76,10 +133,16 @@ function ModItem({ mod, selectedMod, selectedMods, setSelectedMod, handleToggleM
           <motion.button 
             type="button"
             className="mod-name-button"
-            onClick={() => setSelectedMod(mod)}
+            onClick={(e) => {
+              if (e.ctrlKey || e.metaKey) {
+                handleToggleModSelection(mod)
+              } else {
+                setSelectedMod(mod)
+              }
+            }}
             whileHover={{ color: '#4a9eff' }}
+            title={rawName}
           >
-            <span className="mod-status-icon">{mod.enabled ? '📦' : '✗'}</span>
             <span className="mod-name-text">
               {cleanName}
               {shouldShowSuffix && <span className="mod-name-suffix">{suffix}</span>}
@@ -125,7 +188,6 @@ function ModItem({ mod, selectedMod, selectedMods, setSelectedMod, handleToggleM
               }}
             />
             <span className="mod-switch-track" />
-            <span className="mod-switch-text">{mod.enabled ? 'Enabled' : 'Disabled'}</span>
           </label>
         </Tooltip>
         <Tooltip title="Hold 2s to delete">
@@ -155,6 +217,7 @@ function App() {
   const [theme, setTheme] = useState('dark');
   const [accentColor, setAccentColor] = useState('#4a9eff');
   const [showSettings, setShowSettings] = useState(false);
+  const [showSharingPanel, setShowSharingPanel] = useState(false);
 
   const [gamePath, setGamePath] = useState('')
   const [mods, setMods] = useState([])
@@ -172,15 +235,40 @@ function App() {
   const [allTags, setAllTags] = useState([])
   const [filterTag, setFilterTag] = useState('')
   const [filterType, setFilterType] = useState('')
+  // New: Mod Detection API integration
+  const [modDetails, setModDetails] = useState({}) // { [path]: ModDetails }
+  const [detailsLoading, setDetailsLoading] = useState(false)
+  const [selectedCharacters, setSelectedCharacters] = useState(new Set()) // values: character_name, '__generic', '__multi'
+  const [selectedCategories, setSelectedCategories] = useState(new Set()) // category strings
+  const [availableCharacters, setAvailableCharacters] = useState([])
+  const [availableCategories, setAvailableCategories] = useState([])
+  const [showCharacterFilters, setShowCharacterFilters] = useState(true)
+  const [showTypeFilters, setShowTypeFilters] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [expandedFolders, setExpandedFolders] = useState(new Set())
   const [showInstallPanel, setShowInstallPanel] = useState(false)
   const [modsToInstall, setModsToInstall] = useState([])
   const [installLogs, setInstallLogs] = useState([])
   const [showInstallLogs, setShowInstallLogs] = useState(false)
+  const [selectedFolderId, setSelectedFolderId] = useState('all')
+  const [viewMode, setViewMode] = useState('grid') // 'grid', 'compact', 'list'
+  const [contextMenu, setContextMenu] = useState(null) // { x, y, mod }
   // OPTIONAL: user-resizable height
   const [drawerHeight, setDrawerHeight] = useState(380)
   const resizingRef = useRef(false)
+
+  const handleContextMenu = (e, mod) => {
+    e.preventDefault()
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      mod
+    })
+  }
+
+  const closeContextMenu = () => {
+    setContextMenu(null)
+  }
 
   useEffect(() => {
     loadInitialData()
@@ -204,6 +292,13 @@ function App() {
     // Refresh mod list when character data is updated
     const unlistenCharUpdate = listen('character_data_updated', () => {
       loadMods()
+    })
+
+    // Listen for directory changes (new folders, deleted folders, etc.)
+    const unlistenDirChanged = listen('mods_dir_changed', () => {
+      console.log('Directory changed, reloading mods and folders...')
+      loadMods()
+      loadFolders()
     })
 
     // Unified file drop handler function
@@ -256,6 +351,7 @@ function App() {
       unlistenDragDrop.then(f => f())
       unlistenFileDrop.then(f => f())
       unlistenLogs.then(f => f())
+      unlistenDirChanged.then(f => f())
       document.removeEventListener('dragover', preventDefault)
       document.removeEventListener('drop', preventDefault)
     }
@@ -294,6 +390,9 @@ function App() {
       await loadMods()
       await loadFolders()
       await checkGame()
+      
+      // Start the file watcher
+      await invoke('start_file_watcher')
     } catch (error) {
       console.error('Failed to load initial data:', error)
     }
@@ -306,10 +405,91 @@ function App() {
       console.log('Loaded mods:', modList)
       setMods(modList)
       setStatus(`Loaded ${modList.length} mod(s)`)
+      // After loading mods, refresh details for each
+      preloadModDetails(modList)
     } catch (error) {
       console.error('Error loading mods:', error)
       setStatus('Error loading mods: ' + error)
     }
+  }
+
+  // Preload details for all mods using the new Mod Detection API
+  const preloadModDetails = async (modList) => {
+    if (!Array.isArray(modList) || modList.length === 0) {
+      setAvailableCharacters([])
+      setAvailableCategories([])
+      return
+    }
+
+    try {
+      setDetailsLoading(true)
+      const existing = modDetails
+      const pathsToFetch = modList
+        .map(m => m.path)
+        .filter(p => !existing[p])
+
+      if (pathsToFetch.length === 0) {
+        // Already have details; recompute filters source lists
+        recomputeFilterSources(modList, modDetails)
+        return
+      }
+
+      const results = await Promise.allSettled(
+        pathsToFetch.map(p => invoke('get_mod_details', { modPath: p }))
+      )
+
+      const newMap = { ...existing }
+      results.forEach((res, idx) => {
+        const path = pathsToFetch[idx]
+        if (res.status === 'fulfilled' && res.value) {
+          newMap[path] = res.value
+        }
+      })
+      setModDetails(newMap)
+      recomputeFilterSources(modList, newMap)
+    } catch (e) {
+      console.error('Failed to preload mod details:', e)
+    } finally {
+      setDetailsLoading(false)
+    }
+  }
+
+  const recomputeFilterSources = (modList, detailsMap) => {
+    const charSet = new Set()
+    let hasMulti = false
+    modList.forEach(m => {
+      const d = detailsMap[m.path]
+      if (!d) return
+      if (d.character_name) charSet.add(d.character_name)
+      if (typeof d.mod_type === 'string' && d.mod_type.startsWith('Multiple Heroes')) hasMulti = true
+    })
+    const catSet = new Set()
+    modList.forEach(m => {
+      const d = detailsMap[m.path]
+      if (!d) return
+      if (d.category) catSet.add(d.category)
+      const adds = getAdditionalCategories(d)
+      adds.forEach(cat => catSet.add(cat))
+    })
+    setAvailableCharacters(Array.from(charSet).sort((a,b)=>a.localeCompare(b)))
+    setAvailableCategories(Array.from(catSet).sort((a,b)=>a.localeCompare(b)))
+    // Keep multi-selections if still valid; otherwise prune invalids
+    const validChars = new Set(charSet)
+    setSelectedCharacters(prev => {
+      const next = new Set()
+      for (const v of prev) {
+        if (v === '__generic' || v === '__multi' || validChars.has(v)) next.add(v)
+      }
+      return next
+    })
+    const validCats = new Set(catSet)
+    setSelectedCategories(prev => {
+      const next = new Set()
+      for (const v of prev) {
+        if (validCats.has(v)) next.add(v)
+      }
+      return next
+    })
   }
 
   const loadTags = async () => {
@@ -395,7 +575,11 @@ function App() {
   }
 
   const handleDeleteMod = async (modPath) => {
-    if (!confirm('Are you sure you want to delete this mod?')) return
+    if (gameRunning) {
+      setStatus('Cannot delete mods while game is running')
+      return
+    }
+    // No confirmation prompt needed here, the hold-to-delete button handles the intent
     
     try {
       await invoke('delete_mod', { path: modPath })
@@ -407,6 +591,10 @@ function App() {
   }
 
   const handleToggleMod = async (modPath) => {
+    if (gameRunning) {
+      setStatus('Cannot toggle mods while game is running')
+      return
+    }
     try {
       const newState = await invoke('toggle_mod', { modPath })
       setStatus(newState ? 'Mod enabled' : 'Mod disabled')
@@ -461,6 +649,11 @@ function App() {
   }
 
   const handleAssignToFolder = async (folderId) => {
+    if (gameRunning) {
+      setStatus('Cannot move mods while game is running')
+      return
+    }
+
     if (selectedMods.size === 0) {
       setStatus('No mods selected')
       return
@@ -476,6 +669,32 @@ function App() {
       await loadFolders()
     } catch (error) {
       setStatus(`Error: ${error}`)
+    }
+  }
+
+  const handleMoveSingleMod = async (modPath, folderId) => {
+    if (gameRunning) {
+      setStatus('Cannot move mods while game is running')
+      return
+    }
+    try {
+      await invoke('assign_mod_to_folder', { modPath, folderId })
+      setStatus('Mod moved to folder')
+      await loadMods()
+      await loadFolders()
+    } catch (error) {
+      setStatus('Error moving mod: ' + error)
+    }
+  }
+
+  const handleAddTagToSingleMod = async (modPath, tag) => {
+    try {
+      await invoke('add_custom_tag', { modPath, tag })
+      setStatus(`Added tag "${tag}"`)
+      await loadMods()
+      await loadTags()
+    } catch (error) {
+      setStatus('Error adding tag: ' + error)
     }
   }
 
@@ -507,6 +726,11 @@ function App() {
   }
 
   const handleDragStart = (e, mod) => {
+    if (gameRunning) {
+      e.preventDefault()
+      setStatus('Cannot move mods while game is running')
+      return
+    }
     console.log('Drag started:', mod.path)
     e.dataTransfer.setData('text', mod.path)
     e.dataTransfer.setData('modpath', mod.path)
@@ -525,6 +749,11 @@ function App() {
     e.preventDefault()
     e.stopPropagation()
     e.currentTarget.classList.remove('drag-over')
+    
+    if (gameRunning) {
+      setStatus('Cannot move mods while game is running')
+      return
+    }
     
     const modPath = e.dataTransfer.getData('modpath') || e.dataTransfer.getData('text/plain')
     console.log('Drop on folder:', folderId, 'modPath:', modPath)
@@ -587,6 +816,11 @@ function App() {
 
   // Compute filtered mods
   const filteredMods = mods.filter(mod => {
+    // Folder filter
+    if (selectedFolderId !== 'all') {
+      if (mod.folder_id !== selectedFolderId) return false
+    }
+
     // Search query
     if (searchQuery) {
       const query = searchQuery.toLowerCase()
@@ -598,6 +832,40 @@ function App() {
 
     if (filterTag && !modTags.includes(filterTag)) {
       return false
+    }
+
+    // New: Multi-select Character/Hero and Category filters using Mod Detection API
+    const hasCharFilter = selectedCharacters.size > 0
+    const hasCatFilter = selectedCategories.size > 0
+    if (hasCharFilter || hasCatFilter) {
+      const d = modDetails[mod.path]
+      if (!d) return false // wait for details when filters active
+      
+      if (hasCatFilter) {
+        const mainCatMatch = d.category && selectedCategories.has(d.category)
+        const adds = getAdditionalCategories(d)
+        const addCatMatch = adds.some(cat => selectedCategories.has(cat))
+        if (!mainCatMatch && !addCatMatch) return false
+      }
+
+      if (hasCharFilter) {
+        const isMulti = typeof d.mod_type === 'string' && d.mod_type.startsWith('Multiple Heroes')
+        const isGeneric = !d.character_name && !isMulti
+        
+        let multiMatch = false
+        if (isMulti && d.files) {
+          const heroes = detectHeroes(d.files)
+          multiMatch = heroes.some(h => selectedCharacters.has(h))
+        }
+
+        const match = (
+          (d.character_name && selectedCharacters.has(d.character_name)) ||
+          (isMulti && selectedCharacters.has('__multi')) ||
+          (isGeneric && selectedCharacters.has('__generic')) ||
+          multiMatch
+        )
+        if (!match) return false
+      }
     }
 
     return true
@@ -710,266 +978,345 @@ function App() {
         />
       )}
 
+      {showSharingPanel && (
+        <SharingPanel 
+          onClose={() => setShowSharingPanel(false)}
+          gamePath={gamePath}
+          installedMods={mods}
+          selectedMods={selectedMods}
+        />
+      )}
+
       <header className="header" style={{ display: 'flex', alignItems: 'center' }}>
         <img src={logo} alt="Repak Icon" className="repak-icon" style={{ width: '50px', height: '50px', marginRight: '10px' }} />
-        <h1 style={{ margin: 0 }}>Repak GUI Revamped [UI TEST]</h1>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem' }}>
+          <h1 style={{ margin: 0 }}>Repak GUI Revamped [DEV]</h1>
+          <span className="version" style={{ fontSize: '0.9rem', opacity: 0.7 }}>v{version}</span>
+        </div>
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginLeft: 'auto' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', background: 'rgba(255,0,0,0.1)', padding: '4px 8px', borderRadius: '4px', border: '1px solid rgba(255,0,0,0.3)' }}>
+            <input 
+              type="checkbox" 
+              checked={gameRunning} 
+              onChange={(e) => setGameRunning(e.target.checked)} 
+            />
+            <span style={{ fontSize: '0.8rem', color: '#ff6b6b', fontWeight: 'bold' }}>DEV: Game Running</span>
+          </label>
+          <button 
+            onClick={() => setShowSharingPanel(true)} 
+            className="btn-settings"
+            title="Share Mods"
+          >
+            <WifiIcon /> Share
+          </button>
           <button 
             onClick={() => setShowSettings(true)} 
             className="btn-settings"
           >
             ⚙️ Settings
           </button>
-          <span className="version">v{version}</span>
-          {gameRunning && <span className="game-status">⚠️ Game Running</span>}
+          {gameRunning && (
+            <div className="game-running-indicator">
+              <span className="blink-icon">⚠️</span>
+              <span className="running-text">Game Running</span>
+            </div>
+          )}
         </div>
       </header>
 
       <div className="container">
-        {/* Game Path Section */}
-        <section className="section game-path-section">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <h2 style={{ margin: 0 }}>Game Path</h2>
-            <button onClick={handleInstallModClick} className="btn-install-mod">
-              📦 Install Mod
+        {/* Main Action Bar */}
+        <div className="main-action-bar">
+          <div className="search-wrapper">
+            <SearchIcon className="search-icon-large" />
+            <input
+              type="text"
+              placeholder="Search installed mods..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="main-search-input"
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="btn-icon-clear">
+                <ClearIcon />
+              </button>
+            )}
+          </div>
+
+          <div className="action-controls">
+            <select
+              value={filterTag}
+              onChange={(e) => setFilterTag(e.target.value)}
+              className="filter-select-large"
+            >
+              <option value="">All Tags</option>
+              {allTags.map(tag => (
+                <option key={tag} value={tag}>{tag}</option>
+              ))}
+            </select>
+
+            <button onClick={handleInstallModClick} className="btn-install-large">
+              <span className="install-icon">+</span>
+              <span className="install-text">Install Mod</span>
             </button>
           </div>
-          {!gamePath && (
-            <p style={{ margin: 0, color: '#999' }}>
-              Configure the game path from the Settings panel.
-            </p>
-          )}
-        </section>
+        </div>
 
-        {/* Main 2-Panel Layout */}
+        {!gamePath && (
+          <div className="config-warning">
+            ⚠️ Game path not configured. <button onClick={() => setShowSettings(true)} className="btn-link-warning">Configure in Settings</button>
+          </div>
+        )}
+
+        {/* Main 3-Panel Layout */}
         <div className="main-panels" onMouseMove={handleResizeMove}>
-          {/* Left Panel - Mods and Folders */}
-          <div className="left-panel" style={{ width: `${leftPanelWidth}%` }}>
-            {/* Mods and Folders Section */}
-            <section className="section mods-section">
-              <div className="section-header">
-                <h2>Installed Mods ({filteredMods.length}/{mods.length})</h2>
-                <div className="section-header-actions">
-                  <button onClick={handleCreateFolder} className="btn-ghost">
-                    <CreateNewFolderIcon fontSize="small" />
-                    Add Folder
-                  </button>
-                  <button onClick={loadMods} className="btn-ghost">
-                    <RefreshIcon fontSize="small" />
-                    Refresh
-                  </button>
-                </div>
-              </div>
-
-              {/* Search and Filters */}
-              <div className="filters-bar">
-                <div className="mods-toolbar">
-                  <div className="toolbar-card filter-card">
-                    <div className="toolbar-field stretch">
-                      <SearchIcon className="toolbar-icon" fontSize="small" />
-                      <input
-                        type="text"
-                        placeholder="Search mods..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="toolbar-input"
-                      />
-                    </div>
-                    <select
-                      value={filterTag}
-                      onChange={(e) => setFilterTag(e.target.value)}
-                      className="toolbar-select"
-                    >
-                      <option value="">All Tags</option>
-                      {allTags.map(tag => (
-                        <option key={tag} value={tag}>{tag}</option>
-                      ))}
-                    </select>
-                    {(searchQuery || filterTag) && (
+          {/* Wrapper for Left Sidebar and Center Panel */}
+          <div className="content-wrapper" style={{ width: `${leftPanelWidth}%`, display: 'flex', height: '100%' }}>
+            {/* Left Sidebar - Folders */}
+            <div className="left-sidebar">
+              {/* Filters Section */}
+              <div className="sidebar-filters" style={{ padding: '0.5rem 0.6rem', borderBottom: '1px solid var(--panel-border)' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                    <div style={{ fontSize: '0.75rem', opacity: 0.7, fontWeight: 600 }}>FILTERS</div>
+                    {(selectedCharacters.size > 0 || selectedCategories.size > 0) && (
                       <button
-                        onClick={() => { setSearchQuery(''); setFilterTag(''); }}
-                        className="btn-chip"
+                        className="btn-ghost-mini"
+                        onClick={() => { setSelectedCharacters(new Set()); setSelectedCategories(new Set()) }}
+                        title="Clear all filters"
                       >
                         Clear
                       </button>
                     )}
                   </div>
 
-                  <div className={`toolbar-card selection-card ${selectedMods.size === 0 ? 'inactive' : ''}`}>
-                    <div className="selection-header">
-                      <span className="selected-count-chip">
-                        {selectedMods.size > 0 ? `${selectedMods.size} selected` : 'No mods selected'}
-                      </span>
-                      <div className="selection-shortcuts">
-                        {mods.length > 0 && (
-                          <button onClick={handleSelectAll} className="btn-link">
-                            Select All
-                          </button>
-                        )}
-                        {selectedMods.size > 0 && (
-                          <button onClick={handleDeselectAll} className="btn-link">
-                            Clear Selection
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <div className="selection-actions">
-                      <div className="toolbar-field block">
-                        <label htmlFor="move-to-folder">Move to folder</label>
-                        <select
-                          id="move-to-folder"
-                          className="toolbar-select fill"
-                          disabled={selectedMods.size === 0}
-                          defaultValue=""
-                          onChange={(e) => {
-                            const folderId = e.target.value
-                            if (!folderId) return
-                            handleAssignToFolder(folderId)
-                            e.target.value = ''
-                          }}
-                        >
-                          <option value="">Choose folder...</option>
-                          {folders.map(f => (
-                            <option key={f.id} value={f.id}>{f.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="toolbar-field block">
-                        <label htmlFor="tag-input">Add tag</label>
-                        <div className="tag-input-row">
-                          <input
-                            id="tag-input"
-                            type="text"
-                            list="existing-tags"
-                            placeholder="Type or select a tag"
-                            value={newTagInput}
-                            onChange={(e) => setNewTagInput(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleAddCustomTag()}
-                            disabled={selectedMods.size === 0}
-                            className="toolbar-input"
-                          />
-                          <button
-                            onClick={handleAddCustomTag}
-                            className="btn-pill"
-                            disabled={selectedMods.size === 0 || !newTagInput.trim()}
-                          >
-                            Add
-                          </button>
-                        </div>
-                        <datalist id="existing-tags">
-                          {allTags.map(tag => (
-                            <option key={tag} value={tag} />
-                          ))}
-                        </datalist>
-                      </div>
-                    </div>
+                  {/* Character/Hero Chips */}
+                  <div 
+                    className="filter-section-header"
+                    onClick={() => setShowCharacterFilters(v => !v)}
+                    style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                  >
+                    <div style={{ fontSize: '0.75rem', opacity: 0.6 }}>Characters {selectedCharacters.size > 0 && `(${selectedCharacters.size})`}</div>
+                    <span style={{ fontSize: '0.7rem', opacity: 0.5 }}>{showCharacterFilters ? '\u25bc' : '\u25b6'}</span>
                   </div>
+                  {showCharacterFilters && (
+                    <div className="filter-chips-scroll">
+                      {availableCharacters.map(c => {
+                        const active = selectedCharacters.has(c)
+                        return (
+                          <button
+                            key={c}
+                            className={`filter-chip-compact ${active ? 'active' : ''}`}
+                            onClick={() => setSelectedCharacters(prev => { const next = new Set(prev); active ? next.delete(c) : next.add(c); return next; })}
+                            title={c}
+                          >
+                            {c}
+                          </button>
+                        )
+                      })}
+                      {/* Special chips */}
+                      <button
+                        className={`filter-chip-compact ${selectedCharacters.has('__multi') ? 'active' : ''}`}
+                        onClick={() => setSelectedCharacters(prev => { const next = new Set(prev); next.has('__multi') ? next.delete('__multi') : next.add('__multi'); return next; })}
+                        title="Multiple Heroes"
+                      >
+                        Multi
+                      </button>
+                      <button
+                        className={`filter-chip-compact ${selectedCharacters.has('__generic') ? 'active' : ''}`}
+                        onClick={() => setSelectedCharacters(prev => { const next = new Set(prev); next.has('__generic') ? next.delete('__generic') : next.add('__generic'); return next; })}
+                        title="Generic/Global"
+                      >
+                        Generic
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Category Chips */}
+                  <div 
+                    className="filter-section-header"
+                    onClick={() => setShowTypeFilters(v => !v)}
+                    style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.25rem' }}
+                  >
+                    <div style={{ fontSize: '0.75rem', opacity: 0.6 }}>Types {selectedCategories.size > 0 && `(${selectedCategories.size})`}</div>
+                    <span style={{ fontSize: '0.7rem', opacity: 0.5 }}>{showTypeFilters ? '\u25bc' : '\u25b6'}</span>
+                  </div>
+                  {showTypeFilters && (
+                    <div className="filter-chips-scroll">
+                      {availableCategories.map(cat => {
+                        const active = selectedCategories.has(cat)
+                        return (
+                          <button
+                            key={cat}
+                            className={`filter-chip-compact ${active ? 'active' : ''}`}
+                            onClick={() => setSelectedCategories(prev => { const next = new Set(prev); active ? next.delete(cat) : next.add(cat); return next; })}
+                            title={cat}
+                          >
+                            {cat}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="sidebar-header">
+                <h3>Folders</h3>
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  <button 
+                    onClick={async () => {
+                      await loadFolders()
+                      await loadMods()
+                      setStatus('Folders refreshed')
+                    }} 
+                    className="btn-icon" 
+                    title="Refresh Folders"
+                  >
+                    <RefreshIcon fontSize="small" />
+                  </button>
+                  <button onClick={handleCreateFolder} className="btn-icon" title="New Folder">
+                    <CreateNewFolderIcon fontSize="small" />
+                  </button>
+                </div>
+              </div>
+              <div className="folder-list">
+                <div 
+                  className={`folder-item ${selectedFolderId === 'all' ? 'active' : ''} ${filteredMods.length === 0 ? 'empty' : ''}`}
+                  onClick={() => setSelectedFolderId('all')}
+                >
+                  <FolderIcon fontSize="small" />
+                  <span className="folder-name">All Mods</span>
+                  <span className="folder-count">{filteredMods.length}</span>
+                </div>
+                {folders.map(folder => {
+                  const count = filteredMods.filter(m => m.folder_id === folder.id).length;
+                  const hasFilters = selectedCharacters.size > 0 || selectedCategories.size > 0;
+                  // Hide empty folders when filters are active
+                  if (hasFilters && count === 0) return null;
+                  
+                  return (
+                    <div 
+                      key={folder.id} 
+                      className={`folder-item ${selectedFolderId === folder.id ? 'active' : ''} ${count === 0 ? 'empty' : ''}`}
+                      onClick={() => setSelectedFolderId(folder.id)}
+                    >
+                      <FolderIcon fontSize="small" />
+                      <span className="folder-name">{folder.name}</span>
+                      <span className="folder-count">{count}</span>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDeleteFolder(folder.id)
+                        }}
+                        className="btn-icon-small delete-folder"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Center Panel - Mod List */}
+            <div className="center-panel" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <div className="center-header">
+                <div className="header-title">
+                  <h2>
+                    {selectedFolderId === 'all' ? 'All Mods' : 
+                     folders.find(f => f.id === selectedFolderId)?.name || 'Unknown Folder'}
+                  </h2>
+                  <span className="mod-count">({filteredMods.length})</span>
+                </div>
+                <div className="header-actions">
+                  <div className="view-switcher">
+                    <button 
+                      onClick={() => setViewMode('grid')} 
+                      className={`btn-icon-small ${viewMode === 'grid' ? 'active' : ''}`}
+                      title="Grid View"
+                    >
+                      <GridViewIcon fontSize="small" />
+                    </button>
+                    <button 
+                      onClick={() => setViewMode('compact')} 
+                      className={`btn-icon-small ${viewMode === 'compact' ? 'active' : ''}`}
+                      title="Compact View"
+                    >
+                      <ViewModuleIcon fontSize="small" />
+                    </button>
+                    <button 
+                      onClick={() => setViewMode('list')} 
+                      className={`btn-icon-small ${viewMode === 'list' ? 'active' : ''}`}
+                      title="List View"
+                    >
+                      <ViewListIcon fontSize="small" />
+                    </button>
+                  </div>
+                  <div className="divider-vertical" />
+                  <button onClick={loadMods} className="btn-ghost">
+                    <RefreshIcon fontSize="small" />
+                  </button>
                 </div>
               </div>
 
-              {/* Mods List with Expandable Folders */}
-              <div className="mod-list">
+              {/* Bulk Actions Toolbar */}
+              <div className={`bulk-actions-toolbar ${selectedMods.size === 0 ? 'inactive' : ''}`}>
+                 <div className="selection-info">
+                   {selectedMods.size} selected
+                   <button onClick={handleDeselectAll} className="btn-link">Clear</button>
+                 </div>
+                 <div className="bulk-controls">
+                   <select
+                      className="toolbar-select"
+                      disabled={selectedMods.size === 0}
+                      defaultValue=""
+                      onChange={(e) => {
+                        const folderId = e.target.value
+                        if (!folderId) return
+                        handleAssignToFolder(folderId)
+                        e.target.value = ''
+                      }}
+                    >
+                      <option value="">Move to...</option>
+                      {folders.map(f => (
+                        <option key={f.id} value={f.id}>{f.name}</option>
+                      ))}
+                    </select>
+                 </div>
+              </div>
+
+              <div className={`mod-list-grid view-${viewMode}`} style={{ flex: 1, overflowY: 'auto', padding: '1rem' }}>
                 {filteredMods.length === 0 ? (
-                  <p className="empty-state">
-                    {mods.length === 0 ? 'No mods installed. Drop PAK files here to install.' : 'No mods match the current filters.'}
-                  </p>
+                  <div className="empty-state">
+                    <p>No mods found in this folder.</p>
+                  </div>
                 ) : (
-                  <>
-                    {folders.map(folder => {
-                      const folderMods = modsByFolder[folder.id] || []
-                      if (folderMods.length === 0) return null
-                      const isExpanded = expandedFolders.has(folder.id)
-                      
-                      return (
-                        <div key={folder.id} className={`folder-card ${isExpanded ? 'open' : ''}`}>
-                          <div className="folder-card-header">
-                            <button 
-                              className="folder-card-toggle"
-                              onClick={() => toggleFolder(folder.id)}
-                            >
-                              <span className="folder-label">
-                                <ChevronRightIcon className={`folder-chevron ${isExpanded ? 'open' : ''}`} fontSize="small" />
-                                <FolderIcon className="folder-icon" fontSize="small" />
-                                <span className="folder-name">{folder.name}</span>
-                              </span>
-                              <span className="folder-count-chip">
-                                {folderMods.length} {folderMods.length === 1 ? 'mod' : 'mods'}
-                              </span>
-                            </button>
-                            <button 
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleDeleteFolder(folder.id)
-                              }}
-                              className="folder-delete"
-                            >
-                              ×
-                            </button>
-                          </div>
-                          
-                          {isExpanded && (
-                            <div className="folder-card-body mod-card-grid">
-                              {folderMods.map((mod) => (
-                                <ModItem 
-                                  key={mod.path} 
-                                  mod={mod}
-                                  selectedMod={selectedMod}
-                                  selectedMods={selectedMods}
-                                  setSelectedMod={setSelectedMod}
-                                  handleToggleModSelection={handleToggleModSelection}
-                                  handleToggleMod={handleToggleMod}
-                                  handleDeleteMod={handleDeleteMod}
-                                  handleRemoveTag={handleRemoveTag}
-                                  formatFileSize={formatFileSize}
-                                  hideSuffix={hideSuffix}
-                                />
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                    
-                    {modsByFolder['_root'] && modsByFolder['_root'].length > 0 && (
-                      <div className="folder-card open root-folder">
-                        <div className="folder-card-header no-toggle">
-                          <div className="folder-label">
-                            <FolderIcon className="folder-icon" fontSize="small" />
-                            <span className="folder-name">Ungrouped Mods</span>
-                          </div>
-                          <span className="folder-count-chip">
-                            {modsByFolder['_root'].length} {modsByFolder['_root'].length === 1 ? 'mod' : 'mods'}
-                          </span>
-                        </div>
-                        <div className="folder-card-body mod-card-grid">
-                          {modsByFolder['_root'].map((mod) => (
-                            <ModItem 
-                              key={mod.path}
-                              mod={mod}
-                              selectedMod={selectedMod}
-                              selectedMods={selectedMods}
-                              setSelectedMod={setSelectedMod}
-                              handleToggleModSelection={handleToggleModSelection}
-                              handleToggleMod={handleToggleMod}
-                              handleDeleteMod={handleDeleteMod}
-                              handleRemoveTag={handleRemoveTag}
-                              formatFileSize={formatFileSize}
-                              hideSuffix={hideSuffix}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </>
+                  filteredMods.map(mod => (
+                    <ModItem 
+                      key={mod.path} 
+                      mod={mod}
+                      selectedMod={selectedMod}
+                      selectedMods={selectedMods}
+                      setSelectedMod={setSelectedMod}
+                      handleToggleModSelection={handleToggleModSelection}
+                      handleToggleMod={handleToggleMod}
+                      handleDeleteMod={handleDeleteMod}
+                      handleRemoveTag={handleRemoveTag}
+                      formatFileSize={formatFileSize}
+                      hideSuffix={hideSuffix}
+                      onContextMenu={handleContextMenu}
+                    />
+                  ))
                 )}
               </div>
-            </section>
+            </div>
           </div>
 
           {/* Resize Handle */}
           <div 
             className="resize-handle"
             onMouseDown={handleResizeStart}
+            style={{ left: `${leftPanelWidth}%` }}
           />
 
           {/* Right Panel - Mod Details (Always Visible) */}
@@ -979,6 +1326,7 @@ function App() {
                 <div style={{ flex: 1 }}>
                   <ModDetailsPanel 
                     mod={selectedMod}
+                    initialDetails={modDetails[selectedMod.path]}
                     onClose={() => setSelectedMod(null)}
                   />
                 </div>
@@ -1015,7 +1363,7 @@ function App() {
               className="btn-link"
               onClick={() => setShowInstallLogs(v => !v)}
             >
-              {showInstallLogs ? 'Hide Log ▲' : 'Show Log ▼'}
+              {showInstallLogs ? 'Hide Log ▼' : 'Show Log ▲'}
             </button>
             {installLogs.length > 0 && showInstallLogs && (
               <button
@@ -1060,9 +1408,21 @@ function App() {
         </AnimatePresence>
       </motion.div>
 
-      <footer className="footer">
-        <p>Drag & drop PAK files anywhere to install mods</p>
-      </footer>
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          mod={contextMenu.mod}
+          onClose={closeContextMenu}
+          onAssignTag={(tag) => handleAddTagToSingleMod(contextMenu.mod.path, tag)}
+          onMoveTo={(folderId) => handleMoveSingleMod(contextMenu.mod.path, folderId)}
+          onCreateFolder={handleCreateFolder}
+          folders={folders}
+          onDelete={() => handleDeleteMod(contextMenu.mod.path)}
+          onToggle={() => handleToggleMod(contextMenu.mod.path)}
+          allTags={allTags}
+        />
+      )}
     </div>
   )
 }

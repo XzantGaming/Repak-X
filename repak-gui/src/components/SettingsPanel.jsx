@@ -15,6 +15,8 @@ export default function SettingsPanel({ settings, onSave, onClose, theme, setThe
   const [globalUsmap, setGlobalUsmap] = useState(settings.globalUsmap || '');
   const [hideSuffix, setHideSuffix] = useState(settings.hideSuffix || false);
   const [usmapStatus, setUsmapStatus] = useState('');
+  const [isUpdatingChars, setIsUpdatingChars] = useState(false);
+  const [charUpdateStatus, setCharUpdateStatus] = useState('');
 
   const handleSave = () => {
     onSave({
@@ -22,6 +24,28 @@ export default function SettingsPanel({ settings, onSave, onClose, theme, setThe
       hideSuffix
     });
     onClose();
+  };
+
+  const handleUpdateCharacterData = async () => {
+    setIsUpdatingChars(true);
+    setCharUpdateStatus('Updating...');
+    try {
+      const count = await invoke('update_character_data_from_github');
+      setCharUpdateStatus(`✓ Successfully updated! ${count} new skins added.`);
+    } catch (error) {
+      setCharUpdateStatus(`Error: ${error}`);
+    } finally {
+      setIsUpdatingChars(false);
+    }
+  };
+
+  const handleCancelUpdate = async () => {
+    try {
+      await invoke('cancel_character_update');
+      setCharUpdateStatus('Cancelling...');
+    } catch (error) {
+      console.error('Failed to cancel:', error);
+    }
   };
 
   const handleBrowseUsmap = async () => {
@@ -111,6 +135,34 @@ export default function SettingsPanel({ settings, onSave, onClose, theme, setThe
                   color: usmapStatus.startsWith('✓') ? '#4CAF50' : '#ff5252'
                 }}>
                   {usmapStatus}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="setting-section">
+            <h3>Character Data</h3>
+            <div className="setting-group">
+              <p style={{ fontSize: '0.9rem', opacity: 0.7, marginBottom: '0.5rem' }}>
+                Update the character database from GitHub to support new heroes and skins.
+              </p>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button onClick={handleUpdateCharacterData} disabled={isUpdatingChars}>
+                  {isUpdatingChars ? 'Updating...' : 'Update from GitHub'}
+                </button>
+                {isUpdatingChars && (
+                  <button onClick={handleCancelUpdate} className="btn-secondary" style={{ borderColor: '#ff5252', color: '#ff5252' }}>
+                    Cancel
+                  </button>
+                )}
+              </div>
+              {charUpdateStatus && (
+                <p style={{ 
+                  fontSize: '0.85rem', 
+                  marginTop: '0.5rem',
+                  color: charUpdateStatus.includes('Error') || charUpdateStatus.includes('Cancelled') ? '#ff5252' : '#4CAF50'
+                }}>
+                  {charUpdateStatus}
                 </p>
               )}
             </div>
