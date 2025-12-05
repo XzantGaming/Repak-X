@@ -1,38 +1,59 @@
 import React, { useState, useMemo } from 'react';
-import { FaFolder, FaFolderOpen, FaFile } from 'react-icons/fa';
+import { VscFolder, VscFolderOpened, VscFile } from 'react-icons/vsc';
+import './FileTree.css';
 
-const TreeNode = ({ name, node, level = 0 }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const isFolder = node.type === 'folder';
+const FileIcon = ({ name }) => {
+  return <VscFile className="node-icon file-icon" />;
+};
 
-  const handleToggle = () => {
+const FolderIcon = ({ isOpen }) => {
+  return isOpen ? 
+    <VscFolderOpened className="node-icon folder-icon" /> : 
+    <VscFolder className="node-icon folder-icon" />;
+};
+
+const TreeNode = ({ node }) => {
+  const [isOpen, setIsOpen] = useState(true); // Default to open for better visibility
+  const [showCopied, setShowCopied] = useState(false);
+  const isFolder = node.isFolder;
+
+  const handleToggle = (e) => {
+    e.stopPropagation();
     if (isFolder) {
       setIsOpen(!isOpen);
     }
   };
 
+  const handleContextMenu = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Copy path to clipboard
+    if (node.fullPath) {
+      navigator.clipboard.writeText(node.fullPath).then(() => {
+        setShowCopied(true);
+        setTimeout(() => setShowCopied(false), 1500);
+      }).catch(err => console.error('Failed to copy:', err));
+    }
+  };
+
   return (
-    <div>
+    <div className="tree-node">
       <div 
-        onClick={handleToggle} 
-        style={{ paddingLeft: `${level * 20}px`, cursor: isFolder ? 'pointer' : 'default', display: 'flex', alignItems: 'center', gap: '5px' }}
-        className="tree-node"
+        className={`node-content ${isFolder ? 'folder' : 'file'}`}
+        onClick={handleToggle}
+        onContextMenu={handleContextMenu}
+        title={node.fullPath ? `Right-click to copy: ${node.fullPath}` : node.name}
       >
-        {isFolder ? (isOpen ? <FaFolderOpen color="#4a9eff" /> : <FaFolder color="#4a9eff" />) : <FaFile color="#ccc" />}
-        <span>{name}</span>
+        {isFolder ? <FolderIcon isOpen={isOpen} /> : <FileIcon name={node.name} />}
+        <span className="node-label">{node.name}</span>
+        {showCopied && <span className="copied-tooltip">Copied!</span>}
       </div>
+      
       {isFolder && isOpen && (
-        <div>
-          {Object.entries(node.children)
-            .sort(([aName, aNode], [bName, bNode]) => {
-              // Sort folders before files
-              if (aNode.type !== bNode.type) {
-                return aNode.type === 'folder' ? -1 : 1;
-              }
-              return aName.localeCompare(bName); // Sort alphabetically
-            })
-            .map(([childName, childNode]) => (
-              <TreeNode key={childName} name={childName} node={childNode} level={level + 1} />
+        <div className="node-children">
+          {node.children.map((child) => (
+            <TreeNode key={child.id} node={child} />
           ))}
         </div>
       )}
@@ -41,68 +62,130 @@ const TreeNode = ({ name, node, level = 0 }) => {
 };
 
 const FileTree = ({ files }) => {
-  const [expanded, setExpanded] = useState(new Set());
+  const treeData = useMemo(() => {
+    const root = { id: 'root', name: 'root', children: [], isFolder: true };
+    let idCounter = 0;
 
-  const buildTree = (filesArr) => {
-    const root = {};
-    filesArr.forEach(f => {
-      const path = typeof f === 'string' ? f : (f.path || '');
-      const parts = path.split(/[/\\]/).filter(Boolean);
-      let node = root;
-      parts.forEach((part, idx) => {
-        if (!node[part]) node[part] = { __children: {}, __isFile: idx === parts.length - 1, __meta: idx === parts.length - 1 ? f : undefined };
-        node = node[part].__children;
+    const fileList = Array.isArray(files) ? files : [];
+
+    fileList.forEach(path => {
+      // Normalize path separators
+      let normalizedPath = path.replace(/\\/g, '/');
+      
+      // 1. Skip "Game" folder if it's at the start
+      // Handle cases like "Game/Marvel/..." or just "Game" or "Game/"
+      if (normalizedPath.startsWith('Game/')) {
+        normalizedPath = normalizedPath.substring(5);
+      } else if (normalizedPath === 'Game') {
+        return; // Skip the folder itself if it's just "Game"
+      }
+      
+      // Also handle cases where the path might be absolute or have leading slashes
+      // e.g. "/Game/Marvel/..."
+      if (normalizedPath.startsWith('/Game/')) {
+        normalizedPath = normalizedPath.substring(6);
+      }
+
+      // Filter out empty parts to handle double slashes or trailing slashes
+      const parts = normalizedPath.split('/').filter(p => p && p !== '.');
+      
+      // Double check if the first part is still "Game" (case insensitive?)
+      if (parts.length > 0 && parts[0].toLowerCase() === 'game') {
+         parts.shift();
+      }
+
+      if (parts.length === 0) return;
+
+      let current = root;
+      let currentPath = '';
+      
+      parts.forEach((part, index) => {
+        const isFile = index === parts.length - 1;
+        currentPath = currentPath ? `${currentPath}/${part}` : part;
+        let child = current.children.find(c => c.name === part);
+        
+        if (!child) {
+          child = {
+            id: `node-${idCounter++}`,
+            name: part,
+            fullPath: currentPath,
+            children: [],
+            isFolder: !isFile
+          };
+          current.children.push(child);
+        }
+        current = child;
       });
     });
-    return root;
-  };
+    
+    // Recursive sort
+    const sortNode = (node) => {
+      if (node.children) {
+        node.children.sort((a, b) => {
+          if (a.isFolder === b.isFolder) return a.name.localeCompare(b.name);
+          return a.isFolder ? -1 : 1;
+        });
+        node.children.forEach(sortNode);
+      }
+    };
+    sortNode(root);
 
-  const tree = useMemo(() => buildTree(files || []), [files]);
+    // 2. Merge single-child folders
+    const mergeSingleChildFolders = (node) => {
+      if (!node.children) return;
 
-  const toggle = (key) => {
-    const next = new Set(expanded);
-    if (next.has(key)) next.delete(key);
-    else next.add(key);
-    setExpanded(next);
-  };
+      // Process children first (bottom-up might be safer, but top-down works for merging downwards)
+      // Actually, let's do top-down merging.
+      
+      // We iterate through children. If a child is a folder and has exactly one child which is also a folder, merge them.
+      // However, we need to be careful about modifying the array while iterating.
+      
+      // Better approach: Recursively process children first, then try to merge current node with its single child if applicable?
+      // No, the requirement is "merge the folders up to the first folder with assets/subfolders".
+      // This means if A has only child B, and B is a folder, display as "A/B".
+      
+      // Let's do a post-order traversal (process children first) to ensure deep merges happen correctly?
+      // Actually, pre-order (top-down) is fine for "A" -> "A/B" -> "A/B/C".
+      
+      for (let i = 0; i < node.children.length; i++) {
+        let child = node.children[i];
+        
+        // While child is a folder and has exactly one child that is ALSO a folder
+        while (
+          child.isFolder && 
+          child.children && 
+          child.children.length === 1 && 
+          child.children[0].isFolder
+        ) {
+          const grandChild = child.children[0];
+          // Merge name
+          child.name = `${child.name}/${grandChild.name}`;
+          // Update fullPath to point to the deepest merged child
+          child.fullPath = grandChild.fullPath;
+          // Adopt grandchildren
+          child.children = grandChild.children;
+          // Update ID to ensure uniqueness if needed, or keep child's ID
+        }
+        
+        // Recurse for the next level (which might now be several levels deep originally)
+        mergeSingleChildFolders(child);
+      }
+    };
 
-  const renderNodes = (nodeObj, parentKey = '') => {
-    return Object.entries(nodeObj).map(([name, obj]) => {
-      const key = parentKey ? `${parentKey}/${name}` : name;
-      const hasChildren = Object.keys(obj.__children).length > 0;
-      const isFile = !!obj.__isFile;
-      return (
-        <div key={key} className="tree-node">
-          <div
-            className={`node-label ${isFile ? 'file' : 'folder'}`}
-            onClick={() => !isFile && toggle(key)}
-            title={isFile && obj.__meta && obj.__meta.path ? obj.__meta.path : name}
-          >
-            {!isFile ? (
-              <span className="caret">{expanded.has(key) ? '▾' : '▸'}</span>
-            ) : (
-              <span className="caret-placeholder" />
-            )}
-            <span className="node-name">{name}</span>
-          </div>
+    mergeSingleChildFolders(root);
+    
+    return root.children;
+  }, [files]);
 
-          {hasChildren && expanded.has(key) && (
-            <div className="children">
-              {renderNodes(obj.__children, key)}
-            </div>
-          )}
-        </div>
-      )
-    });
-  };
+  if (!files || files.length === 0) {
+    return <div className="file-tree" style={{ padding: '1rem', color: 'var(--text-secondary)' }}>No files to display</div>;
+  }
 
   return (
-    <div className="file-tree" role="tree">
-      {Object.keys(tree).length === 0 ? (
-        <div className="empty">No files</div>
-      ) : (
-        renderNodes(tree)
-      )}
+    <div className="file-tree">
+      {treeData.map(node => (
+        <TreeNode key={node.id} node={node} />
+      ))}
     </div>
   );
 };

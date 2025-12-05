@@ -16,7 +16,8 @@ import {
   GridView as GridViewIcon,
   ViewModule as ViewModuleIcon,
   ViewList as ViewListIcon,
-  Wifi as WifiIcon
+  Wifi as WifiIcon,
+  ViewSidebar as ViewSidebarIcon
 } from '@mui/icons-material'
 import ModDetailsPanel from './components/ModDetailsPanel'
 import InstallModPanel from './components/InstallModPanel'
@@ -293,7 +294,9 @@ function App() {
   const [gameRunning, setGameRunning] = useState(false)
   const [version, setVersion] = useState('')
   const [selectedMod, setSelectedMod] = useState(null)
-  const [leftPanelWidth, setLeftPanelWidth] = useState(60) // percentage
+  const [leftPanelWidth, setLeftPanelWidth] = useState(100) // percentage
+  const [lastPanelWidth, setLastPanelWidth] = useState(60) // to restore after collapse
+  const [isRightPanelOpen, setIsRightPanelOpen] = useState(false)
   const [isResizing, setIsResizing] = useState(false)
   const [selectedMods, setSelectedMods] = useState(new Set())
   const [showBulkActions, setShowBulkActions] = useState(false)
@@ -317,7 +320,7 @@ function App() {
   const [installLogs, setInstallLogs] = useState([])
   const [showInstallLogs, setShowInstallLogs] = useState(false)
   const [selectedFolderId, setSelectedFolderId] = useState('all')
-  const [viewMode, setViewMode] = useState('grid') // 'grid', 'compact', 'list'
+  const [viewMode, setViewMode] = useState('list') // 'grid', 'compact', 'list'
   const [contextMenu, setContextMenu] = useState(null) // { x, y, mod }
   // OPTIONAL: user-resizable height
   const [drawerHeight, setDrawerHeight] = useState(380)
@@ -883,11 +886,27 @@ function App() {
     // Constrain between 30% and 70%
     if (newLeftWidth >= 30 && newLeftWidth <= 70) {
       setLeftPanelWidth(newLeftWidth)
+      if (isRightPanelOpen) {
+        setLastPanelWidth(newLeftWidth)
+      }
     }
   }
 
   const handleResizeEnd = () => {
     setIsResizing(false)
+  }
+
+  const toggleRightPanel = () => {
+    if (isRightPanelOpen) {
+      // Collapse
+      setLastPanelWidth(leftPanelWidth)
+      setLeftPanelWidth(100)
+      setIsRightPanelOpen(false)
+    } else {
+      // Expand
+      setLeftPanelWidth(lastPanelWidth)
+      setIsRightPanelOpen(true)
+    }
   }
 
   useEffect(() => {
@@ -1359,6 +1378,14 @@ function App() {
                     </button>
                   </div>
                   <div className="divider-vertical" />
+                  <button 
+                    onClick={toggleRightPanel} 
+                    className={`btn-ghost ${!isRightPanelOpen ? 'active' : ''}`}
+                    title={isRightPanelOpen ? "Collapse Details" : "Expand Details"}
+                  >
+                    <ViewSidebarIcon fontSize="small" style={{ transform: isRightPanelOpen ? 'none' : 'rotate(180deg)' }} />
+                  </button>
+                  <div className="divider-vertical" />
                   <button onClick={loadMods} className="btn-ghost">
                     <RefreshIcon fontSize="small" />
                   </button>
@@ -1420,17 +1447,19 @@ function App() {
           </div>
 
           {/* Resize Handle */}
-          <div 
-            className="resize-handle"
-            onMouseDown={handleResizeStart}
-            style={{ left: `${leftPanelWidth}%` }}
-          />
+          {isRightPanelOpen && (
+            <div 
+              className="resize-handle"
+              onMouseDown={handleResizeStart}
+              style={{ left: `${leftPanelWidth}%` }}
+            />
+          )}
 
           {/* Right Panel - Mod Details (Always Visible) */}
-          <div className="right-panel" style={{ width: `${100 - leftPanelWidth}%` }}>
+          <div className="right-panel" style={{ width: `${100 - leftPanelWidth}%`, display: isRightPanelOpen ? 'flex' : 'none' }}>
             {selectedMod ? (
-              <div className="mod-details-and-contents" style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
-                <div style={{ flex: 1 }}>
+              <div className="mod-details-and-contents" style={{ display: 'flex', gap: '1rem', height: '100%', overflow: 'hidden' }}>
+                <div style={{ flex: 1, minWidth: '200px', height: '100%' }}>
                   <ModDetailsPanel 
                     mod={selectedMod}
                     initialDetails={modDetails[selectedMod.path]}
@@ -1438,7 +1467,7 @@ function App() {
                   />
                 </div>
 
-                <div className="selected-mod-contents" style={{ width: '360px', maxWidth: '45%', minWidth: '240px' }}>
+                <div className="selected-mod-contents" style={{ width: '360px', maxWidth: '45%', minWidth: '200px', height: '100%', overflow: 'auto' }}>
                   <h3 style={{ marginTop: 0 }}>Contents</h3>
                   <FileTree files={selectedMod.file_contents || selectedMod.files || selectedMod.file_list || []} />
                 </div>

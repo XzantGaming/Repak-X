@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { Tooltip } from '@mui/material'
 import characterData from '../data/character_data.json'
+import FileTree from './FileTree'
 import './ModDetailsPanel.css'
 
 export default function ModDetailsPanel({ mod, initialDetails, onClose }) {
@@ -177,17 +178,8 @@ export default function ModDetailsPanel({ mod, initialDetails, onClose }) {
 
             <div className="detail-section">
               <h3>File Contents ({details.file_count} files)</h3>
-              <div className="file-list">
-                {details.files.slice(0, 100).map((file, idx) => (
-                  <div key={idx} className="file-item">
-                    {getFileIcon(file)} {file}
-                  </div>
-                ))}
-                {details.files.length > 100 && (
-                  <div className="file-item-more">
-                    ... and {details.files.length - 100} more files
-                  </div>
-                )}
+              <div className="file-list-container" style={{ border: '1px solid var(--panel-border)', borderRadius: '4px', background: 'var(--bg-darker)' }}>
+                <FileTree files={details.files} />
               </div>
             </div>
           </>
