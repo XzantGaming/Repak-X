@@ -371,6 +371,15 @@ function App() {
     })
   }
 
+  const handleFolderContextMenu = (e, folder) => {
+    e.preventDefault()
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      folder
+    })
+  }
+
   const closeContextMenu = () => {
     setContextMenu(null)
   }
@@ -729,7 +738,7 @@ function App() {
   }
 
   const handleDeleteFolder = async (folderId) => {
-    if (!confirm('Delete this folder? Mods will not be deleted.')) return
+    // No confirmation prompt needed here, the hold-to-delete button handles the intent
     
     try {
       await invoke('delete_folder', { id: folderId })
@@ -955,13 +964,8 @@ function App() {
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
   }
 
-  // Compute filtered mods
-  const filteredMods = mods.filter(mod => {
-    // Folder filter
-    if (selectedFolderId !== 'all') {
-      if (mod.folder_id !== selectedFolderId) return false
-    }
-
+  // Compute base filtered mods (excluding folder filter)
+  const baseFilteredMods = mods.filter(mod => {
     // Search query
     if (searchQuery) {
       const query = searchQuery.toLowerCase()
@@ -1010,6 +1014,16 @@ function App() {
     }
 
     return true
+  })
+
+  // Apply folder filter to get final list for display
+  const filteredMods = baseFilteredMods.filter(mod => {
+    if (selectedFolderId === 'all') return true
+    
+    // Match exact folder OR subfolder
+    // e.g. if selected is "Category", match "Category" and "Category/Sub"
+    return mod.folder_id === selectedFolderId || 
+           (mod.folder_id && mod.folder_id.startsWith(selectedFolderId + '/'))
   })
 
   // Group mods by folder
@@ -1339,9 +1353,13 @@ function App() {
                   selectedFolderId={selectedFolderId}
                   onSelect={setSelectedFolderId}
                   onDelete={handleDeleteFolder}
+                  onContextMenu={handleFolderContextMenu}
                   getCount={(id) => {
-                    if (id === 'all') return filteredMods.length;
-                    return filteredMods.filter(m => m.folder_id === id).length;
+                    if (id === 'all') return baseFilteredMods.length;
+                    return baseFilteredMods.filter(m => 
+                      m.folder_id === id || 
+                      (m.folder_id && m.folder_id.startsWith(id + '/'))
+                    ).length;
                   }}
                   hasFilters={selectedCharacters.size > 0 || selectedCategories.size > 0}
                 />
@@ -1559,13 +1577,20 @@ function App() {
           x={contextMenu.x}
           y={contextMenu.y}
           mod={contextMenu.mod}
+          folder={contextMenu.folder}
           onClose={closeContextMenu}
-          onAssignTag={(tag) => handleAddTagToSingleMod(contextMenu.mod.path, tag)}
-          onMoveTo={(folderId) => handleMoveSingleMod(contextMenu.mod.path, folderId)}
+          onAssignTag={(tag) => contextMenu.mod && handleAddTagToSingleMod(contextMenu.mod.path, tag)}
+          onMoveTo={(folderId) => contextMenu.mod && handleMoveSingleMod(contextMenu.mod.path, folderId)}
           onCreateFolder={handleCreateFolder}
           folders={folders}
-          onDelete={() => handleDeleteMod(contextMenu.mod.path)}
-          onToggle={() => handleToggleMod(contextMenu.mod.path)}
+          onDelete={() => {
+            if (contextMenu.folder) {
+              handleDeleteFolder(contextMenu.folder.id)
+            } else if (contextMenu.mod) {
+              handleDeleteMod(contextMenu.mod.path)
+            }
+          }}
+          onToggle={() => contextMenu.mod && handleToggleMod(contextMenu.mod.path)}
           allTags={allTags}
         />
       )}

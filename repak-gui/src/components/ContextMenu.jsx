@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import './ContextMenu.css'
 
-const ContextMenu = ({ x, y, mod, onClose, onAssignTag, onMoveTo, onCreateFolder, folders, onDelete, onToggle, allTags }) => {
+const ContextMenu = ({ x, y, mod, folder, onClose, onAssignTag, onMoveTo, onCreateFolder, folders, onDelete, onToggle, allTags }) => {
   const [isDeleting, setIsDeleting] = useState(false)
   const deleteTimeoutRef = useRef(null)
 
@@ -32,6 +32,24 @@ const ContextMenu = ({ x, y, mod, onClose, onAssignTag, onMoveTo, onCreateFolder
     e.stopPropagation()
     setIsDeleting(false)
     if (deleteTimeoutRef.current) clearTimeout(deleteTimeoutRef.current)
+  }
+
+  if (folder) {
+    return (
+      <div className="context-menu" style={{ top: y, left: x }} onClick={(e) => e.stopPropagation()}>
+        <div className="context-menu-header">{folder.name}</div>
+        <div className="context-menu-separator" />
+        <div 
+          className={`context-menu-item danger ${isDeleting ? 'holding' : ''}`}
+          onMouseDown={handleDeleteDown}
+          onMouseUp={handleDeleteUp}
+          onMouseLeave={handleDeleteUp}
+        >
+          <div className="danger-bg" />
+          <span style={{ position: 'relative', zIndex: 2 }}>{isDeleting ? 'Hold to delete...' : 'Delete Folder (Hold 2s)'}</span>
+        </div>
+      </div>
+    )
   }
 
   if (!mod) return null

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { VscFolder, VscFolderOpened, VscLibrary, VscChevronRight, VscChevronDown } from 'react-icons/vsc';
-import './FileTree.css';
+import './FolderTree.css';
 
 const buildTree = (folders) => {
   const root = { id: 'root', name: 'root', children: {}, isVirtual: true };
@@ -10,7 +10,7 @@ const buildTree = (folders) => {
 
   sortedFolders.forEach(folder => {
     // Split by '/' or '\'
-    const parts = folder.name.split(/[/\\]/);
+    const parts = folder.id.split(/[/\\]/);
     let current = root;
     
     parts.forEach((part, index) => {
@@ -48,7 +48,7 @@ const convertToArray = (node) => {
   return children;
 };
 
-const FolderNode = ({ node, selectedFolderId, onSelect, onDelete, getCount, hasFilters }) => {
+const FolderNode = ({ node, selectedFolderId, onSelect, onDelete, getCount, hasFilters, onContextMenu }) => {
   const [isOpen, setIsOpen] = useState(false);
   const hasChildren = node.children && node.children.length > 0;
   
@@ -67,17 +67,25 @@ const FolderNode = ({ node, selectedFolderId, onSelect, onDelete, getCount, hasF
   }, [selectedFolderId, node]);
 
   const handleToggle = (e) => {
-    e.stopPropagation();
+    // e.stopPropagation(); // Allow click to bubble to close context menu
     setIsOpen(!isOpen);
   };
 
   const handleSelect = (e) => {
-    e.stopPropagation();
+    // e.stopPropagation(); // Allow click to bubble to close context menu
     if (!node.isVirtual) {
       onSelect(node.id);
     } else {
       // If virtual, maybe just toggle?
       setIsOpen(!isOpen);
+    }
+  };
+
+  const handleContextMenu = (e) => {
+    if (!node.isVirtual && onContextMenu) {
+      e.preventDefault();
+      e.stopPropagation();
+      onContextMenu(e, node);
     }
   };
 
@@ -93,11 +101,12 @@ const FolderNode = ({ node, selectedFolderId, onSelect, onDelete, getCount, hasF
   const isSelected = selectedFolderId === node.id;
 
   return (
-    <div className="tree-node">
+    <div className="folder-tree-node">
       <div 
         className={`node-content ${isSelected ? 'selected' : ''} ${node.isVirtual ? 'virtual' : ''}`}
         onClick={handleSelect}
-        style={{ paddingLeft: '4px', paddingRight: '8px', opacity: node.isVirtual ? 0.8 : 1 }}
+        onContextMenu={handleContextMenu}
+        style={{ opacity: node.isVirtual ? 0.8 : 1 }}
         title={node.isVirtual ? 'Virtual Folder (Group)' : node.originalName}
       >
         <span 
@@ -124,33 +133,9 @@ const FolderNode = ({ node, selectedFolderId, onSelect, onDelete, getCount, hasF
         </span>
         
         {!node.isVirtual && count !== undefined && (
-            <span className="folder-count" style={{ fontSize: '0.75rem', opacity: 0.6, marginLeft: '8px' }}>
+            <span className="folder-count">
                 {count}
             </span>
-        )}
-        
-        {!node.isVirtual && onDelete && (
-            <button 
-                className="btn-icon-small delete-folder"
-                onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete(node.id);
-                }}
-                style={{ 
-                    marginLeft: '4px', 
-                    opacity: 0.5, 
-                    padding: '2px',
-                    background: 'transparent',
-                    border: 'none',
-                    color: 'inherit',
-                    cursor: 'pointer',
-                    fontSize: '1.1em',
-                    lineHeight: 1
-                }}
-                title="Delete folder"
-            >
-                ×
-            </button>
         )}
       </div>
       
@@ -165,6 +150,7 @@ const FolderNode = ({ node, selectedFolderId, onSelect, onDelete, getCount, hasF
                 onDelete={onDelete}
                 getCount={getCount}
                 hasFilters={hasFilters}
+                onContextMenu={onContextMenu}
             />
           ))}
         </div>
@@ -173,42 +159,92 @@ const FolderNode = ({ node, selectedFolderId, onSelect, onDelete, getCount, hasF
   );
 };
 
-const FolderTree = ({ folders, selectedFolderId, onSelect, onDelete, getCount, hasFilters }) => {
+const FolderTree = ({ folders, selectedFolderId, onSelect, onDelete, getCount, hasFilters, onContextMenu }) => {
+  // Separate root folder from subfolders
+  const rootFolder = useMemo(() => folders.find(f => f.is_root), [folders]);
+  const subfolders = useMemo(() => folders.filter(f => !f.is_root), [folders]);
+  
+  // State for root folder expansion
+  const [isRootOpen, setIsRootOpen] = useState(true);
+
   const treeData = useMemo(() => {
-    const root = buildTree(folders);
+    const root = buildTree(subfolders);
     return convertToArray(root);
-  }, [folders]);
+  }, [subfolders]);
+
+  const handleRootToggle = (e) => {
+    // e.stopPropagation(); // Allow click to bubble to close context menu
+    setIsRootOpen(!isRootOpen);
+  };
 
   return (
-    <div className="file-tree" style={{ padding: 0 }}>
+    <div className="folder-tree" style={{ padding: 0 }}>
       {/* All Mods Root Node */}
-      <div className="tree-node">
+      <div className="folder-tree-node">
         <div 
-            className={`node-content ${selectedFolderId === 'all' ? 'selected' : ''}`}
+            className={`node-content all-mods ${selectedFolderId === 'all' ? 'selected' : ''}`}
             onClick={() => onSelect('all')}
-            style={{ paddingLeft: '24px', paddingRight: '8px' }}
         >
             <span className="node-icon folder-icon">
                 <VscLibrary />
             </span>
             <span className="node-label">All Mods</span>
-            <span className="folder-count" style={{ fontSize: '0.75rem', opacity: 0.6, marginLeft: '8px' }}>
+            <span className="folder-count">
                 {getCount('all')}
             </span>
         </div>
       </div>
 
-      {treeData.map(node => (
-        <FolderNode
-            key={node.fullPath || node.id}
-            node={node}
-            selectedFolderId={selectedFolderId}
-            onSelect={onSelect}
-            onDelete={onDelete}
-            getCount={getCount}
-            hasFilters={hasFilters}
-        />
-      ))}
+      {/* Root Folder (~mods) - Display separately */}
+      {rootFolder && (
+        <div className="folder-tree-node">
+          <div 
+              className={`node-content ${selectedFolderId === rootFolder.id ? 'selected' : ''}`}
+              onClick={() => onSelect(rootFolder.id)}
+          >
+              <span 
+                className="node-toggle-icon" 
+                onClick={handleRootToggle}
+                style={{ 
+                  width: '20px', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  visibility: 'visible'
+                }}
+              >
+                {isRootOpen ? <VscChevronDown /> : <VscChevronRight />}
+              </span>
+
+              <span className="node-icon folder-icon">
+                  {selectedFolderId === rootFolder.id ? <VscFolderOpened /> : <VscFolder />}
+              </span>
+              <span className="node-label">{rootFolder.name}</span>
+              <span className="folder-count">
+                  {getCount(rootFolder.id)}
+              </span>
+          </div>
+          
+          {/* Render subfolders as children of root */}
+          {isRootOpen && (
+            <div className="node-children">
+              {treeData.map(node => (
+                <FolderNode
+                    key={node.fullPath || node.id}
+                    node={node}
+                    selectedFolderId={selectedFolderId}
+                    onSelect={onSelect}
+                    onDelete={onDelete}
+                    getCount={getCount}
+                    hasFilters={hasFilters}
+                    onContextMenu={onContextMenu}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

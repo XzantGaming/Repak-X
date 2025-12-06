@@ -1,0 +1,13 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "append_css",
+			"type": "shell",
+			"command": "echo \"/* Special styling for the 'All Mods' node */\n.folder-tree .node-content.all-mods {\n  padding-left: 24px;\n}\" >> b:\\MRivalsMods\\Coding\\REPAK-REVAMPED\\Repak-Gui-Revamped\\repak-gui\\src\\components\\FolderTree.css",
+			"args": [],
+			"isBackground": false,
+			"group": "none"
+		}
+	]
+}

@@ -1,0 +1,97 @@
+.folder-tree {
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  user-select: none;
+  padding: 0.5rem;
+}
+
+.folder-tree .folder-tree-node {
+  display: flex;
+  flex-direction: column;
+}
+
+.folder-tree .node-content {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background-color 0.15s ease;
+  gap: 8px;
+  position: relative;
+  height: 28px;
+  padding-left: 4px;
+  padding-right: 8px;
+}
+
+.folder-tree .node-content:hover {
+  background-color: var(--bg-light);
+}
+
+.folder-tree .node-content.selected {
+  background-color: rgba(74, 158, 255, 0.15);
+  color: var(--accent-primary);
+}
+
+.folder-tree .node-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.folder-tree .folder-icon {
+  color: var(--accent-primary);
+}
+
+.folder-tree .file-icon {
+  color: var(--text-secondary);
+  opacity: 0.8;
+}
+
+.folder-tree .node-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.folder-tree .node-children {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  margin-left: 10px;
+  padding-left: 10px;
+  border-left: 1px solid var(--panel-border);
+}
+
+/* Specific styles for FolderTree that might differ from FileTree */
+.folder-tree .folder-count {
+  font-size: 0.75rem;
+  opacity: 0.6;
+  margin-left: 8px;
+}
+
+.folder-tree .delete-folder {
+  margin-left: 4px;
+  opacity: 0.5;
+  padding: 2px;
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 1.1em;
+  line-height: 1;
+}
+
+.folder-tree .delete-folder:hover {
+  opacity: 1;
+  color: var(--error);
+}
+
+/* Special styling for the 'All Mods' node */
+.folder-tree .node-content.all-mods {
+  padding-left: 8px;
+  font-weight: bold;
+}
