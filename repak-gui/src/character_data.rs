@@ -353,12 +353,53 @@ pub fn get_all_character_data() -> Vec<CharacterSkin> {
     let cache = CHARACTER_CACHE.read().unwrap();
     cache.all_skins.clone()
 }
-
-// ============================================================================
 // NAME NORMALIZATION
 // ============================================================================
 
-/// Normalize character names for consistent capitalization
+/// Normalize skin name - convert all-caps to title case
+/// Preserves intentional capitalization like "2099", "VFX", acronyms, etc.
+fn normalize_skin_name(raw_name: &str) -> String {
+    let trimmed = raw_name.trim();
+    
+    // If it's not all caps (has at least one lowercase letter), keep as-is
+    if trimmed.chars().any(|c| c.is_lowercase()) {
+        return trimmed.to_string();
+    }
+    
+    // It's all caps - convert to title case, but preserve certain patterns
+    let words: Vec<String> = trimmed.split_whitespace()
+        .map(|word| {
+            // Preserve numbers and special patterns
+            if word.chars().all(|c| c.is_numeric() || c == '\'' || c == '-' || c == '&') {
+                return word.to_string();
+            }
+            
+            // Preserve common acronyms and special terms
+            match word {
+                "VFX" | "SFX" | "UI" | "MVP" | "AI" | "AIM" | "IGNITE" => word.to_string(),
+                "2099" | "1872" => word.to_string(),
+                // Convert to title case
+                _ => {
+                    let mut result = String::new();
+                    let mut first = true;
+                    for c in word.chars() {
+                        if first {
+                            result.push_str(&c.to_uppercase().to_string());
+                            first = false;
+                        } else {
+                            result.push_str(&c.to_lowercase().to_string());
+                        }
+                    }
+                    result
+                }
+            }
+        })
+        .collect();
+    
+    words.join(" ")
+}
+
+/// Normalize character name to proper capitalization
 /// Handles special cases and ensures proper formatting
 fn normalize_character_name(raw_name: &str) -> String {
     let lower = raw_name.to_lowercase();
@@ -465,13 +506,23 @@ fn validate_skin(skin: &CharacterSkin) -> Result<(), String> {
 /// Format: Markdown table with | ID | NAME | SKIN IDs | SKIN NAMES |
 /// Empty cells (| | |) mean "same as previous row"
 fn parse_github_markdown(content: &str) -> Result<Vec<CharacterSkin>, String> {
+    info!("=== Starting GitHub Markdown Parse ===");
+    info!("Content length: {} bytes", content.len());
+    info!("Total lines: {}", content.lines().count());
+    
     let mut skins = Vec::new();
     let mut line_num = 0;
     let mut errors = Vec::new();
+    let mut processed_lines = 0;
+    let mut skipped_lines = 0;
     
     // Track current character for rows with empty ID/name cells
     let mut current_char_id = String::new();
     let mut current_char_name = String::new();
+    
+    // Regex to extract table cells - matches content between pipes
+    // This is more robust than splitting by | because it handles missing trailing pipes
+    let cell_regex = regex_lite::Regex::new(r"\|([^|]*)").unwrap();
     
     for line in content.lines() {
         line_num += 1;
@@ -479,29 +530,40 @@ fn parse_github_markdown(content: &str) -> Result<Vec<CharacterSkin>, String> {
         
         // Skip empty lines, headers, and separator lines
         if line.is_empty() || line.starts_with('#') || line.contains(":--:") {
+            skipped_lines += 1;
             continue;
         }
         
         // Only process lines that look like table rows
-        if !line.starts_with('|') || !line.ends_with('|') {
+        if !line.starts_with('|') {
+            skipped_lines += 1;
             continue;
         }
         
-        // Split by pipe and clean up
-        let parts: Vec<&str> = line.split('|')
-            .map(|s| s.trim())
-            .filter(|s| !s.is_empty())
+        processed_lines += 1;
+        
+        // Extract all cells using regex
+        let cells: Vec<String> = cell_regex.captures_iter(line)
+            .map(|cap| cap.get(1).unwrap().as_str().trim().to_string())
             .collect();
         
-        // Need exactly 4 parts: char_id, char_name, skin_id, skin_name
-        if parts.len() != 4 {
+        // Need exactly 4 cells: char_id, char_name, skin_id, skin_name
+        if cells.len() < 4 {
+            if processed_lines <= 10 {
+                info!("Line {}: Skipping - found {} cells: {:?}", line_num, cells.len(), cells);
+            }
             continue;
         }
         
-        let char_id_cell = parts[0].trim();
-        let char_name_cell = parts[1].trim();
-        let skin_id = parts[2].trim();
-        let skin_name = parts[3].trim();
+        let char_id_cell = &cells[0];
+        let char_name_cell = &cells[1];
+        let skin_id = &cells[2];
+        let skin_name = &cells[3];
+        
+        if processed_lines <= 10 {
+            info!("Line {}: Processing - ID:'{}' Name:'{}' SkinID:'{}' SkinName:'{}'", 
+                  line_num, char_id_cell, char_name_cell, skin_id, skin_name);
+        }
         
         // If char_id cell is not empty, update current character
         if !char_id_cell.is_empty() {
@@ -535,11 +597,14 @@ fn parse_github_markdown(content: &str) -> Result<Vec<CharacterSkin>, String> {
         // Normalize character name for consistent capitalization
         let char_name = normalize_character_name(&current_char_name);
         
+        // Normalize skin name - convert all-caps to title case, but preserve intentional caps
+        let normalized_skin_name = normalize_skin_name(skin_name);
+        
         let skin = CharacterSkin {
             name: char_name,
             id: current_char_id.clone(),
             skinid: skin_id.to_string(),
-            skin_name: skin_name.to_string(),
+            skin_name: normalized_skin_name,
         };
         
         // Validate the skin
@@ -549,6 +614,20 @@ fn parse_github_markdown(content: &str) -> Result<Vec<CharacterSkin>, String> {
         }
         
         skins.push(skin);
+    }
+    
+    info!("=== Parse Complete ===");
+    info!("Processed lines: {}", processed_lines);
+    info!("Skipped lines: {}", skipped_lines);
+    info!("Total skins extracted: {}", skins.len());
+    info!("Validation errors: {}", errors.len());
+    
+    // Log sample of what we got
+    if skins.len() > 0 {
+        info!("First skin: {} - {} ({})", skins[0].name, skins[0].skin_name, skins[0].skinid);
+        if skins.len() > 1 {
+            info!("Last skin: {} - {} ({})", skins[skins.len()-1].name, skins[skins.len()-1].skin_name, skins[skins.len()-1].skinid);
+        }
     }
     
     if !errors.is_empty() {
@@ -562,10 +641,10 @@ fn parse_github_markdown(content: &str) -> Result<Vec<CharacterSkin>, String> {
     }
     
     if skins.is_empty() {
-        return Err("No valid character data found in file".to_string());
+        return Err("No skins were successfully parsed from GitHub data".to_string());
     }
     
-    info!("Parsed {} valid character skins from GitHub data", skins.len());
+    info!("Successfully parsed {} character skins from GitHub", skins.len());
     Ok(skins)
 }
 
@@ -615,9 +694,11 @@ where
     }
     
     on_progress("Parsing character data...");
+    on_progress(&format!("Downloaded {} bytes, {} lines", content.len(), content.lines().count()));
     
     let skins = parse_github_markdown(&content)?;
     
+    on_progress(&format!("Parse complete: {} skins extracted", skins.len()));
     on_progress(&format!("Successfully fetched {} character skins", skins.len()));
     info!("Successfully fetched {} character skins from GitHub", skins.len());
     
@@ -630,9 +711,33 @@ pub async fn update_from_github_with_progress<F>(mut on_progress: F) -> Result<u
 where
     F: FnMut(&str) + Send,
 {
-    let existing = load_character_data();
+    // Load existing data - only from roaming folder, not bundled
+    // This prevents creating a backup of bundled data that was just copied
+    let path = character_data_path();
+    let existing = if path.exists() {
+        match fs::read_to_string(&path) {
+            Ok(contents) => {
+                match serde_json::from_str::<Vec<CharacterSkin>>(&contents) {
+                    Ok(skins) => {
+                        info!("Loaded {} existing skins from {}", skins.len(), path.display());
+                        skins
+                    }
+                    Err(e) => {
+                        warn!("Failed to parse existing character data: {}", e);
+                        Vec::new()
+                    }
+                }
+            }
+            Err(e) => {
+                warn!("Failed to read existing character data: {}", e);
+                Vec::new()
+            }
+        }
+    } else {
+        info!("No existing character data file found");
+        Vec::new()
+    };
     let existing_count = existing.len();
-    info!("Loaded {} existing skins from cache", existing_count);
     
     let new_skins = fetch_github_data_with_progress(&mut on_progress).await?;
     info!("Fetched {} skins from GitHub", new_skins.len());
@@ -652,19 +757,38 @@ where
         warn!("Found {} validation errors in fetched data", validation_errors);
     }
     
-    on_progress(&format!("Saving {} character skins to disk...", new_skins.len()));
-    save_character_data(&new_skins)?;
+    // Merge existing and new skins using a HashMap to deduplicate by skin ID
+    on_progress("Merging with existing data...");
+    use std::collections::HashMap;
+    let mut skin_map: HashMap<String, CharacterSkin> = HashMap::new();
+    
+    // First, add all existing skins
+    for skin in existing {
+        skin_map.insert(skin.skinid.clone(), skin);
+    }
+    
+    // Then, add/update with GitHub skins (overwrites duplicates with fresh data)
+    for skin in new_skins {
+        skin_map.insert(skin.skinid.clone(), skin);
+    }
+    
+    // Convert back to Vec
+    let merged_skins: Vec<CharacterSkin> = skin_map.into_values().collect();
+    let merged_count = merged_skins.len();
+    
+    on_progress(&format!("Saving {} character skins to disk...", merged_count));
+    save_character_data(&merged_skins)?;
     
     on_progress("Refreshing cache...");
     refresh_cache();
     
-    let new_count = if new_skins.len() > existing_count { 
-        new_skins.len() - existing_count 
+    let new_count = if merged_count > existing_count { 
+        merged_count - existing_count 
     } else { 
         0 
     };
     
-    info!("Update complete: {} total skins, {} new", new_skins.len(), new_count);
+    info!("Update complete: {} total skins, {} new", merged_count, new_count);
     Ok(new_count)
 }
 

@@ -269,10 +269,15 @@ pub fn get_pak_characteristics_detailed(mod_contents: Vec<String>) -> ModCharact
     };
     
     // Determine character_name for display
-    // Priority: skin-specific name > single hero > empty
-    let display_character_name = if let Some(ref char_name) = character_name {
+    // Priority: multiple heroes > skin-specific name > single hero > empty
+    let display_character_name = if heroes.len() > 1 {
+        // Multiple heroes detected - leave empty so "Multiple Heroes" is shown
+        String::new()
+    } else if let Some(ref char_name) = character_name {
+        // Single hero with skin-specific name
         char_name.clone()
     } else if heroes.len() == 1 {
+        // Single hero without skin info
         heroes[0].clone()
     } else {
         String::new()

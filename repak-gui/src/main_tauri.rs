@@ -290,11 +290,16 @@ async fn get_pak_files(state: State<'_, Arc<Mutex<AppState>>>) -> Result<Vec<Mod
                     .unwrap_or(0)
             };
             
-            // Calculate priority (number of 9s)
+            // Calculate priority
+            // Priority 0 = "!" prefix (highest priority)
+            // Priority 1-N = 7-N+6 nines displayed as 1-based (7 nines → Priority 1, 8 nines → Priority 2, etc.)
             let mut priority = 0;
             let file_stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
             
-            if file_stem.ends_with("_P") {
+            // Check for "!" prefix (highest priority)
+            if file_stem.starts_with("!") {
+                priority = 0; // Highest priority
+            } else if file_stem.ends_with("_P") {
                 let base_no_p = file_stem.strip_suffix("_P").unwrap();
                 // Check for _999... suffix
                 let re_nums = Regex::new(r"_(\d+)$").unwrap();
@@ -302,7 +307,12 @@ async fn get_pak_files(state: State<'_, Arc<Mutex<AppState>>>) -> Result<Vec<Mod
                     let nums = &caps[1];
                     // Verify they are all 9s
                     if nums.chars().all(|c| c == '9') {
-                        priority = nums.len();
+                        let actual_nines = nums.len();
+                        // Convert actual nines count to UI priority (1-based)
+                        // 7 nines → Priority 1, 8 nines → Priority 2, etc.
+                        if actual_nines >= 7 {
+                            priority = actual_nines - 6;
+                        }
                     }
                 }
             }
@@ -335,11 +345,14 @@ async fn set_mod_priority(mod_path: String, priority: usize) -> Result<(), Strin
     let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
     let stem = path.file_stem().and_then(|s| s.to_str()).ok_or("Invalid filename")?;
     
+    // Strip leading "!" if present (highest priority marker)
+    let stem_no_exclaim = stem.strip_prefix("!").unwrap_or(stem);
+    
     // 1. Strip _P if present
-    let base_no_p = if stem.ends_with("_P") {
-        stem.strip_suffix("_P").unwrap()
+    let base_no_p = if stem_no_exclaim.ends_with("_P") {
+        stem_no_exclaim.strip_suffix("_P").unwrap()
     } else {
-        stem
+        stem_no_exclaim
     };
     
     // 2. Strip _999... if present
@@ -357,10 +370,21 @@ async fn set_mod_priority(mod_path: String, priority: usize) -> Result<(), Strin
     };
     
     // 3. Construct new name with new priority
-    let new_nines = "9".repeat(priority);
-    let new_stem = format!("{}_{}_P", clean_base, new_nines);
-    let new_filename = format!("{}.{}", new_stem, extension);
+    // Priority 0 = "!" prefix (highest priority) with minimum 7 nines
+    // Priority 1-N = 7-N+6 nines (1→7 nines, 2→8 nines, etc.)
+    let new_stem = if priority == 0 {
+        // Highest priority: use "!" prefix with minimum 7 nines
+        let min_nines = "9".repeat(7);
+        format!("!{}_{}_P", clean_base, min_nines)
+    } else {
+        // Convert UI priority (1-based) to actual nines count (7-based)
+        // Remove "!" prefix if present (since priority > 0)
+        let actual_nines = priority + 6; // Priority 1 → 7 nines, Priority 2 → 8 nines, etc.
+        let new_nines = "9".repeat(actual_nines);
+        format!("{}_{}_P", clean_base, new_nines)
+    };
     
+    let new_filename = format!("{}.{}", new_stem, extension);
     let new_path = path.with_file_name(&new_filename);
     
     if new_path == path {
@@ -2071,6 +2095,225 @@ async fn get_mod_details(mod_path: String, _detect_blueprint: Option<bool>) -> R
     })
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+struct ModClash {
+    file_path: String,
+    mod_paths: Vec<String>,
+}
+
+#[tauri::command]
+async fn check_mod_clashes(state: State<'_, Arc<Mutex<AppState>>>) -> Result<Vec<ModClash>, String> {
+    use repak::PakBuilder;
+    use repak::utils::AesKey;
+    use std::str::FromStr;
+    use std::fs::File;
+    use std::io::BufReader;
+    use std::collections::HashMap;
+    
+    let state = state.lock().unwrap();
+    let game_path = &state.game_path;
+    
+    info!("Checking for mod clashes...");
+    
+    if !game_path.exists() {
+        return Err("Game path does not exist".to_string());
+    }
+
+    // Get AES key
+    let aes_key = AesKey::from_str("0C263D8C22DCB085894899C3A3796383E9BF9DE0CBFB08C9BF2DEF2E84F29D74")
+        .map_err(|e| format!("Failed to create AES key: {}", e))?;
+
+    // Structure to hold mod info for clash detection
+    #[derive(Clone)]
+    struct ModInfo {
+        path: PathBuf,
+        priority: usize,
+        character_name: String,  // e.g., "Hawkeye - Default" or "Blade - Skin Name"
+        files: Vec<String>,      // List of files inside this mod
+    }
+
+    let mut mods_info: Vec<ModInfo> = Vec::new();
+
+    // Scan all enabled mods
+    for entry in WalkDir::new(&game_path)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        let path = entry.path();
+
+        if path.is_dir() {
+            continue;
+        }
+
+        let ext = path.extension().and_then(|s| s.to_str());
+
+        // Only check enabled .pak files
+        if ext != Some("pak") {
+            continue;
+        }
+
+        // Calculate priority (same as get_pak_files)
+        let mut priority = 0;
+        let file_stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+
+        // Check for "!" prefix (highest priority)
+        if file_stem.starts_with("!") {
+            priority = 0; // Highest priority
+        } else if file_stem.ends_with("_P") {
+            let base_no_p = file_stem.strip_suffix("_P").unwrap();
+            let re_nums = Regex::new(r"_(\d+)$").unwrap();
+            if let Some(caps) = re_nums.captures(base_no_p) {
+                let nums = &caps[1];
+                if nums.chars().all(|c| c == '9') {
+                    let actual_nines = nums.len();
+                    // Convert actual nines count to UI priority (1-based)
+                    if actual_nines >= 7 {
+                        priority = actual_nines - 6;
+                    }
+                }
+            }
+        }
+
+        // Open PAK file to analyze contents
+        let file = match File::open(&path) {
+            Ok(f) => f,
+            Err(e) => {
+                warn!("Failed to open PAK file {:?}: {}", path, e);
+                continue;
+            }
+        };
+
+        let mut reader = BufReader::new(file);
+        let pak = match PakBuilder::new()
+            .key(aes_key.0.clone())
+            .reader(&mut reader) {
+            Ok(p) => p,
+            Err(e) => {
+                warn!("Failed to read PAK {:?}: {}", path, e);
+                continue;
+            }
+        };
+
+        // Check if it's IoStore
+        let mut utoc_path = path.to_path_buf();
+        utoc_path.set_extension("utoc");
+        let is_iostore = utoc_path.exists();
+
+        // Get file list
+        let files: Vec<String> = if is_iostore {
+            use crate::utoc_utils::read_utoc;
+            read_utoc(&utoc_path, &pak, &path)
+                .iter()
+                .map(|entry| entry.file_path.clone())
+                .collect()
+        } else {
+            pak.files()
+        };
+
+        // Get mod characteristics to determine character
+        use crate::utils::get_pak_characteristics_detailed;
+        let characteristics = get_pak_characteristics_detailed(files.clone());
+
+        mods_info.push(ModInfo {
+            path: path.to_path_buf(),
+            priority,
+            character_name: characteristics.character_name,
+            files,
+        });
+    }
+
+    info!("Analyzed {} enabled mods", mods_info.len());
+
+    // Don't group by character - instead, compare all mods at the same priority level
+    // Group by priority first
+    let mut by_priority: HashMap<usize, Vec<ModInfo>> = HashMap::new();
+    
+    for mod_info in mods_info {
+        by_priority.entry(mod_info.priority).or_insert_with(Vec::new).push(mod_info);
+    }
+
+    // Find clashes: same priority and overlapping files
+    let mut clashes: Vec<ModClash> = Vec::new();
+    use std::collections::HashSet;
+
+    for (priority, same_priority_mods) in by_priority {
+        if same_priority_mods.len() < 2 {
+            continue;
+        }
+
+        info!("Checking priority {} with {} mods", priority, same_priority_mods.len());
+
+        // Compare each pair of mods at this priority level
+        for i in 0..same_priority_mods.len() {
+            for j in (i + 1)..same_priority_mods.len() {
+                let mod1 = &same_priority_mods[i];
+                let mod2 = &same_priority_mods[j];
+
+                // Convert file lists to HashSets for efficient intersection
+                let files1: HashSet<&String> = mod1.files.iter().collect();
+                let files2: HashSet<&String> = mod2.files.iter().collect();
+
+                // Find overlapping files
+                let overlapping_files: Vec<String> = files1
+                    .intersection(&files2)
+                    .map(|s| (*s).clone())
+                    .collect();
+
+                if !overlapping_files.is_empty() {
+                    // Found a clash! These two mods modify the same files
+                    let mod_paths = vec![
+                        mod1.path.to_string_lossy().to_string(),
+                        mod2.path.to_string_lossy().to_string(),
+                    ];
+
+                    // Build a description showing which characters are affected
+                    let mut affected_characters = HashSet::new();
+                    
+                    // Extract character IDs from overlapping file paths
+                    for file_path in &overlapping_files {
+                        // Look for pattern like "Characters/1050/" or "1050/1050800/"
+                        if let Some(char_match) = file_path.split('/').find(|s| {
+                            s.len() == 4 && s.chars().all(|c| c.is_ascii_digit()) && s.starts_with("10")
+                        }) {
+                            affected_characters.insert(char_match.to_string());
+                        }
+                    }
+
+                    let character_info = if !affected_characters.is_empty() {
+                        let char_ids: Vec<String> = affected_characters.iter().cloned().collect();
+                        format!("Characters: {} - ", char_ids.join(", "))
+                    } else {
+                        String::new()
+                    };
+
+                    let clash_description = format!(
+                        "{}Priority: {} - {} overlapping file(s)",
+                        character_info,
+                        priority,
+                        overlapping_files.len()
+                    );
+
+                    info!(
+                        "Found clash between {} and {} at priority {} ({} overlapping files, characters: {:?})",
+                        mod1.path.file_name().unwrap_or_default().to_string_lossy(),
+                        mod2.path.file_name().unwrap_or_default().to_string_lossy(),
+                        priority,
+                        overlapping_files.len(),
+                        affected_characters
+                    );
+
+                    clashes.push(ModClash {
+                        file_path: clash_description,
+                        mod_paths,
+                    });
+                }
+            }
+        }
+    }
+    info!("Found {} clashes", clashes.len());
+    Ok(clashes)
+}
+
 // ============================================================================
 // P2P SHARING COMMANDS
 // ============================================================================
@@ -2270,6 +2513,7 @@ fn main() {
             check_for_updates,
             get_mod_details,
             set_mod_priority,
+            check_mod_clashes,
             extract_pak_to_destination,
             // Character data commands
             get_character_data,
