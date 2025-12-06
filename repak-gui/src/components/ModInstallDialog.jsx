@@ -1,5 +1,15 @@
 import { useState } from 'react'
 
+function parseModType(modType) {
+  if (!modType) return { category: 'Unknown', additional: [] }
+  
+  const bracketMatch = modType.match(/\[(.*?)\]/)
+  const additional = bracketMatch ? bracketMatch[1].split(',').map(s => s.trim()) : []
+  let category = modType.replace(/\[.*?\]/, '').trim()
+  
+  return { category, additional }
+}
+
 export default function ModInstallDialog({ mods, onInstall, onCancel }) {
   const [modConfigs, setModConfigs] = useState(
     mods.map(mod => ({
@@ -45,8 +55,26 @@ export default function ModInstallDialog({ mods, onInstall, onCancel }) {
                     checked={mod.enabled}
                     onChange={(e) => handleConfigChange(idx, 'enabled', e.target.checked)}
                   />
-                  <h3>{mod.mod_name}</h3>
-                  <span className="mod-type-badge">{mod.mod_type}</span>
+                  <div style={{ flex: 1 }}>
+                    <h3>{mod.mod_name}</h3>
+                    <div className="mod-badges" style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
+                      {(() => {
+                        const { category, additional } = parseModType(mod.mod_type)
+                        return (
+                          <>
+                            <span className={`category-badge ${category.toLowerCase().replace(/\s+/g, '-')}-badge`}>
+                              {category}
+                            </span>
+                            {additional.map(tag => (
+                              <span key={tag} className={`additional-badge ${tag.toLowerCase()}-badge`}>
+                                {tag}
+                              </span>
+                            ))}
+                          </>
+                        )
+                      })()}
+                    </div>
+                  </div>
                 </div>
                 
                 {mod.enabled && (

@@ -688,6 +688,36 @@ function App() {
     }
   }
 
+  const handleDevInstallPanel = () => {
+    const categories = ['Skin', 'Audio', 'UI', 'VFX', 'Mesh', 'Texture']
+    const additionalCats = ['Blueprint', 'Text', '']
+    
+    const getRandomMod = (i) => {
+      const randomChar = characterData[Math.floor(Math.random() * characterData.length)].name
+      const randomCat = categories[Math.floor(Math.random() * categories.length)]
+      const randomAdd = additionalCats[Math.floor(Math.random() * additionalCats.length)]
+      
+      let modType = `${randomChar} - ${randomCat}`
+      if (randomAdd) {
+        modType += ` [${randomAdd}]`
+      }
+      
+      return {
+        path: `C:\\Fake\\Path\\Mod${i}.pak`,
+        mod_name: `Mod${i}.pak`,
+        file_size: Math.floor(Math.random() * 1024 * 1024 * 50),
+        mod_type: modType,
+        auto_fix_mesh: Math.random() > 0.5,
+        auto_fix_texture: Math.random() > 0.5,
+        auto_fix_serialize_size: Math.random() > 0.5,
+        auto_to_repak: Math.random() > 0.5
+      }
+    }
+
+    setModsToInstall([getRandomMod(1), getRandomMod(2), getRandomMod(3)])
+    setShowInstallPanel(true)
+  }
+
   const handleDeleteMod = async (modPath) => {
     if (gameRunning) {
       setStatus('Cannot delete mods while game is running')
@@ -842,6 +872,13 @@ function App() {
     } catch (error) {
       setStatus(`Error: ${error}`)
     }
+  }
+
+  // Keep the global tag list in sync when the Install panel creates a new tag
+  const registerTagFromInstallPanel = (tag) => {
+    const trimmed = (tag || '').trim()
+    if (!trimmed) return
+    setAllTags(prev => prev.includes(trimmed) ? prev : [...prev, trimmed].sort())
   }
 
   const handleRemoveTag = async (modPath, tag) => {
@@ -1049,10 +1086,38 @@ function App() {
       setInstallLogs([])
       setShowInstallLogs(true)
       setStatus('Installing mods...')
+
       await invoke('install_mods', { mods: modsWithSettings })
+
+      // Mirror tag assignment flow used by the main list/context menu
+      const typeTracker = {}
+      for (const mod of modsWithSettings) {
+        const modType = mod.mod_type || 'Unknown'
+        const count = typeTracker[modType] || 0
+        const minNines = 7 + count
+        const name = mod.customName || mod.mod_name
+        const filename = `${normalizeModBaseName(name, minNines)}.pak`
+
+        if (mod.selectedTags && mod.selectedTags.length > 0) {
+          const separator = gamePath.includes('\\') ? '\\' : '/'
+          const fullPath = `${gamePath}${separator}${filename}`
+
+          for (const tag of mod.selectedTags) {
+            try {
+              await invoke('add_custom_tag', { modPath: fullPath, tag })
+            } catch (e) {
+              console.error(`Failed to add tag ${tag} to ${fullPath}:`, e)
+            }
+          }
+        }
+
+        typeTracker[modType] = count + 1
+      }
+
       setStatus('Mods installed successfully!')
       await loadMods()
       await loadFolders()
+      await loadTags()
     } catch (error) {
       setStatus(`Installation failed: ${error}`)
     }
@@ -1112,6 +1177,8 @@ function App() {
       {showInstallPanel && (
         <InstallModPanel
           mods={modsToInstall}
+          allTags={allTags}
+          onCreateTag={registerTagFromInstallPanel}
           onInstall={handleInstallMods}
           onCancel={() => setShowInstallPanel(false)}
         />
@@ -1181,6 +1248,21 @@ function App() {
             />
             <span style={{ fontSize: '0.8rem', color: '#ff6b6b', fontWeight: 'bold' }}>DEV: Game Running</span>
           </label>
+          <button
+            onClick={handleDevInstallPanel}
+            style={{
+              background: 'rgba(255, 165, 0, 0.1)',
+              color: 'orange',
+              border: '1px solid rgba(255, 165, 0, 0.3)',
+              padding: '4px 8px',
+              borderRadius: '4px',
+              fontSize: '0.8rem',
+              fontWeight: 'bold',
+              cursor: 'pointer'
+            }}
+          >
+            DEV: Install Panel
+          </button>
           {gameRunning && (
             <div className="game-running-indicator">
               <span className="blink-icon">⚠️</span>

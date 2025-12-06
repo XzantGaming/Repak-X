@@ -55,33 +55,112 @@
   background: var(--bg-lighter);
 }
 
-.filter-section {
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid var(--panel-border);
-}
-
-.filter-section label {
-  display: inline-flex;
+/* Tags Cell Styles */
+.tags-cell {
+  display: flex;
   align-items: center;
   gap: 0.5rem;
-  cursor: pointer;
-}
-
-.filter-types {
-  display: flex;
-  gap: 1rem;
-  align-items: center;
   flex-wrap: wrap;
-  margin-top: 0.5rem;
+  min-width: 200px;
 }
 
-.type-checkbox {
+.tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.tag {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.25rem 0.5rem;
-  background: var(--bg-light);
+  background: var(--bg-darkest);
+  border: 1px solid var(--panel-border);
   border-radius: 4px;
+  padding: 0.125rem 0.375rem;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+}
+
+.tag-remove {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  margin-left: 0.25rem;
+  cursor: pointer;
+  padding: 0;
+  font-size: 1rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+}
+
+.tag-remove:hover {
+  color: var(--danger);
+}
+
+.add-tag-wrapper {
+  position: relative;
+}
+
+.add-tag-btn {
+  background: var(--bg-light);
+  border: 1px solid var(--panel-border);
+  color: var(--text-secondary);
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1.2rem;
+  line-height: 1;
+  padding: 0;
+  transition: all 0.2s;
+}
+
+.add-tag-btn:hover {
+  background: var(--bg-lighter);
+  color: var(--text-primary);
+  border-color: var(--text-secondary);
+}
+
+/* Dropdown (mimicking ContextMenu) */
+.tag-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  padding: 4px 0;
+  min-width: 160px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.dropdown-item {
+  padding: 6px 12px;
+  cursor: pointer;
+  color: #e0e0e0;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  display: block;
+  text-align: left;
+}
+
+.dropdown-item:hover {
+  background: #4a9eff;
+  color: white;
+}
+
+.dropdown-separator {
+  height: 1px;
+  background: #3a3a3a;
+  margin: 4px 0;
 }
 
 .mods-table-container {
