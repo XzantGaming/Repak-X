@@ -1,5 +1,32 @@
 import { useState, useEffect } from 'react'
+import { invoke } from '@tauri-apps/api/core'
 import './InstallModPanel.css'
+
+const hasCookedAssets = (mod = {}) => {
+  if (!mod?.is_dir) return false
+  return Boolean(mod.auto_fix_mesh || mod.auto_fix_texture || mod.auto_fix_serialize_size)
+}
+
+const isRepakLocked = (mod = {}) => hasCookedAssets(mod)
+
+const buildInitialSettings = (mods = []) => {
+  return mods.reduce((acc, mod, idx) => {
+    const locked = isRepakLocked(mod)
+    const defaultToRepak = mod.is_dir ? !locked : Boolean(mod.auto_to_repak)
+
+    acc[idx] = {
+      fixMesh: mod.auto_fix_mesh || false,
+      fixTexture: mod.auto_fix_texture || false,
+      fixSerializeSize: mod.auto_fix_serialize_size || false,
+      toRepak: locked ? false : defaultToRepak,
+      compression: 'Oodle',
+      usmapPath: '',
+      customName: '',
+      selectedTags: []
+    }
+    return acc
+  }, {})
+}
 
 function parseModType(modType) {
   if (!modType) return { character: null, category: 'Unknown', additional: [] }
@@ -28,21 +55,65 @@ function parseModType(modType) {
 export default function InstallModPanel({ mods, allTags, onCreateTag, onInstall, onCancel }) {
   const [openDropdown, setOpenDropdown] = useState(null)
   const [dropdownPos, setDropdownPos] = useState({ x: 0, y: 0 })
-  const [modSettings, setModSettings] = useState(
-    mods.reduce((acc, mod, idx) => {
-      acc[idx] = {
-        fixMesh: mod.auto_fix_mesh || false,
-        fixTexture: mod.auto_fix_texture || false,
-        fixSerializeSize: mod.auto_fix_serialize_size || false,
-        toRepak: mod.auto_to_repak || false,
-        compression: 'Oodle',
-        usmapPath: '',
-        customName: '',
-        selectedTags: []
+  const [modSettings, setModSettings] = useState(() => buildInitialSettings(mods))
+  const [modDetailsMap, setModDetailsMap] = useState({})
+  const [detailsLoading, setDetailsLoading] = useState(false)
+
+  useEffect(() => {
+    setModSettings(buildInitialSettings(mods))
+  }, [mods])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadDetails = async () => {
+      if (!Array.isArray(mods) || mods.length === 0) {
+        setModDetailsMap({})
+        return
       }
-      return acc
-    }, {})
-  )
+
+      const uniquePaths = Array.from(new Set(
+        mods
+          .map(mod => mod?.path)
+          .filter(Boolean)
+      ))
+
+      if (uniquePaths.length === 0) {
+        setModDetailsMap({})
+        return
+      }
+
+      setDetailsLoading(true)
+
+      const results = await Promise.all(uniquePaths.map(async (path) => {
+        try {
+          const detail = await invoke('get_mod_details', { modPath: path })
+          return { path, detail }
+        } catch (error) {
+          console.warn('InstallModPanel: failed to load mod details for', path, error)
+          return { path, detail: null }
+        }
+      }))
+
+      if (cancelled) return
+
+      const nextMap = {}
+      results.forEach(({ path, detail }) => {
+        if (detail) {
+          nextMap[path] = detail
+        }
+      })
+
+      setModDetailsMap(nextMap)
+      setDetailsLoading(false)
+    }
+
+    loadDetails()
+
+    return () => {
+      cancelled = true
+    }
+  }, [mods])
 
   useEffect(() => {
     const handleClickOutside = () => setOpenDropdown(null)
@@ -51,6 +122,9 @@ export default function InstallModPanel({ mods, allTags, onCreateTag, onInstall,
   }, [])
 
   const updateModSetting = (idx, key, value) => {
+    if (key === 'toRepak' && isRepakLocked(mods[idx])) {
+      return
+    }
     setModSettings(prev => ({
       ...prev,
       [idx]: { ...prev[idx], [key]: value }
@@ -74,7 +148,8 @@ export default function InstallModPanel({ mods, allTags, onCreateTag, onInstall,
     // Prepare mods with their settings
     const modsToInstall = mods.map((mod, idx) => ({
       ...mod,
-      ...modSettings[idx]
+      ...modSettings[idx],
+      toRepak: isRepakLocked(mod) ? false : (modSettings[idx]?.toRepak || false)
     }))
     onInstall(modsToInstall)
   }
@@ -89,6 +164,11 @@ export default function InstallModPanel({ mods, allTags, onCreateTag, onInstall,
 
         {/* Mods Table */}
         <div className="mods-table-container">
+          {detailsLoading && (
+            <div className="mods-table-hint">
+              Analyzing dropped content for hero/type details...
+            </div>
+          )}
           <table className="mods-table">
             <thead>
               <tr>
@@ -102,12 +182,27 @@ export default function InstallModPanel({ mods, allTags, onCreateTag, onInstall,
               </tr>
             </thead>
             <tbody>
-              {mods.map((mod, idx) => (
+              {mods.map((mod, idx) => {
+                const details = modDetailsMap[mod.path]
+                const typeSource = details?.mod_type || mod.mod_type
+                const parsedType = parseModType(typeSource)
+                const characterLabel = details?.character_name || parsedType.character
+                const categoryLabel = details?.category || parsedType.category || 'Unknown'
+                const additionalBadges = (details?.additional_categories && details.additional_categories.length > 0)
+                  ? details.additional_categories
+                  : parsedType.additional
+                const namePlaceholder = details?.mod_name || mod.mod_name
+                const repakLocked = isRepakLocked(mod)
+                const repakTitle = repakLocked
+                  ? 'Detected loose assets; repak handled automatically'
+                  : (mod.is_dir ? 'Folder contains PAK files; ready to repak' : 'Direct PAK - can repak if needed')
+
+                return (
                 <tr key={idx}>
                   <td>
                     <input
                       type="text"
-                      placeholder={mod.mod_name}
+                      placeholder={namePlaceholder}
                       value={modSettings[idx]?.customName || ''}
                       onChange={(e) => updateModSetting(idx, 'customName', e.target.value)}
                       className="mod-name-input"
@@ -115,26 +210,21 @@ export default function InstallModPanel({ mods, allTags, onCreateTag, onInstall,
                   </td>
                   <td>
                     <div className="mod-badges" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                      {(() => {
-                        const { character, category, additional } = parseModType(mod.mod_type)
-                        return (
-                          <>
-                            {character && (
-                              <span className={`character-badge ${character.startsWith('Multiple Heroes') ? 'multi-hero' : ''}`}>
-                                {character}
-                              </span>
-                            )}
-                            <span className={`category-badge ${category.toLowerCase().replace(/\s+/g, '-')}-badge`}>
-                              {category}
-                            </span>
-                            {additional.map(tag => (
-                              <span key={tag} className={`additional-badge ${tag.toLowerCase()}-badge`}>
-                                {tag}
-                              </span>
-                            ))}
-                          </>
-                        )
-                      })()}
+                      <>
+                        {characterLabel && (
+                          <span className={`character-badge ${characterLabel.startsWith('Multiple Heroes') ? 'multi-hero' : ''}`}>
+                            {characterLabel}
+                          </span>
+                        )}
+                        <span className={`category-badge ${(categoryLabel || 'unknown').toLowerCase().replace(/\s+/g, '-')}-badge`}>
+                          {categoryLabel}
+                        </span>
+                        {additionalBadges && additionalBadges.map(tag => (
+                          <span key={tag} className={`additional-badge ${tag.toLowerCase()}-badge`}>
+                            {tag}
+                          </span>
+                        ))}
+                      </>
                     </div>
                   </td>
                   <td>
@@ -219,15 +309,21 @@ export default function InstallModPanel({ mods, allTags, onCreateTag, onInstall,
                       onChange={(e) => updateModSetting(idx, 'fixSerializeSize', e.target.checked)}
                     />
                   </td>
-                  <td>
+                  <td style={{ minWidth: '120px' }}>
                     <input
                       type="checkbox"
                       checked={modSettings[idx]?.toRepak || false}
                       onChange={(e) => updateModSetting(idx, 'toRepak', e.target.checked)}
+                      disabled={repakLocked}
+                      style={{ 
+                        cursor: repakLocked ? 'not-allowed' : 'pointer',
+                        opacity: repakLocked ? 0.5 : 1
+                      }}
+                      title={repakTitle}
                     />
                   </td>
                 </tr>
-              ))}
+              )})}
             </tbody>
           </table>
         </div>

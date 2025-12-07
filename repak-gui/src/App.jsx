@@ -153,7 +153,6 @@ function ModItem({ mod, selectedMod, selectedMods, setSelectedMod, handleToggleM
             </span>
           </motion.button>
         </div>
-        <span className="mod-size">{formatFileSize(mod.file_size)}</span>
       </div>
       
       {tags.length > 0 && (
@@ -178,6 +177,7 @@ function ModItem({ mod, selectedMod, selectedMods, setSelectedMod, handleToggleM
       )}
       
       <div className="mod-card-row mod-card-actions">
+        <span className="mod-size" style={{ marginRight: '12px', fontSize: '0.85rem', opacity: 0.7 }}>{formatFileSize(mod.file_size)}</span>
         <div className="priority-control" onClick={e => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', marginRight: '8px' }}>
           <span style={{ fontSize: '0.7rem', opacity: 0.7, marginRight: '4px' }}>Pri:</span>
           <input
