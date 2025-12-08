@@ -18,6 +18,9 @@ export default function SettingsPanel({ settings, onSave, onClose, theme, setThe
   const [usmapStatus, setUsmapStatus] = useState('');
   const [isUpdatingChars, setIsUpdatingChars] = useState(false);
   const [charUpdateStatus, setCharUpdateStatus] = useState('');
+  const [isSkippingLauncher, setIsSkippingLauncher] = useState(false);
+  const [skipLauncherStatus, setSkipLauncherStatus] = useState('');
+  const [isLauncherPatchEnabled, setIsLauncherPatchEnabled] = useState(false);
 
   const handleSave = () => {
     onSave({
@@ -46,6 +49,21 @@ export default function SettingsPanel({ settings, onSave, onClose, theme, setThe
       setCharUpdateStatus('Cancelling...');
     } catch (error) {
       console.error('Failed to cancel:', error);
+    }
+  };
+
+  const handleSkipLauncherPatch = async () => {
+    setIsSkippingLauncher(true);
+    setSkipLauncherStatus('');
+    try {
+      // TODO: Replace with actual backend call once developed
+      await invoke('skip_launcher_patch');
+      setIsLauncherPatchEnabled(true);
+      setSkipLauncherStatus('✓ Launcher patch applied successfully!');
+    } catch (error) {
+      setSkipLauncherStatus(`Error: ${error}`);
+    } finally {
+      setIsSkippingLauncher(false);
     }
   };
 
@@ -81,9 +99,9 @@ export default function SettingsPanel({ settings, onSave, onClose, theme, setThe
         
         <div className="modal-body">
           <div className="setting-section">
-            <h3>Game Path</h3>
+            <h3>Game Mods Path</h3>
             <div className="setting-group">
-              <label>Current Game Path</label>
+              <label>Your game's mods folder path.</label>
               <input
                 type="text"
                 value={gamePath || ''}
@@ -164,6 +182,45 @@ export default function SettingsPanel({ settings, onSave, onClose, theme, setThe
                   color: charUpdateStatus.includes('Error') || charUpdateStatus.includes('Cancelled') ? '#ff5252' : '#4CAF50'
                 }}>
                   {charUpdateStatus}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="setting-section">
+            <h3>Skip Launcher Patch</h3>
+            <div className="setting-group">
+              <p style={{ fontSize: '0.9rem', opacity: 0.7, marginBottom: '0.5rem' }}>
+                Sets <b>launch_record</b> value to 0.
+              </p>
+              <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                <button onClick={handleSkipLauncherPatch} disabled={isSkippingLauncher}>
+                  {isSkippingLauncher ? 'Applying...' : 'Skip Launcher Patch'}
+                </button>
+                <span style={{ 
+                  display: 'inline-flex', 
+                  alignItems: 'center', 
+                  gap: '0.4rem',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  color: isLauncherPatchEnabled ? '#4CAF50' : '#ff5252'
+                }}>
+                  <span style={{
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
+                    backgroundColor: isLauncherPatchEnabled ? '#4CAF50' : '#ff5252'
+                  }}></span>
+                  {isLauncherPatchEnabled ? 'Enabled' : 'Disabled'}
+                </span>
+              </div>
+              {skipLauncherStatus && (
+                <p style={{ 
+                  fontSize: '0.85rem', 
+                  marginTop: '0.5rem',
+                  color: skipLauncherStatus.includes('Error') ? '#ff5252' : '#4CAF50'
+                }}>
+                  {skipLauncherStatus}
                 </p>
               )}
             </div>

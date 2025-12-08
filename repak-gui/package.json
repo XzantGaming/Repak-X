@@ -10,6 +10,7 @@
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
+    "@heroui/checkbox": "^2.3.27",
     "@heroui/switch": "^2.2.24",
     "@heroui/system": "^2.4.23",
     "@heroui/theme": "^2.4.23",

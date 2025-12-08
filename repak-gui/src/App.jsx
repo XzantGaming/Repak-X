@@ -28,6 +28,7 @@ import SharingPanel from './components/SharingPanel'
 import FileTree from './components/FileTree'
 import FolderTree from './components/FolderTree'
 import ContextMenu from './components/ContextMenu'
+import LogDrawer from './components/LogDrawer'
 import { AuroraText } from './components/ui/AuroraText'
 import Switch from './components/ui/Switch'
 import NumberInput from './components/ui/NumberInput'
@@ -290,13 +291,9 @@ function App() {
   const [showInstallPanel, setShowInstallPanel] = useState(false)
   const [modsToInstall, setModsToInstall] = useState([])
   const [installLogs, setInstallLogs] = useState([])
-  const [showInstallLogs, setShowInstallLogs] = useState(false)
   const [selectedFolderId, setSelectedFolderId] = useState('all')
   const [viewMode, setViewMode] = useState('list') // 'grid', 'compact', 'list'
   const [contextMenu, setContextMenu] = useState(null) // { x, y, mod }
-  // OPTIONAL: user-resizable height
-  const [drawerHeight, setDrawerHeight] = useState(380)
-  const resizingRef = useRef(false)
   
   const [clashes, setClashes] = useState([])
   const [showClashPanel, setShowClashPanel] = useState(false)
@@ -372,7 +369,6 @@ function App() {
 
     const unlistenLogs = listen('install_log', (event) => {
       setInstallLogs(prev => [...prev, event.payload])
-      setShowInstallLogs(true)
     })
 
     // Refresh mod list when character data is updated
@@ -1056,7 +1052,6 @@ function App() {
     try {
       setShowInstallPanel(false)
       setInstallLogs([])
-      setShowInstallLogs(true)
       setStatus('Installing mods...')
 
       await invoke('install_mods', { mods: modsWithSettings })
@@ -1124,25 +1119,6 @@ function App() {
     document.documentElement.style.setProperty('--accent-secondary', newAccent);
     localStorage.setItem('accentColor', newAccent);
   };
-
-  useEffect(() => {
-    const onMove = (e) => {
-      if (!resizingRef.current) return
-      const y = e.clientY
-      const vh = window.innerHeight
-      const newH = Math.min(Math.max(vh - y, 160), Math.round(vh * 0.85))
-      setDrawerHeight(newH)
-    }
-    const stop = () => { resizingRef.current = false }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', stop)
-    window.addEventListener('mouseleave', stop)
-    return () => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', stop)
-      window.removeEventListener('mouseleave', stop)
-    }
-  }, [])
 
   return (
     <div className="app">
@@ -1563,68 +1539,11 @@ function App() {
         </div>
       </div>
 
-      <motion.div
-        className="install-drawer"
-        animate={{ height: showInstallLogs ? drawerHeight : 36 }}
-        transition={{ type: 'tween', duration: 0.25 }}
-      >
-        <div
-          className="install-drawer-header"
-          onClick={() => setShowInstallLogs(v => !v)}
-        >
-          <span className="status-text">{status || 'Idle'}</span>
-          <div
-            className="drawer-actions"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              className="btn-link"
-              onClick={() => setShowInstallLogs(v => !v)}
-            >
-              {showInstallLogs ? 'Hide Log ▼' : 'Show Log ▲'}
-            </button>
-            {installLogs.length > 0 && showInstallLogs && (
-              <button
-                className="btn-link"
-                onClick={() => setInstallLogs([])}
-              >
-                Clear
-              </button>
-            )}
-          </div>
-        </div>
-        {showInstallLogs && (
-          <div
-            className="drawer-resize-handle"
-            onMouseDown={(e) => {
-              e.stopPropagation()
-              resizingRef.current = true
-            }}
-            title="Drag to resize"
-          />
-        )}
-        <AnimatePresence initial={false}>
-          {showInstallLogs && (
-            <motion.div
-              className="install-drawer-body"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 12 }}
-              transition={{ duration: 0.2 }}
-            >
-              {installLogs.length === 0 ? (
-                <div className="log-empty">Waiting for installation...</div>
-              ) : (
-                <div className="log-scroll">
-                  {installLogs.map((log, i) => (
-                    <div key={i} className="log-line">{log}</div>
-                  ))}
-                </div>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.div>
+      <LogDrawer
+        status={status}
+        logs={installLogs}
+        onClear={() => setInstallLogs([])}
+      />
 
       {contextMenu && (
         <ContextMenu
