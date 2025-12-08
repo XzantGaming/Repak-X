@@ -40,13 +40,20 @@ fn main() {
         // Workspace root: …/Repak_Gui-Revamped/repak-gui -> parent is workspace root
         let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).parent().unwrap().to_path_buf();
         // Update path to match actual location: uasset_toolkit/tools/UAssetBridge
+        // Prefer net9.0 exe (old working version from Nov 27) with net8.0 DLLs
         let tools_dir = workspace_root.join("uasset_toolkit").join("tools").join("UAssetBridge");
+        let fallback_release_net9 = tools_dir.join("bin").join("Release").join("net9.0").join("win-x64").join("UAssetBridge.exe");
+        let fallback_release_publish = tools_dir.join("bin").join("Release").join("net8.0").join("win-x64").join("publish").join("UAssetBridge.exe");
         let fallback_release = tools_dir.join("bin").join("Release").join("net8.0").join("win-x64").join("UAssetBridge.exe");
         let fallback_debug = tools_dir.join("bin").join("Debug").join("net8.0").join("win-x64").join("UAssetBridge.exe");
 
         // Pick the first existing source
         let source = if primary_src.exists() {
             Some(primary_src)
+        } else if fallback_release_net9.exists() {
+            Some(fallback_release_net9)
+        } else if fallback_release_publish.exists() {
+            Some(fallback_release_publish)
         } else if fallback_release.exists() {
             Some(fallback_release)
         } else if fallback_debug.exists() {
@@ -59,12 +66,51 @@ fn main() {
             if let Err(e) = fs::create_dir_all(&dest_dir) {
                 println!("cargo:warning=failed to create {}: {}", dest_dir.display(), e);
             } else {
+                // Copy UAssetBridge.exe
                 match fs::copy(&src, &dest_path) {
                     Ok(_) => {
                         println!("cargo:warning=UAssetBridge copied to {}", dest_path.display());
                     }
                     Err(e) => {
                         println!("cargo:warning=failed to copy {} to {}: {}", src.display(), dest_path.display(), e);
+                    }
+                }
+                
+                // Copy required DLL dependencies and config files
+                // For net9.0 exe, get DLLs from net8.0 publish folder since net9.0 lacks them
+                let src_dir = src.parent().unwrap();
+                let dll_fallback_dir = tools_dir.join("bin").join("Release").join("net8.0").join("win-x64").join("publish");
+                
+                let required_files = vec![
+                    "UAssetBridge.dll", 
+                    "UAssetAPI.dll", 
+                    "Newtonsoft.Json.dll", 
+                    "ZstdSharp.dll",
+                    "UAssetBridge.runtimeconfig.json",
+                    "UAssetBridge.deps.json"
+                ];
+                
+                for dll_name in required_files {
+                    let mut dll_src = src_dir.join(dll_name);
+                    
+                    // If file doesn't exist in source dir, try fallback (net8.0 publish)
+                    if !dll_src.exists() && dll_fallback_dir.exists() {
+                        dll_src = dll_fallback_dir.join(dll_name);
+                    }
+                    
+                    let dll_dest = dest_dir.join(dll_name);
+                    
+                    if dll_src.exists() {
+                        match fs::copy(&dll_src, &dll_dest) {
+                            Ok(_) => {
+                                println!("cargo:warning={} copied to {}", dll_name, dll_dest.display());
+                            }
+                            Err(e) => {
+                                println!("cargo:warning=failed to copy {} to {}: {}", dll_src.display(), dll_dest.display(), e);
+                            }
+                        }
+                    } else {
+                        println!("cargo:warning={} not found at {} or fallback", dll_name, src_dir.display());
                     }
                 }
             }

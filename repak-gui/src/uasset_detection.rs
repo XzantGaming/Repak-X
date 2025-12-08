@@ -20,23 +20,37 @@ pub async fn detect_mesh_files_async(mod_contents: &[String]) -> bool {
     }
     
     // Use UAssetAPI batch detection
-    if let Ok(toolkit) = UAssetToolkit::new(None) {
-        info!("[Detection] Using UAssetAPI batch detection for SkeletalMesh");
-        match toolkit.batch_detect_skeletal_mesh(&uasset_files).await {
-            Ok(true) => {
-                info!("[Detection] FOUND SkeletalMesh (UAssetAPI)");
-                return true;
+    match UAssetToolkit::new(None) {
+        Ok(toolkit) => {
+            info!("[Detection] UAssetToolkit initialized successfully");
+            info!("[Detection] Passing {} files to UAssetAPI batch_detect_skeletal_mesh", uasset_files.len());
+            
+            // Log first few files being checked
+            for (i, file) in uasset_files.iter().take(3).enumerate() {
+                info!("[Detection] UAssetAPI checking file {}: {}", i + 1, file);
             }
-            Ok(false) => {
-                info!("[Detection] No SkeletalMesh found (UAssetAPI)");
-                return false;
-            }
-            Err(e) => {
-                info!("[Detection] UAssetAPI error (check USMAP config): {}", e);
+            
+            info!("[Detection] Calling batch_detect_skeletal_mesh...");
+            match toolkit.batch_detect_skeletal_mesh(&uasset_files).await {
+                Ok(true) => {
+                    info!("[Detection] ✓ FOUND SkeletalMesh (UAssetAPI returned true)");
+                    return true;
+                }
+                Ok(false) => {
+                    info!("[Detection] ✗ No SkeletalMesh found (UAssetAPI returned false)");
+                    info!("[Detection] This means UAssetAPI checked the files but didn't identify any as SkeletalMesh");
+                    return false;
+                }
+                Err(e) => {
+                    info!("[Detection] ✗ UAssetAPI batch detection error: {}", e);
+                    info!("[Detection] This may indicate USMAP issues or file read errors");
+                }
             }
         }
-    } else {
-        info!("[Detection] UAssetAPI unavailable - cannot detect SkeletalMesh");
+        Err(e) => {
+            info!("[Detection] ✗ Failed to initialize UAssetToolkit: {}", e);
+            info!("[Detection] UAssetAPI unavailable - cannot detect SkeletalMesh");
+        }
     }
 
     false
@@ -67,23 +81,29 @@ pub async fn detect_texture_files_async(mod_contents: &[String]) -> bool {
     
     // Use UAssetAPI batch detection - checks if texture needs MipGen fix
     // (is Texture2D AND MipGenSettings != NoMipmaps)
-    if let Ok(toolkit) = UAssetToolkit::new(None) {
-        info!("[Detection] Using UAssetAPI batch detection for Texture2D");
-        match toolkit.batch_detect_texture(&uasset_files).await {
-            Ok(true) => {
-                info!("[Detection] FOUND Texture2D needing MipGen fix with .ubulk - texture fix ENABLED");
-                return true;
-            }
-            Ok(false) => {
-                info!("[Detection] No Texture2D needing MipGen fix found (UAssetAPI)");
-                return false;
-            }
-            Err(e) => {
-                info!("[Detection] UAssetAPI error (check USMAP config): {}", e);
+    match UAssetToolkit::new(None) {
+        Ok(toolkit) => {
+            info!("[Detection] UAssetToolkit initialized successfully");
+            info!("[Detection] Using UAssetAPI batch detection for Texture2D");
+            match toolkit.batch_detect_texture(&uasset_files).await {
+                Ok(true) => {
+                    info!("[Detection] FOUND Texture2D needing MipGen fix with .ubulk - texture fix ENABLED");
+                    return true;
+                }
+                Ok(false) => {
+                    info!("[Detection] No Texture2D needing MipGen fix found (UAssetAPI)");
+                    return false;
+                }
+                Err(e) => {
+                    info!("[Detection] UAssetAPI batch detection error: {}", e);
+                    info!("[Detection] This may indicate USMAP issues or file read errors");
+                }
             }
         }
-    } else {
-        info!("[Detection] UAssetAPI unavailable - cannot detect Texture2D");
+        Err(e) => {
+            info!("[Detection] Failed to initialize UAssetToolkit: {}", e);
+            info!("[Detection] UAssetAPI unavailable - cannot detect Texture2D");
+        }
     }
 
     false
@@ -103,23 +123,29 @@ pub async fn detect_static_mesh_files_async(mod_contents: &[String]) -> bool {
     }
     
     // Use UAssetAPI batch detection
-    if let Ok(toolkit) = UAssetToolkit::new(None) {
-        info!("[Detection] Using UAssetAPI batch detection for StaticMesh");
-        match toolkit.batch_detect_static_mesh(&uasset_files).await {
-            Ok(true) => {
-                info!("[Detection] FOUND StaticMesh (UAssetAPI)");
-                return true;
-            }
-            Ok(false) => {
-                info!("[Detection] No StaticMesh found (UAssetAPI)");
-                return false;
-            }
-            Err(e) => {
-                info!("[Detection] UAssetAPI error (check USMAP config): {}", e);
+    match UAssetToolkit::new(None) {
+        Ok(toolkit) => {
+            info!("[Detection] UAssetToolkit initialized successfully");
+            info!("[Detection] Using UAssetAPI batch detection for StaticMesh");
+            match toolkit.batch_detect_static_mesh(&uasset_files).await {
+                Ok(true) => {
+                    info!("[Detection] FOUND StaticMesh (UAssetAPI)");
+                    return true;
+                }
+                Ok(false) => {
+                    info!("[Detection] No StaticMesh found (UAssetAPI)");
+                    return false;
+                }
+                Err(e) => {
+                    info!("[Detection] UAssetAPI batch detection error: {}", e);
+                    info!("[Detection] This may indicate USMAP issues or file read errors");
+                }
             }
         }
-    } else {
-        info!("[Detection] UAssetAPI unavailable - cannot detect StaticMesh");
+        Err(e) => {
+            info!("[Detection] Failed to initialize UAssetToolkit: {}", e);
+            info!("[Detection] UAssetAPI unavailable - cannot detect StaticMesh");
+        }
     }
 
     false

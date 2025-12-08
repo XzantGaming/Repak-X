@@ -95,7 +95,22 @@ pub fn parse_crash_info(crash_folder: &Path, enabled_mods: Vec<String>) -> Optio
     
     // Try to read and parse the XML file
     let xml_content = match fs::read_to_string(&crash_context_path) {
-        Ok(content) => content,
+        Ok(content) => {
+            // Validate XML content size to prevent memory issues
+            if content.len() > 10_000_000 { // 10MB limit
+                warn!("CrashContext.runtime-xml file too large ({}B), skipping detailed parsing", content.len());
+                return Some(CrashInfo {
+                    crash_folder: crash_folder.to_path_buf(),
+                    timestamp,
+                    error_message: Some("Crash file too large to parse".to_string()),
+                    crash_type: None,
+                    seconds_since_start: None,
+                    process_id: None,
+                    enabled_mods,
+                });
+            }
+            content
+        }
         Err(e) => {
             warn!("Failed to read CrashContext.runtime-xml: {}", e);
             return Some(CrashInfo {
@@ -133,15 +148,40 @@ pub fn parse_crash_info(crash_folder: &Path, enabled_mods: Vec<String>) -> Optio
 }
 
 /// Extract a value from an XML tag (simple parser, not full XML)
+/// Includes validation to prevent crashes from malformed XML
 fn extract_xml_tag(xml: &str, tag_name: &str) -> Option<String> {
+    // Validate input parameters
+    if xml.is_empty() || tag_name.is_empty() {
+        return None;
+    }
+    
     let start_tag = format!("<{}>", tag_name);
     let end_tag = format!("</{}>", tag_name);
     
     if let Some(start_pos) = xml.find(&start_tag) {
         let content_start = start_pos + start_tag.len();
+        
+        // Validate bounds to prevent panics
+        if content_start >= xml.len() {
+            warn!("XML parsing error: invalid content start position for tag '{}'", tag_name);
+            return None;
+        }
+        
         if let Some(end_pos) = xml[content_start..].find(&end_tag) {
-            let value = xml[content_start..content_start + end_pos].trim();
-            return Some(value.to_string());
+            let content_end = content_start + end_pos;
+            
+            // Additional bounds check
+            if content_end > xml.len() {
+                warn!("XML parsing error: invalid content end position for tag '{}'", tag_name);
+                return None;
+            }
+            
+            let value = xml[content_start..content_end].trim();
+            
+            // Don't return empty values
+            if !value.is_empty() {
+                return Some(value.to_string());
+            }
         }
     }
     
@@ -205,6 +245,42 @@ pub fn extract_character_id(error_message: &str) -> Option<String> {
     None
 }
 
+/// Count total number of crash folders
+pub fn count_total_crashes() -> usize {
+    let crash_dir = get_crash_log_path();
+    
+    if !crash_dir.exists() {
+        return 0;
+    }
+    
+    match fs::read_dir(&crash_dir) {
+        Ok(entries) => {
+            entries
+                .filter_map(Result::ok)
+                .filter(|entry| entry.path().is_dir())
+                .count()
+        }
+        Err(e) => {
+            warn!("Failed to count crash folders: {}", e);
+            0
+        }
+    }
+}
+
+/// Format SystemTime to human readable string
+fn format_system_time(time: SystemTime) -> String {
+    match time.duration_since(std::time::UNIX_EPOCH) {
+        Ok(duration) => {
+            // Simple timestamp formatting
+            let secs = duration.as_secs();
+            let minutes = (secs / 60) % 60;
+            let hours = (secs / 3600) % 24;
+            format!("{}h {}m ago", hours, minutes)
+        }
+        Err(_) => "Unknown time".to_string(),
+    }
+}
+
 /// Convert CrashInfo to CrashRecord for persistent storage
 pub fn crash_info_to_record(info: &CrashInfo) -> CrashRecord {
     let timestamp_str = format_system_time(info.timestamp);
@@ -222,74 +298,6 @@ pub fn crash_info_to_record(info: &CrashInfo) -> CrashRecord {
     }
 }
 
-/// Format SystemTime as a readable string
-fn format_system_time(time: SystemTime) -> String {
-    use std::time::UNIX_EPOCH;
-    
-    match time.duration_since(UNIX_EPOCH) {
-        Ok(duration) => {
-            let secs = duration.as_secs();
-            let datetime = chrono::DateTime::<chrono::Utc>::from_timestamp(secs as i64, 0)
-                .unwrap_or_default();
-            datetime.format("%Y-%m-%d %H:%M:%S").to_string()
-        }
-        Err(_) => "Unknown time".to_string(),
-    }
-}
-
-/// Get the most recent crash folder
-pub fn get_latest_crash_folder() -> Option<PathBuf> {
-    let crash_dir = get_crash_log_path();
-    
-    if !crash_dir.exists() {
-        return None;
-    }
-    
-    let mut latest: Option<(PathBuf, SystemTime)> = None;
-    
-    if let Ok(entries) = fs::read_dir(&crash_dir) {
-        for entry in entries.filter_map(Result::ok) {
-            let path = entry.path();
-            
-            if !path.is_dir() {
-                continue;
-            }
-            
-            if let Ok(metadata) = entry.metadata() {
-                if let Ok(created) = metadata.created() {
-                    match latest {
-                        None => latest = Some((path, created)),
-                        Some((_, latest_time)) => {
-                            if created > latest_time {
-                                latest = Some((path, created));
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    
-    latest.map(|(path, _)| path)
-}
-
-/// Count total number of crash folders
-pub fn count_total_crashes() -> usize {
-    let crash_dir = get_crash_log_path();
-    
-    if !crash_dir.exists() {
-        return 0;
-    }
-    
-    fs::read_dir(&crash_dir)
-        .map(|entries| {
-            entries
-                .filter_map(Result::ok)
-                .filter(|e| e.path().is_dir())
-                .count()
-        })
-        .unwrap_or(0)
-}
 
 /// Delete all crash folders (cleanup)
 pub fn clear_all_crashes() -> Result<usize, String> {

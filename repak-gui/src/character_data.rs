@@ -81,55 +81,6 @@ static CHARACTER_CACHE: Lazy<Arc<RwLock<CharacterDataCache>>> = Lazy::new(|| {
 // KNOWN CHARACTER IDS (for default skin generation)
 // ============================================================================
 
-/// Known character IDs - used for generating default skin IDs (name -> id)
-pub fn get_known_character_ids() -> HashMap<String, String> {
-    let mut map = HashMap::new();
-    map.insert("Hulk".to_string(), "1011".to_string());
-    map.insert("Punisher".to_string(), "1014".to_string());
-    map.insert("Storm".to_string(), "1015".to_string());
-    map.insert("Loki".to_string(), "1016".to_string());
-    map.insert("Human Torch".to_string(), "1017".to_string());
-    map.insert("Doctor Strange".to_string(), "1018".to_string());
-    map.insert("Mantis".to_string(), "1020".to_string());
-    map.insert("Hawkeye".to_string(), "1021".to_string());
-    map.insert("Captain America".to_string(), "1022".to_string());
-    map.insert("Rocket Raccoon".to_string(), "1023".to_string());
-    map.insert("Hela".to_string(), "1024".to_string());
-    map.insert("Cloak & Dagger".to_string(), "1025".to_string());
-    map.insert("Black Panther".to_string(), "1026".to_string());
-    map.insert("Groot".to_string(), "1027".to_string());
-    map.insert("Ultron".to_string(), "1028".to_string());
-    map.insert("Magik".to_string(), "1029".to_string());
-    map.insert("Moon Knight".to_string(), "1030".to_string());
-    map.insert("Luna Snow".to_string(), "1031".to_string());
-    map.insert("Squirrel Girl".to_string(), "1032".to_string());
-    map.insert("Black Widow".to_string(), "1033".to_string());
-    map.insert("Iron Man".to_string(), "1034".to_string());
-    map.insert("Venom".to_string(), "1035".to_string());
-    map.insert("Spider-Man".to_string(), "1036".to_string());
-    map.insert("Magneto".to_string(), "1037".to_string());
-    map.insert("Scarlet Witch".to_string(), "1038".to_string());
-    map.insert("Thor".to_string(), "1039".to_string());
-    map.insert("Mister Fantastic".to_string(), "1040".to_string());
-    map.insert("Winter Soldier".to_string(), "1041".to_string());
-    map.insert("Peni Parker".to_string(), "1042".to_string());
-    map.insert("Star-Lord".to_string(), "1043".to_string());
-    map.insert("Blade".to_string(), "1044".to_string());
-    map.insert("Namor".to_string(), "1045".to_string());
-    map.insert("Adam Warlock".to_string(), "1046".to_string());
-    map.insert("Jeff the Landshark".to_string(), "1047".to_string());
-    map.insert("Psylocke".to_string(), "1048".to_string());
-    map.insert("Wolverine".to_string(), "1049".to_string());
-    map.insert("Invisible Woman".to_string(), "1050".to_string());
-    map.insert("The Thing".to_string(), "1051".to_string());
-    map.insert("Iron Fist".to_string(), "1052".to_string());
-    map.insert("Emma Frost".to_string(), "1053".to_string());
-    map.insert("Phoenix".to_string(), "1054".to_string());
-    map.insert("Daredevil".to_string(), "1055".to_string());
-    map.insert("Angela".to_string(), "1056".to_string());
-    map.insert("Gambit".to_string(), "1058".to_string());
-    map
-}
 
 /// Get character name from character ID (id -> name)
 /// Used for static mesh and audio mods that aren't skin-specific

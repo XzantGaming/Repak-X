@@ -1,5 +1,5 @@
 use colored::Colorize;
-use log::info;
+use log::{error, info, warn};
 use path_slash::PathExt;
 use std::fs;
 use std::fs::{File, OpenOptions};
@@ -22,7 +22,7 @@ pub fn mesh_patch(paths: &mut Vec<PathBuf>, mod_dir: &PathBuf) -> Result<(), rep
         .iter()
         .filter(|p| {
             p.extension().and_then(|ext| ext.to_str()) == Some("uasset")
-                && (p.to_str().unwrap().to_lowercase().contains("meshes"))
+                && p.to_str().map_or(false, |s| s.to_lowercase().contains("meshes"))
         })
         .cloned()
         .collect::<Vec<PathBuf>>();
@@ -38,7 +38,7 @@ pub fn mesh_patch(paths: &mut Vec<PathBuf>, mod_dir: &PathBuf) -> Result<(), rep
 
     let patched_files = BufReader::new(&file)
         .lines()
-        .map(|l| l.unwrap().clone())
+        .filter_map(|l| l.ok())
         .collect::<Vec<_>>();
 
     let mut cache_writer = BufWriter::new(&file);
@@ -52,35 +52,52 @@ pub fn mesh_patch(paths: &mut Vec<PathBuf>, mod_dir: &PathBuf) -> Result<(), rep
         let mut sizes: Vec<i64> = vec![];
         let mut offsets: Vec<i64> = vec![];
 
-        let dir_path = uassetfile.parent().unwrap();
+        let Some(dir_path) = uassetfile.parent() else {
+            warn!("Could not get parent directory for file: {:?}, skipping", uassetfile);
+            continue 'outer;
+        };
         let uexp_file = dir_path.join(
             uassetfile
                 .file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .replace(".uasset", ".uexp"),
+                .and_then(|n| n.to_str())
+                .map(|s| s.replace(".uasset", ".uexp"))
+                .unwrap_or_else(|| {
+                    warn!("Could not convert filename to string: {:?}", uassetfile);
+                    "unknown.uexp".to_string()
+                }),
         );
 
         if !uexp_file.exists() {
-            panic!("UEXP file doesnt exist");
-            // damn
+            warn!("UEXP file does not exist: {:?}, skipping mesh patching for this file", uexp_file);
+            continue 'outer;
         }
 
-        let rel_uasset = &uassetfile
+        let rel_uasset = match uassetfile
             .strip_prefix(mod_dir)
-            .expect("file not in input directory")
-            .to_slash()
-            .expect("failed to convert to slash path");
+            .ok()
+            .and_then(|p| p.to_slash())
+        {
+            Some(path) => path,
+            None => {
+                error!("File not in input directory or failed to convert to slash path: {:?}", uassetfile);
+                continue 'outer;
+            }
+        };
 
-        let rel_uexp = &uexp_file
+        let rel_uexp = match uexp_file
             .strip_prefix(mod_dir)
-            .expect("file not in input directory")
-            .to_slash()
-            .expect("failed to convert to slash path");
+            .ok()
+            .and_then(|p| p.to_slash())
+        {
+            Some(path) => path,
+            None => {
+                error!("File not in input directory or failed to convert to slash path: {:?}", uexp_file);
+                continue 'outer;
+            }
+        };
 
         for i in &patched_files {
-            if i.as_str() == *rel_uexp || i.as_str() == *rel_uasset {
+            if i.as_str() == rel_uexp.as_ref() as &str || i.as_str() == rel_uasset.as_ref() as &str {
                 info!(
                     "Skipping {} (File has already been patched before)",
                     i.yellow()
@@ -89,29 +106,27 @@ pub fn mesh_patch(paths: &mut Vec<PathBuf>, mod_dir: &PathBuf) -> Result<(), rep
             }
         }
 
-        fs::copy(
-            &uexp_file,
-            dir_path.join(format!(
-                "{}.bak",
-                uexp_file.file_name().unwrap().to_str().unwrap()
-            )),
-        )?;
-        fs::copy(
-            uassetfile,
-            dir_path.join(format!(
-                "{}.bak",
-                uassetfile.file_name().unwrap().to_str().unwrap()
-            )),
-        )?;
+        let uexp_backup_name = uexp_file
+            .file_name()
+            .and_then(|n| n.to_str())
+            .map(|s| format!("{}.bak", s))
+            .unwrap_or_else(|| "unknown_uexp.bak".to_string());
+        fs::copy(&uexp_file, dir_path.join(uexp_backup_name))?;
+        let uasset_backup_name = uassetfile
+            .file_name()
+            .and_then(|n| n.to_str())
+            .map(|s| format!("{}.bak", s))
+            .unwrap_or_else(|| "unknown_uasset.bak".to_string());
+        fs::copy(uassetfile, dir_path.join(uasset_backup_name))?;
 
-        info!("Processing {}", &uassetfile.to_str().unwrap().yellow());
+        info!("Processing {}", uassetfile.to_str().unwrap_or("<invalid_path>").yellow());
         let mut rdr = BufReader::new(File::open(uassetfile.clone())?);
         let (exp_cnt, exp_offset) = fixer.read_uasset(&mut rdr)?;
         fixer.read_exports(&mut rdr, &mut sizes, &mut offsets, exp_offset, exp_cnt)?;
 
-        let backup_file = format!("{}.bak", uexp_file.to_str().unwrap());
+        let backup_file = format!("{}.bak", uexp_file.to_str().unwrap_or("unknown"));
         let backup_file_size = fs::metadata(uassetfile)?.len();
-        let tmpfile = format!("{}.temp", uexp_file.to_str().unwrap());
+        let tmpfile = format!("{}.temp", uexp_file.to_str().unwrap_or("unknown"));
 
         drop(rdr);
 
@@ -123,14 +138,18 @@ pub fn mesh_patch(paths: &mut Vec<PathBuf>, mod_dir: &PathBuf) -> Result<(), rep
             Ok(_) => {}
             Err(e) => match e.kind() {
                 ErrorKind::InvalidData => {
-                    panic!("{}", e.to_string())
+                    error!("Invalid data error during mesh patching: {}", e.to_string());
+                    fs::remove_file(&tmpfile).ok(); // Clean up temp file
+                    continue 'outer;
                 }
                 ErrorKind::Other => {
                     fs::remove_file(&tmpfile)?;
                     continue 'outer;
                 }
                 _ => {
-                    panic!("{}", e.to_string())
+                    error!("Unexpected error during mesh patching: {}", e.to_string());
+                    fs::remove_file(&tmpfile).ok(); // Clean up temp file
+                    continue 'outer;
                 }
             },
         }

@@ -1,94 +1,85 @@
 # Repak GUI (Marvel Rivals)
 
 Repak GUI is a Windows application for installing and repacking Marvel Rivals mods. It automates UE IOStore packaging, applies mesh fixes during repack, and intelligently handles compression so your installed mods load and stay small.
+ 
+## Overview
 
-## 🚀 Quick Start
+Repak GUI focuses on one job: taking Marvel Rivals `.pak` mods and turning them into game-ready IOStore assets with minimal manual work.
 
-### For Contributors (Building from Source)
+At a high level it:
+- Extracts the original `.pak` mod.
+- Applies mesh fixes where needed.
+- Rebuilds the mod as UE5.3 IOStore (`.utoc` / `.ucas` + a small companion `.pak`).
+- Uses Oodle compression intelligently so files stay small but still load correctly.
 
-**One-command build:**
-```powershell
-.\build_contributor.ps1  # Builds everything: C# tools, frontend, backend
-```
+## Main Components
 
-Or double-click `build_contributor.bat` on Windows.
+- **Tauri desktop app (Rust + React GUI)**  
+  The main application you run as `repak-gui.exe`. Provides the drag-and-drop interface and orchestrates all work.
 
-This builds:
-- ✅ UAssetBridge.exe (C# texture processing)
-- ✅ StaticMeshSerializeSizeFixer.exe (C# mesh fixing)
-- ✅ React frontend
-- ✅ Rust backend + Tauri app
+- **Rust backend**  
+  Handles pak unpacking/packing, IOStore building, and communication with UAsset tools.
 
-**See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed build instructions and prerequisites.**
+- **C# helper tools**  
+  - `UAssetBridge.exe` – optional texture processing and conversions (Very experimental at the moment and the patch doesnt properly apply ingame yet).  
+  - `StaticMeshSerializeSizeFixer.exe` – mesh fixups applied during repack.
 
-### For Creating Distribution Packages
+- **UAsset / IOStore logic**  
+  Re-uses and extends existing crates to safely read, modify and rebuild UE assets for Marvel Rivals.
 
-```powershell
-.\build_and_package.ps1 -Zip  # Builds everything and creates a shareable ZIP
-```
-
-This creates a complete distribution package in `dist/` ready to share with users.
-
-### For Development (Quick Iteration)
-
-```powershell
-.\build_app.ps1  # Frontend + Backend only (assumes C# tools already built)
-.\run_app.ps1    # Launch the app
-```
-
-**⚠️ Important:** Don't use `cargo build` directly! This is a Tauri + React app with C# dependencies.
-
----
-
-This repository still contains CLI and library crates under the hood, but end users should use the GUI app.
-
-## Features
-- Install PAK mods with one drag-and-drop.
-- Automatic mesh patching during repack (no manual steps).
-- IOStore packaging (UE5.3 target): produces `.utoc/.ucas` + a tiny companion `.pak`.
-- Oodle compression for UCAS (ExportBundleData included); ContainerHeader is kept uncompressed by spec.
-- Compression summary after each build so you can verify size reduction.
-- Hardened import/name/preload resolution to avoid crashes on malformed assets.
+End users normally interact only with the GUI; the backend and helper tools run automatically.
 
 ## Requirements
+
 - Windows x64
-- Marvel Rivals installed (UE5.3)
+- Marvel Rivals (UE5.3)
 - Game-provided Oodle available at runtime (standard for the game)
 
 ## Installation
-1) Download a prebuilt ZIP from the Releases page.
-2) Extract anywhere (avoid Program Files to simplify permissions).
-3) Launch `repak-gui.exe`.
 
-Optional (texture pipeline): ensure `uassetbridge/UAssetBridge.exe` is present next to `repak-gui.exe` (the build now auto-produces this in `target/<profile>/uassetbridge/`, and releases should ship it in the app folder). Without it, texture post-processing is skipped with warnings (non-fatal).
+1. Download a prebuilt ZIP from the **Releases** page.
+2. Extract it to any writable folder (avoid `Program Files` to keep permissions simple).
+3. Run `repak-gui.exe`.
 
-## Usage
-1) Drag a `.pak` mod into the GUI and click Repack/Install.
-2) The app will unpack, patch meshes, and repack to IOStore.
-3) Output in your game `Paks/~mods` folder:
+## Basic Usage
+
+1. Drag a `.pak` mod into the GUI.
+2. Choose **Repack / Install**.
+3. The app will:
+   - Unpack the mod
+   - Apply mesh fixes
+   - Rebuild it as IOStore with appropriate compression
+4. The final files are written to your Marvel Rivals `Paks/~mods` folder, typically as:
    - `<stem>_9999999_P.utoc`
    - `<stem>_9999999_P.ucas`
-   - `<stem>_9999999_P.pak` (small companion, uncompressed)
-4) After completion, check `latest.log` for a line like:
-   - `IoStore compression summary: total_blocks_compressed=X bulk=Y shaders=Z export=W`
+   - `<stem>_9999999_P.pak` (small, uncompressed companion)
 
-Notes:
-- Ensure the `_9999999_P` suffix is used so the game prioritizes your mod.
-- Audio/Movie mods are handled by the existing logic; game data mods use the IOStore path above.
+Use the `_9999999_P` (The App will autocomplete it for you if its missing but if you want to be extra safe do the suffix manually) suffix so the game prioritizes your mod over base content.
 
-## Compression behavior
-- UCAS is compressed with Oodle where it reduces size.
-- ExportBundleData is allowed to compress; ContainerHeader stays uncompressed.
-- The companion `chunknames` `.pak` is always uncompressed (by design, very small).
+## How It Works (Short Version)
+
+- Rebuilds mods targeting **UE 5.3 IOStore** format.
+- Uses **Oodle compression** on data that benefits from it, leaving required headers uncompressed.
+- Provides a short compression summary in logs so you can verify that data packed as expected.
+- Tries to be robust against malformed or unusual assets to reduce crash risk.
 
 ## Troubleshooting
-- Texture warnings about `UAssetBridge.exe` missing: optional; place the bridge EXE under `uassetbridge/` to enable the texture pipeline.
-- If a mod fails to load, share `target/release/latest.log` and the mod name so we can tailor fixes without disabling compression globally.
 
+- **Textures look wrong or warnings mention `UAssetBridge.exe`**  
+  Add `uassetbridge/UAssetBridge.exe` next to `repak-gui.exe` to enable the full texture pipeline.(Experimental. Being worked on proper function)
 
+- **Mod not loading or game issues**  
+  Double-check that the output files are in the correct `Paks/~mods` folder and use the `_9999999_P` suffix.  
+  If problems persist, open an issue and include the log file and mod name.
+
+## Development
+
+The project is a Tauri (Rust) + React app with C# helper tools. For building from source, scripts such as `build_contributor.ps1` and `build_app.ps1` orchestrate the full pipeline.
 
 ## Acknowledgements
+
 - [unpak](https://github.com/bananaturtlesandwich/unpak): original crate featuring read-only pak operations
 - [rust-u4pak](https://github.com/panzi/rust-u4pak)'s README detailing the pak file layout
 - [jieyouxu](https://github.com/jieyouxu) for serialization implementation of the significantly more complex V11 index
 - [repak](https://github.com/trumank/repak) for the original repak implementation
+- [repak-rivals](https://github.com/natimerry/repak-rivals) by @natimerry, the original fork point and an important early reference

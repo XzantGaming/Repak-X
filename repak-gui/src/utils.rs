@@ -330,45 +330,6 @@ pub fn get_current_pak_characteristics(mod_contents: Vec<String>) -> String {
     chars.mod_type
 }
 
-/// Build mod characteristics from UAssetAPI detection results
-/// This is more accurate than heuristic-based detection for mesh/texture/static mesh
-pub fn build_characteristics_from_detection(
-    mod_contents: Vec<String>,
-    has_skeletal_mesh: bool,
-    has_texture: bool,
-    has_static_mesh: bool,
-) -> ModCharacteristics {
-    // Start with heuristic detection for character/hero identification and other categories
-    let mut chars = get_pak_characteristics_detailed(mod_contents);
-    
-    // Override the category based on UAssetAPI detection results if they found something
-    // Priority: Skeletal Mesh > Static Mesh > Texture
-    if has_skeletal_mesh {
-        chars.category = "Mesh".to_string();
-    } else if has_static_mesh {
-        chars.category = "Static Mesh".to_string();
-    } else if has_texture {
-        chars.category = "Retexture".to_string();
-    }
-    // If none of the UAssetAPI checks found anything, keep the heuristic category
-    
-    // Rebuild the mod_type string with the corrected category
-    let base_type = if !chars.character_name.is_empty() {
-        format!("{} - {}", chars.character_name, chars.category)
-    } else if chars.heroes.len() > 1 {
-        format!("Multiple Heroes ({}) - {}", chars.heroes.len(), chars.category)
-    } else {
-        chars.category.clone()
-    };
-    
-    chars.mod_type = if !chars.additional_categories.is_empty() {
-        format!("{} [{}]", base_type, chars.additional_categories.join(", "))
-    } else {
-        base_type
-    };
-    
-    chars
-}
 
 pub fn find_marvel_rivals() -> Option<PathBuf> {
     let shit = get_steam_library_paths();
