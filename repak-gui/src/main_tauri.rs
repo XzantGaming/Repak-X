@@ -497,6 +497,35 @@ async fn parse_dropped_files(
         
         // Determine mod type and auto-detection flags
         let (mod_type, auto_fix_mesh, auto_fix_texture, auto_fix_serialize_size) = if path.is_dir() {
+            // First check if directory contains multiple PAK files - if so, process each PAK separately
+            use walkdir::WalkDir;
+            let mut pak_files = Vec::new();
+            
+            for entry in WalkDir::new(&path).max_depth(1).into_iter().filter_map(|e| e.ok()) {
+                let entry_path = entry.path();
+                if entry_path.is_file() {
+                    if let Some(ext) = entry_path.extension().and_then(|s| s.to_str()) {
+                        if ext == "pak" {
+                            pak_files.push(entry_path.to_path_buf());
+                        }
+                    }
+                }
+            }
+            
+            // If directory contains multiple PAK files, process each one separately
+            if pak_files.len() > 1 {
+                let _ = window.emit("install_log", format!("[Detection] Found {} PAK files in directory: {}", pak_files.len(), mod_name));
+                
+                // Process each PAK file individually by recursively calling parse_dropped_files
+                let pak_paths: Vec<String> = pak_files.iter()
+                    .map(|p| p.to_string_lossy().to_string())
+                    .collect();
+                
+                // Return early and let the recursion handle each PAK
+                return Box::pin(parse_dropped_files(pak_paths, state, window)).await;
+            }
+            
+            // Single PAK file or no PAK files found - treat as content directory with loose files
             use crate::utils::collect_files;
             
             let mut file_paths = Vec::new();
@@ -504,6 +533,7 @@ async fn parse_dropped_files(
                 let files: Vec<String> = file_paths.iter()
                     .map(|p| p.to_string_lossy().to_string())
                     .collect();
+                
                     
                 let mod_type = get_current_pak_characteristics(files.clone());
                 

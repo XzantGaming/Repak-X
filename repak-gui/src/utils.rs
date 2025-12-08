@@ -10,7 +10,8 @@ use regex_lite::Regex;
 use crate::character_data;
 
 static SKIN_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"[0-9]{4}\/[0-9]{7}").unwrap()
+    // Matches patterns like 1033/1033503 or 1033\1033503 (forward or backslash)
+    Regex::new(r"[0-9]{4}[/\\][0-9]{7}").unwrap()
 });
 
 // Regex to extract just the character ID (4 digits) from paths like /Characters/1021/ or /Hero_ST/1048/
@@ -82,8 +83,9 @@ pub fn get_character_mod_skin(file: &str) -> Option<ModType> {
     if let Some(caps) = skin_id_match {
         let full_match = caps[0].to_string();
         info!("SKIN_REGEX matched: {} in file: {}", full_match, file);
-        // Extract just the 7-digit skin ID (skip the "1234/" prefix)
-        let skin_id = &full_match[5..];
+        // Extract just the 7-digit skin ID (skip the "1234/" or "1234\" prefix)
+        // The match is like "1033/1033503" or "1033\1033503", we want the last 7 digits
+        let skin_id = &full_match[full_match.len() - 7..];
         info!("Extracted skin ID: {}", skin_id);
         
         // Use the runtime character data lookup
@@ -104,7 +106,9 @@ pub fn get_character_mod_skin(file: &str) -> Option<ModType> {
         }
         None
     } else {
-        info!("SKIN_REGEX did not match file: {}", file);
+        // Log first 100 chars of file path for debugging
+        let preview = if file.len() > 100 { &file[..100] } else { file };
+        info!("SKIN_REGEX did not match file: {}", preview);
         None
     }
 }
@@ -189,21 +193,18 @@ pub fn get_pak_characteristics_detailed(mod_contents: Vec<String>) -> ModCharact
             has_blueprint = true;
         }
 
-        // Try to get skin-specific name from Characters paths
-        let category = path.split('/').next().unwrap_or_default();
-        if category == "Characters" {
-            match get_character_mod_skin(path) {
-                Some(ModType::Custom(skin)) => {
-                    info!("Found custom skin: {} from path: {}", skin, path);
-                    character_name = Some(skin);
-                }
-                Some(ModType::Default(name)) => {
-                    info!("Found default skin: {} from path: {}", name, path);
-                    _fallback = Some(name);
-                }
-                None => {
-                    info!("No skin match for path: {}", path);
-                }
+        // Try to get skin-specific name from any path containing the skin pattern
+        match get_character_mod_skin(path) {
+            Some(ModType::Custom(skin)) => {
+                info!("Found custom skin: {} from path: {}", skin, path);
+                character_name = Some(skin);
+            }
+            Some(ModType::Default(name)) => {
+                info!("Found default skin: {} from path: {}", name, path);
+                _fallback = Some(name);
+            }
+            None => {
+                // No skin-specific match, will use character ID detection below
             }
         }
         
@@ -327,6 +328,46 @@ pub fn get_pak_characteristics_detailed(mod_contents: Vec<String>) -> ModCharact
 pub fn get_current_pak_characteristics(mod_contents: Vec<String>) -> String {
     let chars = get_pak_characteristics_detailed(mod_contents);
     chars.mod_type
+}
+
+/// Build mod characteristics from UAssetAPI detection results
+/// This is more accurate than heuristic-based detection for mesh/texture/static mesh
+pub fn build_characteristics_from_detection(
+    mod_contents: Vec<String>,
+    has_skeletal_mesh: bool,
+    has_texture: bool,
+    has_static_mesh: bool,
+) -> ModCharacteristics {
+    // Start with heuristic detection for character/hero identification and other categories
+    let mut chars = get_pak_characteristics_detailed(mod_contents);
+    
+    // Override the category based on UAssetAPI detection results if they found something
+    // Priority: Skeletal Mesh > Static Mesh > Texture
+    if has_skeletal_mesh {
+        chars.category = "Mesh".to_string();
+    } else if has_static_mesh {
+        chars.category = "Static Mesh".to_string();
+    } else if has_texture {
+        chars.category = "Retexture".to_string();
+    }
+    // If none of the UAssetAPI checks found anything, keep the heuristic category
+    
+    // Rebuild the mod_type string with the corrected category
+    let base_type = if !chars.character_name.is_empty() {
+        format!("{} - {}", chars.character_name, chars.category)
+    } else if chars.heroes.len() > 1 {
+        format!("Multiple Heroes ({}) - {}", chars.heroes.len(), chars.category)
+    } else {
+        chars.category.clone()
+    };
+    
+    chars.mod_type = if !chars.additional_categories.is_empty() {
+        format!("{} [{}]", base_type, chars.additional_categories.join(", "))
+    } else {
+        base_type
+    };
+    
+    chars
 }
 
 pub fn find_marvel_rivals() -> Option<PathBuf> {
