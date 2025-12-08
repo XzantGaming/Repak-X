@@ -1736,6 +1736,89 @@ async fn check_game_running() -> Result<bool, String> {
     Ok(false)
 }
 
+/// Launch Marvel Rivals via Steam, temporarily skipping the launcher
+/// 
+/// This function:
+/// 1. Backs up the current launch_record value
+/// 2. Sets launch_record to "0" to skip the launcher
+/// 3. Launches the game via Steam protocol
+/// 4. Restores the original launch_record value
+/// 
+/// This ensures the game launches without the launcher when using our app,
+/// but preserves the user's Steam launch settings for manual launches
+#[tauri::command]
+async fn launch_game(state: State<'_, Arc<Mutex<AppState>>>) -> Result<(), String> {
+    use std::process::Command;
+    
+    // Get game path
+    let game_path = {
+        let state = state.lock().unwrap();
+        state.game_path.clone()
+    };
+    
+    // Path to launch_record file (next to MarvelRivals_Launcher.exe)
+    let launch_record_path = game_path.join("launch_record");
+    
+    // Backup original value
+    let original_value = match std::fs::read_to_string(&launch_record_path) {
+        Ok(content) => {
+            info!("Backed up launch_record value: {}", content.trim());
+            Some(content)
+        }
+        Err(e) => {
+            warn!("Could not read launch_record (file may not exist): {}", e);
+            None
+        }
+    };
+    
+    // Set to "0" to skip launcher
+    if let Err(e) = std::fs::write(&launch_record_path, "0") {
+        error!("Failed to modify launch_record: {}", e);
+        return Err(format!("Failed to modify launch_record: {}", e));
+    }
+    info!("Set launch_record to 0 (skip launcher)");
+    
+    // Launch the game via Steam
+    #[cfg(target_os = "windows")]
+    let launch_result = Command::new("cmd")
+        .args(&["/C", "start", "steam://run/2767030"])
+        .spawn();
+    
+    #[cfg(target_os = "macos")]
+    let launch_result = Command::new("open")
+        .arg("steam://run/2767030")
+        .spawn();
+    
+    #[cfg(target_os = "linux")]
+    let launch_result = Command::new("xdg-open")
+        .arg("steam://run/2767030")
+        .spawn();
+    
+    // Give Steam a moment to read the file before we restore it
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    
+    // Restore original value
+    if let Some(original) = original_value {
+        if let Err(e) = std::fs::write(&launch_record_path, original.trim()) {
+            warn!("Failed to restore launch_record: {}", e);
+        } else {
+            info!("Restored launch_record to original value");
+        }
+    }
+    
+    // Check launch result
+    match launch_result {
+        Ok(_) => {
+            info!("Successfully launched Marvel Rivals via Steam (launcher skipped)");
+            Ok(())
+        }
+        Err(e) => {
+            error!("Failed to launch game: {}", e);
+            Err(format!("Failed to launch game. Please ensure Steam is installed. Error: {}", e))
+        }
+    }
+}
+
 #[tauri::command]
 async fn get_app_version() -> Result<String, String> {
     Ok(env!("CARGO_PKG_VERSION").to_string())
@@ -2715,6 +2798,7 @@ fn main() {
             get_all_tags,
             toggle_mod,
             check_game_running,
+            launch_game,
             get_app_version,
             check_for_updates,
             monitor_game_for_crashes,
