@@ -8,3 +8,10 @@ repak-gui/dist/
 # Ignored build artifacts (keep these)
 repak-gui/package-lock.json
 repak-gui/src/assets/
+
+UAssetAPI/UAssetAPI/bin/
+UAssetAPI/UAssetAPI/obj/
+UAssetAPI/StaticMeshSerializeSizeFixer/obj/
+UAssetAPI/StaticMeshSerializeSizeFixer/bin/
+uasset_toolkit/tools/UAssetBridge/bin/
+uasset_toolkit/tools/UAssetBridge/obj/

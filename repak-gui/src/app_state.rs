@@ -238,7 +238,7 @@ pub struct AppState {
     #[serde(skip)]
     pub show_install_dialog: bool,
     #[serde(skip)]
-    pub pending_install_mods: Vec<crate::install_mod_core::InstallableMod>,
+    pub pending_install_mods: Vec<String>,
     #[serde(skip)]
     pub install_fix_mesh: bool,
     #[serde(skip)]
@@ -251,6 +251,22 @@ pub struct AppState {
     pub install_status: String,
     #[serde(skip)]
     pub installing: bool,
+    
+    // Crash monitoring
+    #[serde(skip)]
+    pub game_was_running: bool,
+    #[serde(skip)]
+    pub last_game_check_time: Option<std::time::SystemTime>,
+    #[serde(skip)]
+    pub crash_detected: bool,
+    #[serde(skip)]
+    pub latest_crash_info: Option<crate::crash_monitor::CrashInfo>,
+    #[serde(skip)]
+    pub show_crash_dialog: bool,
+    #[serde(default)]
+    pub crash_history: Vec<crate::crash_monitor::CrashRecord>,
+    #[serde(skip)]
+    pub show_crash_history: bool,
 }
 
 impl Default for AppState {
@@ -317,6 +333,13 @@ impl Default for AppState {
             install_progress: 0.0,
             install_status: String::new(),
             installing: false,
+            game_was_running: false,
+            last_game_check_time: Some(std::time::SystemTime::now()),
+            crash_detected: false,
+            latest_crash_info: None,
+            show_crash_dialog: false,
+            crash_history: Vec::new(),
+            show_crash_history: false,
         }
     }
 }
@@ -918,5 +941,96 @@ impl AppState {
         }
         
         0
+    }
+    
+    // Crash monitoring methods
+    pub fn check_for_crashes(&mut self) {
+        let game_running = Self::is_game_running();
+        
+        // Detect game state change from running to not running
+        if self.game_was_running && !game_running {
+            info!("Game stopped - checking for crashes...");
+            
+            // Check for new crash folders
+            let check_time = self.last_game_check_time.unwrap_or_else(|| std::time::SystemTime::now());
+            let new_crashes = crate::crash_monitor::check_for_new_crashes(check_time);
+            
+            if !new_crashes.is_empty() {
+                info!("Crash detected! Found {} new crash folder(s)", new_crashes.len());
+                
+                // Get list of enabled mods
+                let enabled_mods: Vec<String> = self.pak_files
+                    .iter()
+                    .filter(|m| m.enabled)
+                    .map(|m| m.path.file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_string())
+                    .collect();
+                
+                // Parse the most recent crash
+                if let Some(crash_folder) = new_crashes.first() {
+                    if let Some(crash_info) = crate::crash_monitor::parse_crash_info(
+                        crash_folder,
+                        enabled_mods
+                    ) {
+                        // Add to history
+                        let record = crate::crash_monitor::crash_info_to_record(&crash_info);
+                        self.crash_history.push(record);
+                        
+                        // Keep only last 50 crashes in history
+                        if self.crash_history.len() > 50 {
+                            self.crash_history.remove(0);
+                        }
+                        
+                        // Set current crash info
+                        self.latest_crash_info = Some(crash_info);
+                        self.crash_detected = true;
+                        self.show_crash_dialog = true;
+                        
+                        // Save config to persist crash history
+                        let _ = self.save_config();
+                    }
+                }
+            } else {
+                info!("Game closed normally (no crash detected)");
+            }
+        }
+        
+        // Update state
+        self.game_was_running = game_running;
+        
+        // Update last check time when game starts
+        if game_running && !self.game_was_running {
+            self.last_game_check_time = Some(std::time::SystemTime::now());
+        }
+    }
+    
+    pub fn dismiss_crash_dialog(&mut self) {
+        self.show_crash_dialog = false;
+        self.crash_detected = false;
+    }
+    
+    pub fn get_crash_summary(&self) -> Option<String> {
+        self.latest_crash_info.as_ref().map(|info| {
+            let error = info.error_message.as_ref()
+                .map(|e| e.as_str())
+                .unwrap_or("Unknown error");
+            let time = info.seconds_since_start.unwrap_or(0);
+            format!("Crash after {}s: {}", time, error)
+        })
+    }
+    
+    pub fn get_total_crashes(&self) -> usize {
+        crate::crash_monitor::count_total_crashes()
+    }
+    
+    pub fn clear_crash_logs(&mut self) -> Result<usize, String> {
+        let result = crate::crash_monitor::clear_all_crashes();
+        if result.is_ok() {
+            self.crash_history.clear();
+            let _ = self.save_config();
+        }
+        result
     }
 }

@@ -9,6 +9,8 @@ mod uasset_api_integration;
 mod utils;
 mod utoc_utils;
 mod character_data;
+mod crash_monitor;
+mod app_state;
 mod p2p_sharing;
 mod p2p_libp2p;
 mod p2p_manager;
@@ -43,6 +45,12 @@ struct WatcherState {
 /// P2P Sharing state management
 struct P2PState {
     manager: Arc<p2p_manager::UnifiedP2PManager>,
+}
+
+/// Crash monitoring state
+struct CrashMonitorState {
+    game_start_time: Mutex<Option<std::time::SystemTime>>,
+    last_checked_crash: Mutex<Option<std::time::SystemTime>>,
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -1777,6 +1785,188 @@ struct UpdateInfo {
 }
 
 // ============================================================================
+// CRASH MONITORING COMMANDS
+// ============================================================================
+
+/// Monitor game state and detect crashes
+/// This should be called periodically (every 2-5 seconds) from the frontend
+#[tauri::command]
+async fn monitor_game_for_crashes(
+    crash_state: State<'_, CrashMonitorState>,
+) -> Result<Option<crash_monitor::CrashInfo>, String> {
+    use sysinfo::{ProcessRefreshKind, RefreshKind, System};
+    
+    let s = System::new_with_specifics(
+        RefreshKind::new().with_processes(ProcessRefreshKind::new())
+    );
+    
+    let game_process_names = ["Marvel-Win64-Shipping.exe"];
+    let mut game_running = false;
+    
+    for (_pid, process) in s.processes() {
+        let process_name = process.name().to_string_lossy().to_lowercase();
+        for game_name in &game_process_names {
+            if process_name == game_name.to_lowercase() {
+                game_running = true;
+                break;
+            }
+        }
+    }
+    
+    let mut game_start_time = crash_state.game_start_time.lock().unwrap();
+    let mut last_checked = crash_state.last_checked_crash.lock().unwrap();
+    
+    // Game just started - record the start time
+    if game_running && game_start_time.is_none() {
+        let now = std::time::SystemTime::now();
+        *game_start_time = Some(now);
+        *last_checked = Some(now);
+        info!("Game started - monitoring for crashes from: {:?}", now);
+        return Ok(None);
+    }
+    
+    // Game just stopped - check for crashes that occurred during THIS session
+    if !game_running && game_start_time.is_some() {
+        let session_start = game_start_time.unwrap();
+        info!("Game stopped - checking for crashes since session start: {:?}", session_start);
+        
+        // Check for crashes created AFTER the game started
+        let new_crashes = crash_monitor::check_for_new_crashes(session_start);
+        
+        // Reset state for next session
+        *game_start_time = None;
+        
+        if !new_crashes.is_empty() {
+            error!("⚠️ ═══════════════════════════════════════════════════════════════");
+            error!("⚠️ CRASH DETECTED! Marvel Rivals crashed during this session!");
+            error!("⚠️ ═══════════════════════════════════════════════════════════════");
+            error!("⚠️ Found {} crash folder(s) from this session", new_crashes.len());
+            
+            // Parse the most recent crash
+            if let Some(crash_folder) = new_crashes.first() {
+                let crash_info = crash_monitor::parse_crash_info(crash_folder, Vec::new());
+                
+                if let Some(ref info) = crash_info {
+                    let unknown_error = "Unknown error".to_string();
+                    let error_msg = info.error_message.as_ref().unwrap_or(&unknown_error);
+                    
+                    error!("⚠️ Crash Details:");
+                    error!("⚠️   Type: {}", info.crash_type.as_ref().unwrap_or(&"Unknown".to_string()));
+                    
+                    // Parse and display detailed error information
+                    let (asset_path, error_type, details) = crash_monitor::parse_error_details(error_msg);
+                    
+                    if let Some(err_type) = error_type {
+                        error!("⚠️   Error Type: {}", err_type);
+                    }
+                    
+                    if let Some(asset) = asset_path {
+                        error!("⚠️   Affected Asset: {}", asset);
+                        
+                        // Extract character ID if present
+                        if let Some(char_id) = crash_monitor::extract_character_id(error_msg) {
+                            error!("⚠️   Character ID: {}", char_id);
+                        }
+                    }
+                    
+                    if let Some(detail) = details {
+                        error!("⚠️   Details: {}", detail);
+                    }
+                    
+                    // Check if it's a mesh-related crash
+                    if crash_monitor::is_mesh_related_crash(error_msg) {
+                        error!("⚠️   ⚡ MESH LOADING ERROR - Likely caused by incorrect SerializeSize");
+                        error!("⚠️   💡 Tip: Re-run UAssetGUI on this mod or disable 'Fix Mesh' option");
+                    }
+                    
+                    if let Some(seconds) = info.seconds_since_start {
+                        let minutes = seconds / 60;
+                        let secs = seconds % 60;
+                        error!("⚠️   Time in game: {}m {}s", minutes, secs);
+                    }
+                    
+                    error!("⚠️   Crash folder: {:?}", crash_folder);
+                    error!("⚠️   Mods enabled: {} mod(s)", info.enabled_mods.len());
+                    
+                    if !info.enabled_mods.is_empty() {
+                        error!("⚠️   Active mods:");
+                        for mod_name in &info.enabled_mods {
+                            error!("⚠️     - {}", mod_name);
+                        }
+                    }
+                    
+                    // Show full error message at the end for reference
+                    error!("⚠️");
+                    error!("⚠️   Full Error Message:");
+                    error!("⚠️   {}", error_msg);
+                    error!("⚠️ ═══════════════════════════════════════════════════════════════");
+                    
+                    // Update last checked time to avoid re-reporting this crash
+                    *last_checked = Some(info.timestamp);
+                }
+                
+                return Ok(crash_info);
+            }
+        } else {
+            info!("✓ ═══════════════════════════════════════════════════════════════");
+            info!("✓ Game closed normally - no crashes detected this session");
+            info!("✓ ═══════════════════════════════════════════════════════════════");
+        }
+    }
+    
+    Ok(None)
+}
+
+#[tauri::command]
+async fn get_crash_history() -> Result<Vec<PathBuf>, String> {
+    let crash_dir = crash_monitor::get_crash_log_path();
+    
+    if !crash_dir.exists() {
+        return Ok(Vec::new());
+    }
+    
+    let mut crashes = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&crash_dir) {
+        for entry in entries.filter_map(Result::ok) {
+            let path = entry.path();
+            if path.is_dir() {
+                crashes.push(path);
+            }
+        }
+    }
+    
+    // Sort by creation time (newest first)
+    crashes.sort_by(|a, b| {
+        let a_time = std::fs::metadata(a).and_then(|m| m.created()).ok();
+        let b_time = std::fs::metadata(b).and_then(|m| m.created()).ok();
+        b_time.cmp(&a_time)
+    });
+    
+    Ok(crashes)
+}
+
+#[tauri::command]
+async fn get_total_crashes() -> Result<usize, String> {
+    Ok(crash_monitor::count_total_crashes())
+}
+
+#[tauri::command]
+async fn clear_crash_logs() -> Result<usize, String> {
+    crash_monitor::clear_all_crashes()
+}
+
+#[tauri::command]
+async fn dismiss_crash_dialog() -> Result<(), String> {
+    // This is a no-op in Tauri version - frontend handles dialog state
+    Ok(())
+}
+
+#[tauri::command]
+async fn get_crash_log_path() -> Result<String, String> {
+    Ok(crash_monitor::get_crash_log_path().to_string_lossy().to_string())
+}
+
+// ============================================================================
 // CHARACTER DATA COMMANDS
 // ============================================================================
 
@@ -2468,6 +2658,10 @@ fn main() {
         watcher: Mutex::new(None),
         last_event_time: Mutex::new(std::time::Instant::now()),
     };
+    let crash_state = CrashMonitorState {
+        game_start_time: Mutex::new(None),
+        last_checked_crash: Mutex::new(None),
+    };
     let p2p_manager = tokio::runtime::Runtime::new()
         .expect("Failed to create tokio runtime")
         .block_on(p2p_manager::UnifiedP2PManager::new())
@@ -2477,6 +2671,7 @@ fn main() {
     tauri::Builder::default()
         .manage(state)
         .manage(watcher_state)
+        .manage(crash_state)
         .manage(p2p_state)
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -2511,6 +2706,12 @@ fn main() {
             check_game_running,
             get_app_version,
             check_for_updates,
+            monitor_game_for_crashes,
+            get_crash_history,
+            get_total_crashes,
+            clear_crash_logs,
+            dismiss_crash_dialog,
+            get_crash_log_path,
             get_mod_details,
             set_mod_priority,
             check_mod_clashes,

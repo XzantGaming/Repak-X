@@ -5,6 +5,7 @@ mod install_mod;
 mod uasset_detection;
 mod uasset_api_integration;
 mod utils;
+mod crash_monitor;
 
 pub mod ios_widget;
 mod utoc_utils;
