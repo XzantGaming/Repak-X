@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { Tooltip } from '@mui/material'
+import { FaTag } from "react-icons/fa6"
 import characterData from '../data/character_data.json'
 import FileTree from './FileTree'
 import './ModDetailsPanel.css'
@@ -180,7 +181,10 @@ export default function ModDetailsPanel({ mod, initialDetails, onClose }) {
                 <h3>Tags</h3>
                 <div className="tags-list">
                   {mod.custom_tags.map((tag, idx) => (
-                    <span key={idx} className="tag">{tag}</span>
+                    <span key={idx} className="tag">
+                      <FaTag />
+                      {tag}
+                    </span>
                   ))}
                 </div>
               </div>

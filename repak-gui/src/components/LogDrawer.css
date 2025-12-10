@@ -3,11 +3,11 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(12, 14, 16, 0.95);
+  background: var(--panel-bg);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.5);
+  border-top: 1px solid var(--panel-border);
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.3);
   overflow: hidden;
   z-index: 120;
   display: flex;
@@ -23,8 +23,8 @@
   justify-content: space-between;
   padding: 0 0.75rem 0 1rem;
   font-size: 0.85rem;
-  background: rgba(255, 255, 255, 0.03);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: var(--field-bg);
+  border-bottom: 1px solid var(--border-light);
   cursor: pointer;
   user-select: none;
 }
@@ -33,23 +33,23 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: var(--text-primary, #e0e0e0);
+  color: var(--text-primary);
 }
 
 .log-drawer-icon {
-  color: var(--accent-primary, #4a9eff);
+  color: var(--accent-primary);
   font-size: 0.9rem;
   flex-shrink: 0;
 }
 
 .log-drawer-status-text {
-  color: var(--text-primary, #e0e0e0);
+  color: var(--text-primary);
 }
 
 .log-drawer-count {
   font-size: 0.75rem;
-  color: var(--text-secondary, #888);
-  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+  background: var(--field-bg);
   padding: 2px 6px;
   border-radius: 10px;
   margin-left: 0.5rem;
@@ -62,8 +62,8 @@
 
 .log-drawer-btn {
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: var(--text-secondary, #aaa);
+  border: 1px solid var(--border-light);
+  color: var(--text-secondary);
   padding: 4px 10px;
   border-radius: 4px;
   font-size: 0.75rem;
@@ -73,20 +73,20 @@
 }
 
 .log-drawer-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text-primary, #fff);
-  border-color: rgba(255, 255, 255, 0.25);
+  background: var(--field-bg);
+  color: var(--text-primary);
+  border-color: var(--panel-border);
 }
 
 .log-drawer-resize-handle {
   height: 6px;
   cursor: ns-resize;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--field-bg);
   transition: background 0.15s;
 }
 
 .log-drawer-resize-handle:hover {
-  background: var(--accent-primary, #4a9eff);
+  background: var(--accent-primary);
   opacity: 0.5;
 }
 
@@ -96,7 +96,7 @@
   display: flex;
   flex-direction: column;
   padding: 0.75rem;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-darkest);
   position: relative;
 }
 
@@ -104,7 +104,7 @@
   position: absolute;
   top: 0.5rem;
   right: 0.5rem;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--bg-light);
   border: none;
   color: #b33a3a;
   padding: 6px;
@@ -114,15 +114,15 @@
   align-items: center;
   justify-content: center;
   font-size: 1.1rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   transition: all 0.15s ease;
   z-index: 10;
 }
 
 .log-drawer-clear-btn:hover {
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--bg-lighter);
   color: #ff4444;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   transform: scale(1.05);
 }
 
@@ -130,7 +130,7 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: var(--text-secondary, #888);
+  color: var(--text-secondary);
   font-style: italic;
   padding: 0.5rem;
 }
@@ -143,15 +143,22 @@
   display: inline-block;
   width: 8px;
   height: 16px;
-  background: var(--accent-primary, #4a9eff);
+  background: var(--accent-primary);
   animation: log-cursor-blink 1s step-end infinite;
   vertical-align: middle;
   margin-left: 2px;
 }
 
 @keyframes log-cursor-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0;
+  }
 }
 
 .log-drawer-scroll {
@@ -169,17 +176,17 @@
 }
 
 .log-drawer-scroll::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-dark);
   border-radius: 4px;
 }
 
 .log-drawer-scroll::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--bg-lighter);
   border-radius: 4px;
 }
 
 .log-drawer-scroll::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: var(--text-secondary);
 }
 
 .log-drawer-line {
@@ -194,11 +201,12 @@
 }
 
 .log-drawer-line:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--field-bg);
 }
 
 .log-drawer-line-number {
-  color: rgba(255, 255, 255, 0.25);
+  color: var(--text-secondary);
+  opacity: 0.5;
   font-size: 0.75rem;
   min-width: 28px;
   text-align: right;
@@ -207,19 +215,19 @@
 }
 
 .log-drawer-line-content {
-  color: var(--text-primary, #e0e0e0);
+  color: var(--text-primary);
   white-space: pre-wrap;
   word-break: break-word;
   flex: 1;
 }
 
-/* Log line type colors */
+/* Log line type colors - these remain semantic colors */
 .log-drawer-line.success .log-drawer-line-content {
   color: #4caf50;
 }
 
 .log-drawer-line.success .log-drawer-line-number {
-  color: rgba(76, 175, 80, 0.4);
+  color: rgba(76, 175, 80, 0.6);
 }
 
 .log-drawer-line.warning .log-drawer-line-content {
@@ -227,7 +235,7 @@
 }
 
 .log-drawer-line.warning .log-drawer-line-number {
-  color: rgba(255, 152, 0, 0.4);
+  color: rgba(255, 152, 0, 0.6);
 }
 
 .log-drawer-line.error .log-drawer-line-content {
@@ -235,7 +243,7 @@
 }
 
 .log-drawer-line.error .log-drawer-line-number {
-  color: rgba(244, 67, 54, 0.4);
+  color: rgba(244, 67, 54, 0.6);
 }
 
 .log-drawer-line.info .log-drawer-line-content {
@@ -243,5 +251,5 @@
 }
 
 .log-drawer-line.info .log-drawer-line-number {
-  color: rgba(33, 150, 243, 0.4);
+  color: rgba(33, 150, 243, 0.6);
 }

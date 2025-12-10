@@ -22,7 +22,10 @@ import {
   Check as CheckIcon
 } from '@mui/icons-material'
 import { RiDeleteBin2Fill } from 'react-icons/ri'
+import { FaTag } from "react-icons/fa6"
+import Checkbox from './components/ui/Checkbox'
 import ModDetailsPanel from './components/ModDetailsPanel'
+import ModsList from './components/ModsList'
 import InstallModPanel from './components/InstallModPanel'
 import SettingsPanel from './components/SettingsPanel'
 import SharingPanel from './components/SharingPanel'
@@ -89,137 +92,7 @@ function getAdditionalCategories(details) {
   return []
 }
 
-// Mod Item Component
-function ModItem({ mod, selectedMod, selectedMods, setSelectedMod, handleToggleModSelection, handleToggleMod, handleDeleteMod, handleRemoveTag, formatFileSize, hideSuffix, onContextMenu, handleSetPriority }) {
-  const [isDeleteHolding, setIsDeleteHolding] = useState(false)
-  const holdTimeoutRef = useRef(null)
-  const rawName = mod.custom_name || mod.path.split('\\').pop()
-  const nameWithoutExt = rawName.replace(/\.[^/.]+$/, '')
-  const suffixMatch = nameWithoutExt.match(/(_\d+_P)$/i)
-  const cleanName = suffixMatch ? nameWithoutExt.slice(0, -suffixMatch[0].length) : nameWithoutExt
-  const suffix = suffixMatch ? suffixMatch[0] : ''
-  const shouldShowSuffix = !hideSuffix && suffix
-  const tags = toTagArray(mod.custom_tags)
-
-  useEffect(() => () => clearTimeout(holdTimeoutRef.current), [])
-
-  const startDeleteHold = (event) => {
-    event.stopPropagation()
-    clearTimeout(holdTimeoutRef.current)
-    setIsDeleteHolding(true)
-    holdTimeoutRef.current = setTimeout(() => {
-      setIsDeleteHolding(false)
-      handleDeleteMod(mod.path)
-    }, 2000)
-  }
-
-  const cancelDeleteHold = (event) => {
-    event.stopPropagation()
-    clearTimeout(holdTimeoutRef.current)
-    if (isDeleteHolding) setIsDeleteHolding(false)
-  }
-
-  return (
-    <motion.div
-      className={`mod-card mod-item ${selectedMod === mod ? 'selected' : ''} ${!mod.enabled ? 'disabled' : ''} ${selectedMods.has(mod.path) ? 'bulk-selected' : ''}`}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: mod.enabled ? 1 : 0.5 }}
-      whileHover={{ scale: 1.01 }}
-      transition={{ duration: 0.2 }}
-      onContextMenu={(e) => onContextMenu(e, mod)}
-    >
-      <div className="mod-card-row">
-        <div className="mod-card-main">
-          <Tooltip title="Select mod">
-            <input
-              type="checkbox"
-              checked={selectedMods.has(mod.path)}
-              onChange={() => handleToggleModSelection(mod)}
-              onClick={(e) => e.stopPropagation()}
-              className="modern-checkbox"
-            />
-          </Tooltip>
-          <motion.button
-            type="button"
-            className="mod-name-button"
-            onClick={(e) => {
-              if (e.ctrlKey || e.metaKey) {
-                handleToggleModSelection(mod)
-              } else {
-                setSelectedMod(mod)
-              }
-            }}
-            whileHover={{ color: 'var(--accent-primary)' }}
-            title={rawName}
-          >
-            <span className="mod-name-text">
-              {cleanName}
-              {shouldShowSuffix && <span className="mod-name-suffix">{suffix}</span>}
-            </span>
-          </motion.button>
-        </div>
-      </div>
-
-      {tags.length > 0 && (
-        <div className="tag-container">
-          {tags.map(tag => (
-            <span key={tag} className="tag">
-              {tag}
-              <button
-                type="button"
-                className="tag-remove"
-                aria-label={`Remove ${tag}`}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleRemoveTag(mod.path, tag)
-                }}
-              >
-                ×
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-
-      <div className="mod-card-row mod-card-actions">
-        <span className="mod-size" style={{ marginRight: '12px', fontSize: '0.85rem', opacity: 0.7 }}>{formatFileSize(mod.file_size)}</span>
-        <NumberInput
-          value={mod.priority || 0}
-          min={0}
-          max={7}
-          onChange={(newPriority) => handleSetPriority(mod.path, newPriority)}
-        />
-        <Tooltip title={mod.enabled ? 'Disable mod' : 'Enable mod'}>
-          <div className="mod-switch-wrapper" onClick={(e) => e.stopPropagation()}>
-            <Switch
-              size="sm"
-              color="primary"
-              checked={mod.enabled}
-              onChange={(_, event) => {
-                event?.stopPropagation()
-                handleToggleMod(mod.path)
-              }}
-              className="mod-switch"
-            />
-          </div>
-        </Tooltip>
-        <Tooltip title="Hold 2s to delete">
-          <button
-            className={`hold-delete ${isDeleteHolding ? 'holding' : ''}`}
-            onMouseDown={startDeleteHold}
-            onMouseUp={cancelDeleteHold}
-            onMouseLeave={cancelDeleteHold}
-            onTouchStart={startDeleteHold}
-            onTouchEnd={cancelDeleteHold}
-            aria-label="Hold to delete mod"
-          >
-            <RiDeleteBin2Fill size={18} />
-          </button>
-        </Tooltip>
-      </div>
-    </motion.div>
-  )
-}
+// ModItem has been moved to src/components/ModsList.jsx
 
 function ClashPanel({ clashes, onClose }) {
   return (
@@ -255,6 +128,7 @@ function ClashPanel({ clashes, onClose }) {
 function App() {
   const [globalUsmap, setGlobalUsmap] = useState('');
   const [hideSuffix, setHideSuffix] = useState(false);
+  const [autoOpenDetails, setAutoOpenDetails] = useState(false);
 
   const [theme, setTheme] = useState('dark');
   const [accentColor, setAccentColor] = useState('#4a9eff');
@@ -330,6 +204,14 @@ function App() {
       await loadMods()
     } catch (error) {
       setStatus('Error setting priority: ' + error)
+    }
+  }
+
+  const handleModSelect = (mod) => {
+    setSelectedMod(mod)
+    if (autoOpenDetails && !isRightPanelOpen) {
+      setLeftPanelWidth(lastPanelWidth > 60 ? lastPanelWidth : 70) // Ensure reasonable width
+      setIsRightPanelOpen(true)
     }
   }
 
@@ -1095,6 +977,7 @@ function App() {
   const handleSaveSettings = (settings) => {
     setGlobalUsmap(settings.globalUsmap || '')
     setHideSuffix(settings.hideSuffix || false)
+    setAutoOpenDetails(settings.autoOpenDetails || false)
     // TODO: Save to backend state
     setStatus('Settings saved')
   }
@@ -1143,7 +1026,7 @@ function App() {
 
       {showSettings && (
         <SettingsPanel
-          settings={{ globalUsmap, hideSuffix }}
+          settings={{ globalUsmap, hideSuffix, autoOpenDetails }}
           onSave={handleSaveSettings}
           onClose={() => setShowSettings(false)}
           theme={theme}
@@ -1318,7 +1201,12 @@ function App() {
         {/* Main 3-Panel Layout */}
         <div className="main-panels" onMouseMove={handleResizeMove}>
           {/* Wrapper for Left Sidebar and Center Panel */}
-          <div className="content-wrapper" style={{ width: `${leftPanelWidth}%`, display: 'flex', height: '100%' }}>
+          <motion.div
+            className="content-wrapper"
+            animate={{ width: `${leftPanelWidth}%` }}
+            transition={isResizing ? { duration: 0 } : { type: "tween", ease: "circOut", duration: 0.35 }}
+            style={{ display: 'flex', height: '100%' }}
+          >
             {/* Left Sidebar - Folders */}
             <div className="left-sidebar">
               {/* Filters Section */}
@@ -1514,45 +1402,40 @@ function App() {
                 </div>
               </div>
 
-              <div className={`mod-list-grid view-${viewMode}`} style={{ flex: 1, overflowY: 'auto', padding: '1rem' }}>
-                {filteredMods.length === 0 ? (
-                  <div className="empty-state">
-                    <p>No mods found in this folder.</p>
-                  </div>
-                ) : (
-                  filteredMods.map(mod => (
-                    <ModItem
-                      key={mod.path}
-                      mod={mod}
-                      selectedMod={selectedMod}
-                      selectedMods={selectedMods}
-                      setSelectedMod={setSelectedMod}
-                      handleToggleModSelection={handleToggleModSelection}
-                      handleToggleMod={handleToggleMod}
-                      handleDeleteMod={handleDeleteMod}
-                      handleRemoveTag={handleRemoveTag}
-                      formatFileSize={formatFileSize}
-                      hideSuffix={hideSuffix}
-                      onContextMenu={handleContextMenu}
-                      handleSetPriority={handleSetPriority}
-                    />
-                  ))
-                )}
-              </div>
+              <ModsList
+                mods={filteredMods}
+                viewMode={viewMode}
+                selectedMod={selectedMod}
+                selectedMods={selectedMods}
+                onSelect={handleModSelect}
+                onToggleSelection={handleToggleModSelection}
+                onToggleMod={handleToggleMod}
+                onDeleteMod={handleDeleteMod}
+                onRemoveTag={handleRemoveTag}
+                onSetPriority={handleSetPriority}
+                onContextMenu={handleContextMenu}
+                formatFileSize={formatFileSize}
+                hideSuffix={hideSuffix}
+              />
             </div>
-          </div>
+          </motion.div>
 
           {/* Resize Handle */}
-          {isRightPanelOpen && (
-            <div
-              className="resize-handle"
-              onMouseDown={handleResizeStart}
-              style={{ left: `${leftPanelWidth}%` }}
-            />
-          )}
+          {/* Resize Handle */}
+          <motion.div
+            className="resize-handle"
+            onMouseDown={handleResizeStart}
+            animate={{ left: `${leftPanelWidth}%` }}
+            transition={isResizing ? { duration: 0 } : { type: "tween", ease: "circOut", duration: 0.35 }}
+          />
 
           {/* Right Panel - Mod Details (Always Visible) */}
-          <div className="right-panel" style={{ width: `${100 - leftPanelWidth}%`, display: isRightPanelOpen ? 'flex' : 'none' }}>
+          <motion.div
+            className="right-panel"
+            animate={{ width: `${100 - leftPanelWidth}%` }}
+            transition={isResizing ? { duration: 0 } : { type: "tween", ease: "circOut", duration: 0.35 }}
+            style={{ display: 'flex' }}
+          >
             {selectedMod ? (
               <div className="mod-details-and-contents" style={{ display: 'flex', gap: '1rem', height: '100%', overflow: 'hidden' }}>
                 <div style={{ flex: 1, minWidth: '200px', height: '100%' }}>
@@ -1573,9 +1456,9 @@ function App() {
                 <p>Select a mod to view details</p>
               </div>
             )}
-          </div>
+          </motion.div>
         </div>
-      </div>
+      </div >
 
       <LogDrawer
         status={status}
@@ -1583,29 +1466,31 @@ function App() {
         onClear={() => setInstallLogs([])}
       />
 
-      {contextMenu && (
-        <ContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
-          mod={contextMenu.mod}
-          folder={contextMenu.folder}
-          onClose={closeContextMenu}
-          onAssignTag={(tag) => contextMenu.mod && handleAddTagToSingleMod(contextMenu.mod.path, tag)}
-          onMoveTo={(folderId) => contextMenu.mod && handleMoveSingleMod(contextMenu.mod.path, folderId)}
-          onCreateFolder={handleCreateFolder}
-          folders={folders}
-          onDelete={() => {
-            if (contextMenu.folder) {
-              handleDeleteFolder(contextMenu.folder.id)
-            } else if (contextMenu.mod) {
-              handleDeleteMod(contextMenu.mod.path)
-            }
-          }}
-          onToggle={() => contextMenu.mod && handleToggleMod(contextMenu.mod.path)}
-          allTags={allTags}
-        />
-      )}
-    </div>
+      {
+        contextMenu && (
+          <ContextMenu
+            x={contextMenu.x}
+            y={contextMenu.y}
+            mod={contextMenu.mod}
+            folder={contextMenu.folder}
+            onClose={closeContextMenu}
+            onAssignTag={(tag) => contextMenu.mod && handleAddTagToSingleMod(contextMenu.mod.path, tag)}
+            onMoveTo={(folderId) => contextMenu.mod && handleMoveSingleMod(contextMenu.mod.path, folderId)}
+            onCreateFolder={handleCreateFolder}
+            folders={folders}
+            onDelete={() => {
+              if (contextMenu.folder) {
+                handleDeleteFolder(contextMenu.folder.id)
+              } else if (contextMenu.mod) {
+                handleDeleteMod(contextMenu.mod.path)
+              }
+            }}
+            onToggle={() => contextMenu.mod && handleToggleMod(contextMenu.mod.path)}
+            allTags={allTags}
+          />
+        )
+      }
+    </div >
   )
 }
 

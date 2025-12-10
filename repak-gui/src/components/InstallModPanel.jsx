@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import Switch from './ui/Switch'
+import { FaTag } from "react-icons/fa6"
 import './InstallModPanel.css'
 import characterData from '../data/character_data.json'
 
@@ -202,6 +203,7 @@ export default function InstallModPanel({ mods, allTags, onCreateTag, onInstall,
                           <div className="tags-list">
                             {(modSettings[idx]?.selectedTags || []).map(tag => (
                               <span key={tag} className="tag">
+                                <FaTag />
                                 {tag}
                                 <button
                                   type="button"

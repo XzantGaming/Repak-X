@@ -82,7 +82,7 @@
 .hero-tag {
   background: rgba(74, 158, 255, 0.15);
   border: 1px solid rgba(74, 158, 255, 0.3);
-  color: white !important;
+  color: var(--text-primary) !important;
   font-size: 0.85em;
   padding: 4px 8px 4px 6px;
   border-radius: 4px;
@@ -131,4 +131,26 @@
 
 .multi-hero-arrow {
   color: var(--panel-bg) !important;
+}
+
+/* Tag tooltip styles (matches multi-hero-tooltip) */
+.tags-tooltip {
+  background-color: var(--panel-bg) !important;
+  border: 1px solid var(--panel-border) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+  max-width: 300px !important;
+  padding: 0 !important;
+}
+
+.tags-tooltip-arrow {
+  color: var(--panel-bg) !important;
+}
+
+.tags-tooltip-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  color: var(--text-primary);
+  font-size: 0.85rem;
 }

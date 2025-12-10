@@ -5,20 +5,20 @@
   --bg-dark: #202020;
   --bg-light: #2a2a2a;
   --bg-lighter: #323232;
-  
+
   --panel-bg: var(--bg-darker);
   --panel-border: #2a2a2a;
-  
+
   --text-primary: #e6e6e6;
   --text-secondary: #a7a7a7;
-  
+
   --accent-primary: #4a9eff;
   --accent-secondary: #3a8eef;
   --danger: #f44336;
   --success: #4CAF50;
-  
+
   --btn-text: #ffffff;
-  --overlay: rgba(0,0,0,0.6);
+  --overlay: rgba(0, 0, 0, 0.6);
 
   /* Added for consistency */
   --card-surface: rgba(12, 14, 20, 0.9);
@@ -37,6 +37,13 @@
   --mod-switch-track: rgba(255, 255, 255, 0.12);
   --mod-switch-knob: #fff;
   --field-bg: rgba(255, 255, 255, 0.04);
+
+  /* Mod Card Specifics */
+  --card-bg: #0f1012;
+  --border-light: rgba(255, 255, 255, 0.05);
+  --tag-bg: rgba(255, 255, 255, 0.06);
+  --tag-border: rgba(255, 255, 255, 0.08);
+  --tag-hover-bg: rgba(255, 255, 255, 0.12);
 }
 
 [data-theme="light"] {
@@ -45,20 +52,20 @@
   --bg-dark: #efefef;
   --bg-light: #e6e6e6;
   --bg-lighter: #dddddd;
-  
+
   --panel-bg: #ffffff;
   --panel-border: #e0e0e0;
-  
+
   --text-primary: #111214;
   --text-secondary: #5a5a5a;
-  
+
   --accent-primary: #4a9eff;
   --accent-secondary: #3a8eef;
   --danger: #d32f2f;
   --success: #2e7d32;
-  
+
   --btn-text: #111214;
-  --overlay: rgba(0,0,0,0.06);
+  --overlay: rgba(0, 0, 0, 0.06);
 
   /* Added for consistency */
   --card-surface: #ffffff;
@@ -77,17 +84,30 @@
   --mod-switch-track: rgba(0, 0, 0, 0.12);
   --mod-switch-knob: #fff;
   --field-bg: rgba(0, 0, 0, 0.05);
+
+  /* Mod Card Specifics for Light Mode */
+  --card-bg: #ffffff;
+  --border-light: rgba(0, 0, 0, 0.06);
+  --tag-bg: rgba(0, 0, 0, 0.05);
+  --tag-border: rgba(0, 0, 0, 0.08);
+  --tag-hover-bg: rgba(0, 0, 0, 0.08);
 }
 
 /* Generic helpers used across components */
-.panel, .modal-content, .install-panel, .details-panel {
+.panel,
+.modal-content,
+.install-panel,
+.details-panel {
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
   color: var(--text-primary);
   border-radius: 6px;
 }
 
-input[type="text"], .path-input, .search-input, select {
+input[type="text"],
+.path-input,
+.search-input,
+select {
   background: var(--bg-darkest);
   color: var(--text-primary);
   border: 1px solid var(--panel-border);
@@ -95,17 +115,18 @@ input[type="text"], .path-input, .search-input, select {
   padding: 8px 10px;
 }
 
-.btn, button {
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  gap:8px;
-  padding:8px 14px;
-  border-radius:4px;
-  border:1px solid transparent;
-  cursor:pointer;
-  color:var(--btn-text);
-  background:var(--bg-light);
+.btn,
+button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  color: var(--btn-text);
+  background: var(--bg-light);
 }
 
 .btn-primary {
@@ -117,10 +138,10 @@ input[type="text"], .path-input, .search-input, select {
 .tag {
   background: var(--bg-light);
   color: var(--accent-primary);
-  padding:4px 8px;
-  border-radius:4px;
-  border:1px solid var(--panel-border);
-  font-size:12px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--panel-border);
+  font-size: 12px;
 }
 
 .modal-overlay {

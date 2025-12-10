@@ -16,7 +16,7 @@
   border-radius: 4px;
   font-weight: 600;
   font-size: 0.85rem;
-  background: rgba(255,255,255,0.08);
+  background: rgba(255, 255, 255, 0.08);
   color: var(--text-primary);
   border: 1px solid var(--panel-border);
 }
@@ -30,7 +30,7 @@
 .category-badge {
   background: #4a9eff20;
   color: var(--accent-primary, #4a9eff);
-  border: 1px solid rgba(74,158,255,0.35);
+  border: 1px solid rgba(74, 158, 255, 0.35);
 }
 
 /* Specific Category Colors */
@@ -99,7 +99,7 @@
 .blueprint-badge {
   background: #9b59b620;
   color: #c084fc;
-  border: 1px solid rgba(192,132,252,0.35);
+  border: 1px solid rgba(192, 132, 252, 0.35);
 }
 
 .text-badge {

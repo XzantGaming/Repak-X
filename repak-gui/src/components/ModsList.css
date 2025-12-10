@@ -1,0 +1,296 @@
+/* Mods List Container */
+.mod-list-grid {
+    display: grid;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Grid View (Spacious) */
+.mod-list-grid.view-grid {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+    padding: 20px;
+}
+
+.mod-list-grid.view-grid .mod-card {
+    min-height: 160px;
+    padding: 16px;
+    gap: 12px;
+}
+
+/* Compact View (Dense) */
+.mod-list-grid.view-compact {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 8px;
+    padding: 12px;
+}
+
+.mod-list-grid.view-compact .mod-card {
+    padding: 8px 10px;
+    gap: 4px;
+    min-height: auto;
+}
+
+.mod-list-grid.view-compact .mod-name-button {
+    font-size: 0.85rem;
+}
+
+.mod-list-grid.view-compact .mod-tags-row {
+    gap: 4px;
+}
+
+.mod-list-grid.view-compact .tag {
+    height: 16px;
+    padding: 0 4px;
+    font-size: 0.65rem;
+}
+
+.mod-list-grid.view-compact .mod-actions-row {
+    padding-top: 4px;
+    margin-top: 4px;
+}
+
+.mod-list-grid.view-compact .mod-size {
+    font-size: 0.7rem;
+}
+
+/* List View (Legacy/Functional) */
+.mod-list-grid.view-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.mod-list-grid.view-list .mod-card {
+    flex-direction: row;
+    align-items: center;
+    padding: 8px 16px;
+    gap: 16px;
+    min-height: 48px;
+}
+
+.mod-list-grid.view-list .mod-main-row {
+    flex: 1;
+}
+
+.mod-list-grid.view-list .mod-tags-row {
+    flex: 0 1 auto;
+    margin-top: 0;
+}
+
+.mod-list-grid.view-list .mod-actions-row {
+    margin-top: 0;
+    border-top: none;
+    padding-top: 0;
+    flex: 0 0 auto;
+}
+
+/* --- Sleek Mod Card Design --- */
+.mod-card {
+    background: var(--card-bg, #0f1012);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: all 0.2s ease;
+    color: var(--text-primary);
+    min-height: 120px;
+    position: relative;
+}
+
+.mod-card:hover {
+    border-color: var(--accent-primary);
+    background: color-mix(in srgb, var(--accent-primary), var(--bg-darkest) 92%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    z-index: 1;
+}
+
+.mod-card.selected {
+    border-color: var(--accent-primary);
+    background: color-mix(in srgb, var(--accent-primary), var(--bg-darkest) 88%);
+}
+
+/* Row 1: Checkbox + Name */
+.mod-main-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.mod-checkbox-wrapper {
+    display: flex;
+    align-items: center;
+}
+
+.mod-name-button {
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    padding: 0;
+    min-width: 0;
+    flex: 1;
+    text-align: left;
+}
+
+.mod-name-text {
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+}
+
+.mod-name-suffix {
+    color: var(--text-secondary);
+    font-weight: 400;
+    font-size: 0.85em;
+    margin-left: 4px;
+}
+
+/* Row 2: Tags */
+.mod-tags-row {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 0;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    mask-image: linear-gradient(to right, black 95%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, black 95%, transparent 100%);
+    flex-shrink: 0;
+    /* Prevent squashing */
+    min-height: 26px;
+    /* Ensure visibility */
+    align-items: center;
+}
+
+.mod-tags-row::-webkit-scrollbar {
+    display: none;
+}
+
+.mod-card .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 4px;
+    background: var(--tag-bg, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--tag-border, rgba(255, 255, 255, 0.08));
+    font-size: 0.7rem;
+    color: var(--text-primary);
+    font-weight: 500;
+    line-height: 1;
+    transition: all 0.2s ease;
+}
+
+.mod-card .tag:hover {
+    background: var(--tag-hover-bg, rgba(255, 255, 255, 0.12));
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+.mod-card .tag svg {
+    font-size: 9px;
+    color: var(--accent-primary, #4a9eff);
+}
+
+/* Row 3: Actions */
+.mod-actions-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: auto;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-light);
+    gap: 8px;
+}
+
+.actions-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.mod-size {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+/* Status Icons */
+.mod-status-icon {
+    font-size: 0.9rem;
+    opacity: 0.8;
+}
+
+/* Empty State */
+.empty-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-secondary);
+    font-size: 1rem;
+    padding: 2rem;
+    text-align: center;
+}
+
+/* Switch & Delete Controls */
+.mod-switch-wrapper {
+    display: inline-flex;
+    align-items: center;
+}
+
+.hold-delete {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.2s;
+}
+
+.hold-delete:hover {
+    background: rgba(255, 68, 68, 0.1);
+    color: #ff4444;
+}
+
+.hold-delete.holding {
+    background: rgba(255, 68, 68, 0.2);
+    color: #ff4444;
+}
+
+.hold-delete::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 0%;
+    height: 2px;
+    background: #ff4444;
+    transition: width 0s;
+}
+
+.hold-delete.holding::after {
+    width: 100%;
+    transition: width 2s linear;
+}

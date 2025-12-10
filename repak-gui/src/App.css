@@ -102,7 +102,8 @@ body {
   align-items: stretch;
   height: 100%;
   overflow: hidden;
-  padding: 0; /* important */
+  padding: 0;
+  /* important */
   flex-shrink: 0;
 }
 
@@ -127,7 +128,8 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  margin: 0; /* kill external spacing */
+  margin: 0;
+  /* kill external spacing */
   box-sizing: border-box;
 }
 
@@ -384,109 +386,7 @@ button {
   gap: 0.75rem;
 }
 
-.mod-card {
-  background: color-mix(in srgb, var(--accent-primary), var(--bg-darkest) 93%);
-  border: 1px solid var(--border-color);
-  border-radius: 14px;
-  padding: 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  transition: border-color 0.2s ease, transform 0.2s ease, background-color 0.2s ease;
-  color: var(--text-primary);
-}
-
-.mod-card:hover {
-  border-color: var(--accent-primary);
-  background: color-mix(in srgb, var(--accent-primary), var(--bg-darkest) 85%);
-}
-
-.mod-card.selected {
-  border-color: var(--accent-primary);
-  background: color-mix(in srgb, var(--accent-primary), transparent 90%);
-}
-
-.mod-card-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
-.mod-card-main {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  min-width: 0;
-}
-
-.mod-name-button {
-  background: transparent;
-  border: none;
-  color: var(--text-primary);
-  font: inherit;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  cursor: pointer;
-  padding: 0;
-}
-
-.mod-name-text {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.35rem;
-  flex-wrap: wrap;
-  color: inherit;
-}
-
-.mod-name-suffix {
-  color: var(--mod-name-suffix);
-  font-size: 0.9em;
-}
-
-.mod-status-icon {
-  font-size: 0.9rem;
-  opacity: 0.8;
-}
-
-.mod-card .mod-size {
-  font-size: 0.85rem;
-  color: var(--mod-size-color);
-}
-
-.mod-card-actions {
-  justify-content: flex-end;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
-.mod-switch-wrapper {
-  display: inline-flex;
-  align-items: center;
-}
-
-.mod-switch.heroui-switch {
-  gap: 0;
-}
-
-.mod-switch.heroui-switch .heroui-switch-track {
-  width: 42px;
-  height: 24px;
-}
-
-.mod-switch.heroui-switch .heroui-switch-thumb {
-  width: 18px;
-  height: 18px;
-  top: 3px;
-  left: 3px;
-}
-
-.mod-switch.heroui-switch.checked .heroui-switch-thumb {
-  transform: translateX(18px);
-}
-
+/* CSS Moved to ModsList.css */
 .hold-delete {
   width: 42px;
   height: 42px;
@@ -529,10 +429,29 @@ button {
 .tag {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  padding: 0.15rem 0.55rem;
-  border-radius: 999px;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px 0 6px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 0.75rem;
+  color: #ffffff;
+  font-weight: 500;
+  line-height: 1;
+  transition: all 0.2s ease;
+}
+
+.tag svg {
+  font-size: 10px;
+  color: var(--accent-primary, #4a9eff);
+  opacity: 1;
+}
+
+.tag:hover {
   background: rgba(255, 255, 255, 0.08);
+  border-color: var(--accent-primary);
+  color: #ffffff;
 }
 
 .tag-remove {
@@ -540,13 +459,19 @@ button {
   background: transparent;
   color: inherit;
   cursor: pointer;
-  font-size: 0.75rem;
+  font-size: 12px;
   line-height: 1;
   padding: 0;
+  margin-left: 2px;
+  opacity: 0.6;
+  display: flex;
+  /* Fix alignment */
+  align-items: center;
 }
 
 .tag-remove:hover {
-  color: var(--accent-primary, #4a9eff);
+  opacity: 1;
+  color: var(--danger, #ff5252);
 }
 
 .mods-toolbar {
@@ -682,7 +607,7 @@ button {
   .folder-card {
     padding: 0.85rem;
   }
-  
+
   .mod-card-grid {
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   }
@@ -1057,7 +982,8 @@ input[type="text"]:focus {
 }
 
 /* Loading and Error States */
-.loading-state, .error-state {
+.loading-state,
+.error-state {
   padding: 2rem;
   text-align: center;
   color: #999;
@@ -1104,8 +1030,13 @@ input[type="text"]:focus {
 
 /* Animations */
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 .fade-in {
@@ -1186,7 +1117,8 @@ input[type="text"]:focus {
 .file-tree {
   max-height: 60vh;
   overflow-y: auto;
-  overflow-x: auto; /* allow horizontal scrollbar for long filenames */
+  overflow-x: auto;
+  /* allow horizontal scrollbar for long filenames */
   white-space: nowrap;
   padding: 0.5rem;
   background: var(--background-secondary);
@@ -1214,10 +1146,11 @@ input[type="text"]:focus {
 }
 
 .node-label:hover {
-  background: rgba(255,255,255,0.03);
+  background: rgba(255, 255, 255, 0.03);
 }
 
-.caret, .caret-placeholder {
+.caret,
+.caret-placeholder {
   width: 1em;
   display: inline-block;
   text-align: center;
@@ -1232,12 +1165,12 @@ input[type="text"]:focus {
 
 .children {
   margin-left: 12px;
-  border-left: 1px dashed rgba(255,255,255,0.03);
+  border-left: 1px dashed rgba(255, 255, 255, 0.03);
   padding-left: 8px;
 }
 
 .file-tree .empty {
-  color: rgba(255,255,255,0.5);
+  color: rgba(255, 255, 255, 0.5);
   padding: 6px;
 }
 
@@ -1292,13 +1225,14 @@ input[type="text"]:focus {
   background: rgba(18, 20, 22, 0.85);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border-top: 1px solid rgba(255,255,255,0.08);
-  box-shadow: 0 -8px 24px rgba(0,0,0,0.4);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4);
   overflow: hidden;
   z-index: 120;
   display: flex;
   flex-direction: column;
-  max-height: 85vh; /* safety cap */
+  max-height: 85vh;
+  /* safety cap */
 }
 
 .install-drawer.open {
@@ -1312,7 +1246,7 @@ input[type="text"]:focus {
   justify-content: space-between;
   padding: 0 0.75rem 0 1rem;
   font-size: 0.85rem;
-  background: rgba(255,255,255,0.04);
+  background: rgba(255, 255, 255, 0.04);
   cursor: pointer;
   user-select: none;
 }
@@ -1352,12 +1286,12 @@ input[type="text"]:focus {
 .drawer-resize-handle {
   height: 6px;
   cursor: ns-resize;
-  background: rgba(255,255,255,0.08);
+  background: rgba(255, 255, 255, 0.08);
   transition: background 0.15s;
 }
 
 .drawer-resize-handle:hover {
-  background: rgba(255,255,255,0.18);
+  background: rgba(255, 255, 255, 0.18);
 }
 
 /* New Layout Styles */
@@ -1474,7 +1408,10 @@ input[type="text"]:focus {
   display: block;
 }
 
-.folder-item:first-child .folder-count /* All Mods */ {
+.folder-item:first-child .folder-count
+
+/* All Mods */
+  {
   display: block;
 }
 
@@ -1604,80 +1541,25 @@ input[type="text"]:focus {
   align-items: center;
 }
 
-/* Grid View (Default) - slightly smaller than before */
-.mod-list-grid.view-grid {
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-}
+/* --- View Variables --- */
 
-/* Compact View */
-.mod-list-grid.view-compact {
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 0.5rem;
-}
-
-.mod-list-grid.view-compact .mod-card {
-  padding: 0.5rem;
-  gap: 0.25rem;
-}
-
-.mod-list-grid.view-compact .mod-card-row {
-  gap: 0.25rem;
-}
-
-.mod-list-grid.view-compact .mod-size,
-.mod-list-grid.view-compact .tag-container,
-.mod-list-grid.view-compact .mod-switch-text {
-  display: none;
-}
-
-.mod-list-grid.view-compact .mod-name-text {
-  font-size: 0.85rem;
-}
-
-/* List View */
-.mod-list-grid.view-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.mod-list-grid.view-list .mod-card {
-  flex-direction: row;
-  align-items: center;
-  padding: 0.5rem 1rem;
-  gap: 1rem;
-}
-
-.mod-list-grid.view-list .mod-card-row {
-  flex: 1;
-  margin: 0;
-}
-
-.mod-list-grid.view-list .mod-card-main {
-  flex: 1;
-}
-
-.mod-list-grid.view-list .tag-container {
-  margin: 0 1rem;
-}
-
-.mod-list-grid.view-list .mod-card-actions {
-  margin: 0;
-}
+/* CSS Moved to ModsList.css */
 
 
 /* Refined Mod Card Styles */
 
 /* Truncate Mod Names */
 .mod-card-main {
-  min-width: 0; /* Allow flex child to shrink below content size */
+  min-width: 0;
+  /* Allow flex child to shrink below content size */
   flex: 1;
 }
 
 .mod-name-button {
   min-width: 0;
   width: 100%;
-  justify-content: flex-start; /* Align text to left */
+  justify-content: flex-start;
+  /* Align text to left */
 }
 
 .mod-name-text {
@@ -1902,9 +1784,20 @@ input[type="text"]:focus {
 }
 
 @keyframes blink-alert {
-  0% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.3; transform: scale(0.85); }
-  100% { opacity: 1; transform: scale(1); }
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.3;
+    transform: scale(0.85);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 /* Chip Filters */

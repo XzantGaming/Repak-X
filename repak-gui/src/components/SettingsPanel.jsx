@@ -19,6 +19,7 @@ const ACCENT_COLORS = {
 export default function SettingsPanel({ settings, onSave, onClose, theme, setTheme, accentColor, setAccentColor, gamePath, onAutoDetectGamePath, onBrowseGamePath, isGamePathLoading }) {
   const [globalUsmap, setGlobalUsmap] = useState(settings.globalUsmap || '');
   const [hideSuffix, setHideSuffix] = useState(settings.hideSuffix || false);
+  const [autoOpenDetails, setAutoOpenDetails] = useState(settings.autoOpenDetails || false);
   const [usmapStatus, setUsmapStatus] = useState('');
   const [isUpdatingChars, setIsUpdatingChars] = useState(false);
   const [charUpdateStatus, setCharUpdateStatus] = useState('');
@@ -62,7 +63,8 @@ export default function SettingsPanel({ settings, onSave, onClose, theme, setThe
   const handleSave = () => {
     onSave({
       globalUsmap,
-      hideSuffix
+      hideSuffix,
+      autoOpenDetails
     });
     onClose();
   };
@@ -261,6 +263,14 @@ export default function SettingsPanel({ settings, onSave, onClose, theme, setThe
               >
                 <span style={{ paddingLeft: '4px', fontWeight: 'normal', opacity: 0.9 }}>Hide file suffix in mod names</span>
               </Checkbox>
+              <div style={{ marginTop: '0.5rem' }}>
+                <Checkbox
+                  checked={autoOpenDetails}
+                  onChange={(checked) => setAutoOpenDetails(checked)}
+                >
+                  <span style={{ paddingLeft: '4px', fontWeight: 'normal', opacity: 0.9 }}>Auto-open details panel on click</span>
+                </Checkbox>
+              </div>
             </div>
           </div>
 
