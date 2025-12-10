@@ -116,9 +116,9 @@ try {
         Write-Warning "UAssetBridge project not found at $bridgeProject"
     }
 
-    # Build StaticMeshSerializeSizeFixer
-    Write-Info "Building StaticMeshSerializeSizeFixer.exe..."
-    $fixerProject = Join-Path $workspaceRoot "UAssetAPI\StaticMeshSerializeSizeFixer\StaticMeshSerializeSizeFixer.csproj"
+    # Build UAssetMeshFixer
+    Write-Info "Building UAssetMeshFixer.exe..."
+    $fixerProject = Join-Path $workspaceRoot "UAssetAPI\StaticMeshSerializeSizeFixer\UAssetMeshFixer.csproj"
     if (Test-Path $fixerProject) {
         $fixerOutput = Join-Path $workspaceRoot "target\serialsizefixer"
         New-Item -ItemType Directory -Force -Path $fixerOutput | Out-Null
@@ -135,12 +135,12 @@ try {
             exit 1
         }
         
-        $fixerExe = Join-Path $fixerOutput "StaticMeshSerializeSizeFixer.exe"
+        $fixerExe = Join-Path $fixerOutput "UAssetMeshFixer.exe"
         if (Test-Path $fixerExe) {
-            Write-Success "StaticMeshSerializeSizeFixer.exe built successfully"
+            Write-Success "UAssetMeshFixer.exe built successfully"
             Write-Info "Location: $fixerExe"
         } else {
-            Write-Error-Custom "StaticMeshSerializeSizeFixer.exe not found after build!"
+            Write-Error-Custom "UAssetMeshFixer.exe not found after build!"
             exit 1
         }
     } else {
@@ -221,7 +221,7 @@ try {
     $profileDir = if ($Configuration -eq "release") { "release" } else { "debug" }
     $exePath = Join-Path $workspaceRoot "target\$profileDir\repak-gui.exe"
     $bridgePath = Join-Path $workspaceRoot "target\$profileDir\uassetbridge\UAssetBridge.exe"
-    $fixerPath = Join-Path $workspaceRoot "target\serialsizefixer\StaticMeshSerializeSizeFixer.exe"
+    $fixerPath = Join-Path $workspaceRoot "target\serialsizefixer\UAssetMeshFixer.exe"
     
     Write-Host ""
     Write-Host "Built Artifacts:" -ForegroundColor Cyan

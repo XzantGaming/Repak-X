@@ -125,18 +125,18 @@ try {
     }
     
     # ============================================
-    # Copy StaticMeshSerializeSizeFixer
+    # Copy UAssetMeshFixer
     # ============================================
-    Write-Info "Copying StaticMeshSerializeSizeFixer..."
+    Write-Info "Copying UAssetMeshFixer..."
     $fixerDir = Join-Path $workspaceRoot "target\serialsizefixer"
-    $fixerExe = Join-Path $fixerDir "StaticMeshSerializeSizeFixer.exe"
+    $fixerExe = Join-Path $fixerDir "UAssetMeshFixer.exe"
     if (Test-Path $fixerExe) {
         $destFixerDir = Join-Path $distDir "tools"
         New-Item -ItemType Directory -Force -Path $destFixerDir | Out-Null
-        Copy-Item -LiteralPath $fixerExe -Destination (Join-Path $destFixerDir "StaticMeshSerializeSizeFixer.exe") -Force
-        Write-Success "Copied StaticMeshSerializeSizeFixer.exe"
+        Copy-Item -LiteralPath $fixerExe -Destination (Join-Path $destFixerDir "UAssetMeshFixer.exe") -Force
+        Write-Success "Copied UAssetMeshFixer.exe"
     } else {
-        Write-Warning "StaticMeshSerializeSizeFixer.exe not found at $fixerExe"
+        Write-Warning "UAssetMeshFixer.exe not found at $fixerExe"
     }
     
     # ============================================
@@ -302,7 +302,7 @@ See LICENSE-MIT and LICENSE-APACHE for details.
     $components = @(
         @{Name="Main Application"; Path="repak-gui.exe"},
         @{Name="UAssetBridge"; Path="uassetbridge\UAssetBridge.exe"},
-        @{Name="SerializeSizeFixer"; Path="tools\StaticMeshSerializeSizeFixer.exe"},
+        @{Name="Mesh Fixer"; Path="tools\UAssetMeshFixer.exe"},
         @{Name="Oodle DLL"; Path="oo2core_9_win64.dll"},
         @{Name="Character Data"; Path="data\character_data.json"}
     )

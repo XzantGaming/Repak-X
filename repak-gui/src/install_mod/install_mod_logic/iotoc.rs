@@ -103,6 +103,29 @@ pub fn convert_to_iostore_directory(
         }
     }
 
+    // Filter out temporary/backup files that should NOT be included in the IoStore package
+    // This includes: .bak files (mesh patch backups), .temp files, patched_files cache
+    let original_count = paths.len();
+    paths.retain(|p| {
+        let file_name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("");
+        
+        // Exclude backup files, temp files, and the patched_files cache
+        let should_exclude = ext == "bak" 
+            || ext == "temp" 
+            || file_name == "patched_files";
+        
+        if should_exclude {
+            debug!("Excluding from IoStore: {}", p.display());
+        }
+        
+        !should_exclude
+    });
+    
+    if paths.len() != original_count {
+        info!("Filtered {} temporary/backup files from IoStore conversion", original_count - paths.len());
+    }
+
     let action = ActionToZen::new(
         to_pak_dir.clone(),
         mod_dir.join(utoc_name),
@@ -242,20 +265,20 @@ struct SerializeSizeFixResult {
     asset_type: Option<String>,
 }
 
-/// Find the StaticMeshSerializeSizeFixer tool - searches multiple locations
+/// Find the UAssetMeshFixer tool - searches multiple locations
 fn find_static_mesh_fixer_tool() -> Result<PathBuf, Box<dyn std::error::Error>> {
     // Try to find the tool relative to the executable first
     if let Ok(exe_path) = std::env::current_exe() {
         if let Some(exe_dir) = exe_path.parent() {
             // Check next to executable (for release builds)
-            let next_to_exe = exe_dir.join("StaticMeshSerializeSizeFixer.exe");
+            let next_to_exe = exe_dir.join("UAssetMeshFixer.exe");
             if next_to_exe.exists() {
                 info!("   🔧 Found tool next to exe: {}", next_to_exe.display());
                 return Ok(next_to_exe);
             }
             
             // Check in tools subdirectory
-            let in_tools = exe_dir.join("tools").join("StaticMeshSerializeSizeFixer.exe");
+            let in_tools = exe_dir.join("tools").join("UAssetMeshFixer.exe");
             if in_tools.exists() {
                 info!("   🔧 Found tool in tools dir: {}", in_tools.display());
                 return Ok(in_tools);
@@ -266,17 +289,17 @@ fn find_static_mesh_fixer_tool() -> Result<PathBuf, Box<dyn std::error::Error>> 
     // Relative paths for development (from workspace root during tauri dev)
     let relative_paths = [
         // From workspace root (tauri dev runs from here)
-        "Repak_Gui-Revamped-TauriUpdate/UAssetAPI/StaticMeshSerializeSizeFixer/bin/Release/net8.0/win-x64/publish/StaticMeshSerializeSizeFixer.exe",
-        "Repak_Gui-Revamped-TauriUpdate/UAssetAPI/StaticMeshSerializeSizeFixer/bin/Release/net8.0/win-x64/StaticMeshSerializeSizeFixer.exe",
+        "Repak_Gui-Revamped-TauriUpdate/UAssetAPI/StaticMeshSerializeSizeFixer/bin/Release/net8.0/win-x64/publish/UAssetMeshFixer.exe",
+        "Repak_Gui-Revamped-TauriUpdate/UAssetAPI/StaticMeshSerializeSizeFixer/bin/Release/net8.0/win-x64/UAssetMeshFixer.exe",
         // From repak-gui directory
-        "../UAssetAPI/StaticMeshSerializeSizeFixer/bin/Release/net8.0/win-x64/publish/StaticMeshSerializeSizeFixer.exe",
-        "../UAssetAPI/StaticMeshSerializeSizeFixer/bin/Release/net8.0/win-x64/StaticMeshSerializeSizeFixer.exe",
+        "../UAssetAPI/StaticMeshSerializeSizeFixer/bin/Release/net8.0/win-x64/publish/UAssetMeshFixer.exe",
+        "../UAssetAPI/StaticMeshSerializeSizeFixer/bin/Release/net8.0/win-x64/UAssetMeshFixer.exe",
         // Legacy paths
-        "../../UAssetAPI/StaticMeshSerializeSizeFixer/bin/Release/net8.0/win-x64/publish/StaticMeshSerializeSizeFixer.exe",
-        "../../UAssetAPI/StaticMeshSerializeSizeFixer/bin/Release/net8.0/win-x64/StaticMeshSerializeSizeFixer.exe",
+        "../../UAssetAPI/StaticMeshSerializeSizeFixer/bin/Release/net8.0/win-x64/publish/UAssetMeshFixer.exe",
+        "../../UAssetAPI/StaticMeshSerializeSizeFixer/bin/Release/net8.0/win-x64/UAssetMeshFixer.exe",
         // UAssetAPI in same directory structure
-        "UAssetAPI/StaticMeshSerializeSizeFixer/bin/Release/net8.0/win-x64/publish/StaticMeshSerializeSizeFixer.exe",
-        "UAssetAPI/StaticMeshSerializeSizeFixer/bin/Release/net8.0/win-x64/StaticMeshSerializeSizeFixer.exe",
+        "UAssetAPI/StaticMeshSerializeSizeFixer/bin/Release/net8.0/win-x64/publish/UAssetMeshFixer.exe",
+        "UAssetAPI/StaticMeshSerializeSizeFixer/bin/Release/net8.0/win-x64/UAssetMeshFixer.exe",
     ];
     
     for path in &relative_paths {
@@ -292,7 +315,7 @@ fn find_static_mesh_fixer_tool() -> Result<PathBuf, Box<dyn std::error::Error>> 
         warn!("   Current working directory: {}", cwd.display());
     }
     
-    Err("StaticMeshSerializeSizeFixer.exe not found in any search path. Make sure it's built with 'dotnet publish'.".into())
+    Err("UAssetMeshFixer.exe not found in any search path. Make sure it's built with 'dotnet publish'.".into())
 }
 
 /// Detect asset type using UAssetAPI (no heuristics!)

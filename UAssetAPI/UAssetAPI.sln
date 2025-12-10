@@ -5,7 +5,7 @@ VisualStudioVersion = 17.4.33103.184
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "UAssetAPI", "UAssetAPI\UAssetAPI.csproj", "{178417EC-1177-413E-BE85-C83AECD64279}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "StaticMeshSerializeSizeFixer", "StaticMeshSerializeSizeFixer\StaticMeshSerializeSizeFixer.csproj", "{D1E8F3A1-2B4C-4D9E-8F7A-1C3B5D6E7F8A}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "UAssetMeshFixer", "StaticMeshSerializeSizeFixer\UAssetMeshFixer.csproj", "{D1E8F3A1-2B4C-4D9E-8F7A-1C3B5D6E7F8A}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

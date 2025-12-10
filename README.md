@@ -22,7 +22,7 @@ At a high level it:
 
 - **C# helper tools**  
   - `UAssetBridge.exe` – optional texture processing and conversions (Very experimental at the moment and the patch doesnt properly apply ingame yet).  
-  - `StaticMeshSerializeSizeFixer.exe` – mesh fixups applied during repack.
+  - `UAssetMeshFixer.exe` – mesh fixups applied during repack.
 
 - **UAsset / IOStore logic**  
   Re-uses and extends existing crates to safely read, modify and rebuild UE assets for Marvel Rivals.
