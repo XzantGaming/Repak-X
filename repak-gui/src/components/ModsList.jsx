@@ -29,9 +29,21 @@ function ModItem({
     const holdTimeoutRef = useRef(null)
     const rawName = mod.custom_name || mod.path.split('\\').pop()
     const nameWithoutExt = rawName.replace(/\.[^/.]+$/, '')
-    const suffixMatch = nameWithoutExt.match(/(_\d+_P)$/i)
-    const suffix = suffixMatch ? suffixMatch[1] : ''
-    const cleanName = hideSuffix && suffix ? nameWithoutExt.replace(suffix, '') : nameWithoutExt
+
+    // Identify all trailing priority suffixes (e.g. _9999999_P_9999999_P)
+    const suffixGroupMatch = nameWithoutExt.match(/((?:_\d+_P)+)$/i)
+    const fullSuffixGroup = suffixGroupMatch ? suffixGroupMatch[1] : ''
+
+    // Extract the last single suffix for display
+    const lastSuffixMatch = fullSuffixGroup.match(/(_\d+_P)$/i)
+    const suffix = lastSuffixMatch ? lastSuffixMatch[1] : ''
+
+    // Clean name is the base name without ANY priority suffixes
+    const cleanBaseName = fullSuffixGroup
+        ? nameWithoutExt.substring(0, nameWithoutExt.length - fullSuffixGroup.length)
+        : nameWithoutExt
+
+    const cleanName = cleanBaseName
     const shouldShowSuffix = !hideSuffix && suffix
     const tags = toTagArray(mod.custom_tags)
     const MAX_VISIBLE_TAGS = 3
