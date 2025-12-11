@@ -1,7 +1,9 @@
 {
   "identifier": "default",
   "description": "Capability for the main application window",
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "core:default",
     "dialog:default",

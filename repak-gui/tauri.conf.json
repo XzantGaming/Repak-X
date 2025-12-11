@@ -11,7 +11,10 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["msi", "nsis"],
+    "targets": [
+      "msi",
+      "nsis"
+    ],
     "icon": [
       "icons/RepakIcon.ico"
     ],
@@ -28,7 +31,7 @@
   "app": {
     "windows": [
       {
-        "title": "Repak Gui Revamped",
+        "title": "Repak X",
         "width": 1400,
         "height": 900,
         "minWidth": 800,
@@ -42,7 +45,9 @@
     ],
     "security": {
       "csp": null,
-      "capabilities": ["default"]
+      "capabilities": [
+        "default"
+      ]
     },
     "withGlobalTauri": true
   }

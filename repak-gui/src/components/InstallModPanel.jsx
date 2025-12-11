@@ -128,7 +128,7 @@ export default function InstallModPanel({ mods, allTags, onCreateTag, onInstall,
                   {
                     key: 'fixMesh',
                     label: 'Patch Skeletal Meshes',
-                    hint: 'idk'
+                    hint: 'Applies fixes to skeletal meshes'
                   },
                   {
                     key: 'fixTexture',

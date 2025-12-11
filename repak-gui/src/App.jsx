@@ -43,6 +43,7 @@ import './styles/theme.css'
 import './styles/Badges.css'
 import './styles/Fonts.css'
 import logo from './assets/app-icons/RepakIcon-x256.png'
+import ClashPanel from './components/ClashPanel'
 
 const toTagArray = (tags) => Array.isArray(tags) ? tags : (tags ? [tags] : [])
 
@@ -95,36 +96,7 @@ function getAdditionalCategories(details) {
 
 // ModItem has been moved to src/components/ModsList.jsx
 
-function ClashPanel({ clashes, onClose }) {
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '800px', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
-        <h2>Mod Conflicts ({clashes.length})</h2>
-        <div className="clash-list" style={{ overflowY: 'auto', flex: 1, padding: '1rem', background: 'rgba(0,0,0,0.2)', borderRadius: '4px' }}>
-          {clashes.length === 0 ? (
-            <p>No conflicts found!</p>
-          ) : (
-            clashes.map((clash, i) => (
-              <div key={i} className="clash-item" style={{ marginBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.5rem' }}>
-                <div className="clash-file" style={{ color: '#aaa', fontSize: '0.9rem', marginBottom: '0.25rem' }}>{clash.file_path}</div>
-                <div className="clash-mods" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                  {clash.mod_paths.map(path => (
-                    <span key={path} className="tag" style={{ background: 'rgba(255, 100, 100, 0.2)', border: '1px solid rgba(255, 100, 100, 0.4)' }}>
-                      {path.split(/[/\\]/).pop()}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-        <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
-          <button className="btn-modern" onClick={onClose}>Close</button>
-        </div>
-      </div>
-    </div>
-  )
-}
+// ClashPanel has been moved to src/components/ClashPanel.jsx
 
 function App() {
   const [globalUsmap, setGlobalUsmap] = useState('');
@@ -206,6 +178,12 @@ function App() {
       }
 
       await loadMods()
+
+      // Refresh clash list if panel is open
+      if (showClashPanel) {
+        const result = await invoke('check_mod_clashes')
+        setClashes(result)
+      }
     } catch (error) {
       setStatus('Error setting priority: ' + error)
     }
@@ -1065,6 +1043,8 @@ function App() {
       {showClashPanel && (
         <ClashPanel
           clashes={clashes}
+          mods={mods}
+          onSetPriority={handleSetPriority}
           onClose={() => setShowClashPanel(false)}
         />
       )}
@@ -1113,7 +1093,7 @@ function App() {
       <header className="header" style={{ display: 'flex', alignItems: 'center' }}>
         <img src={logo} alt="Repak Icon" className="repak-icon" style={{ width: '50px', height: '50px', marginRight: '10px' }} />
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem' }}>
-          <h1 style={{ margin: 0 }}>Repak GUI <AuroraText>Revamped</AuroraText> [DEV]</h1>
+          <h1 style={{ margin: 0 }}>Repak <AuroraText className="font-bbh-bartle">X</AuroraText> [DEV]</h1>
           <span className="version" style={{ fontSize: '0.9rem', opacity: 0.7 }}>v{version}</span>
         </div>
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginLeft: 'auto' }}>
