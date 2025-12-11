@@ -94,10 +94,6 @@ function getAdditionalCategories(details) {
   return []
 }
 
-// ModItem has been moved to src/components/ModsList.jsx
-
-// ClashPanel has been moved to src/components/ClashPanel.jsx
-
 function App() {
   const [globalUsmap, setGlobalUsmap] = useState('');
   const [hideSuffix, setHideSuffix] = useState(false);
@@ -254,6 +250,29 @@ function App() {
       if (!paths || paths.length === 0) return
       console.log('Dropped items:', paths)
 
+      // Check if we should quick-organize to a folder (using ref for current value in closure)
+      const targetFolder = dropTargetFolderRef.current
+      if (targetFolder) {
+        // Quick organize: directly install to the folder without showing install panel
+        console.log('Quick organizing to folder:', targetFolder)
+        setStatus(`Quick installing ${paths.length} item(s) to ${targetFolder}...`)
+
+        try {
+          // Install directly using the new backend implementation
+          // Passes raw paths and target folder name
+          await invoke('quick_organize', { paths, targetFolder })
+          setStatus(`Installed ${paths.length} item(s) to ${targetFolder}!`)
+          await loadMods()
+          await loadFolders()
+        } catch (installError) {
+          console.error('Quick install error:', installError)
+          setStatus(`Error installing mods: ${installError}`)
+        }
+
+        setDropTargetFolder(null) // Reset for next drop
+        return
+      }
+
       try {
         setStatus('Processing dropped items...')
         const modsData = await invoke('parse_dropped_files', { paths })
@@ -263,36 +282,9 @@ function App() {
         }
         console.log('Parsed mods:', modsData)
 
-        // Check if we should quick-organize to a folder (using ref for current value in closure)
-        const targetFolder = dropTargetFolderRef.current
-        if (targetFolder) {
-          // Quick organize: directly install to the folder without showing install panel
-          console.log('Quick organizing to folder:', targetFolder)
-          setStatus(`Quick installing ${modsData.length} mod(s) to ${targetFolder}...`)
-
-          // Prepare mods with folder assignment for direct install
-          const modsWithFolder = modsData.map(mod => ({
-            ...mod,
-            targetFolder: targetFolder
-          }))
-
-          try {
-            // Install directly
-            await invoke('install_mods', { mods: modsWithFolder })
-            setStatus(`Installed ${modsData.length} mod(s) to ${targetFolder}!`)
-            await loadMods()
-            await loadFolders()
-          } catch (installError) {
-            console.error('Quick install error:', installError)
-            setStatus(`Error installing mods: ${installError}`)
-          }
-
-          setDropTargetFolder(null) // Reset for next drop
-        } else {
-          // Normal drop: show install panel
-          setModsToInstall(modsData)
-          setShowInstallPanel(true)
-        }
+        // Normal drop: show install panel
+        setModsToInstall(modsData)
+        setShowInstallPanel(true)
       } catch (error) {
         console.error('Parse error:', error)
         setStatus(`Error parsing dropped items: ${error}`)
@@ -1150,29 +1142,33 @@ function App() {
             </AnimatePresence>
           </button>
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', background: 'rgba(255,0,0,0.1)', padding: '4px 8px', borderRadius: '4px', border: '1px solid rgba(255,0,0,0.3)' }}>
-            <input
-              type="checkbox"
-              checked={gameRunning}
-              onChange={(e) => setGameRunning(e.target.checked)}
-            />
-            <span style={{ fontSize: '0.8rem', color: '#ff6b6b', fontWeight: 'bold' }}>DEV: Game Running</span>
-          </label>
-          <button
-            onClick={handleDevInstallPanel}
-            style={{
-              background: 'rgba(255, 165, 0, 0.1)',
-              color: 'orange',
-              border: '1px solid rgba(255, 165, 0, 0.3)',
-              padding: '4px 8px',
-              borderRadius: '4px',
-              fontSize: '0.8rem',
-              fontWeight: 'bold',
-              cursor: 'pointer'
-            }}
-          >
-            DEV: Install Panel
-          </button>
+          {false && (
+            <>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', background: 'rgba(255,0,0,0.1)', padding: '4px 8px', borderRadius: '4px', border: '1px solid rgba(255,0,0,0.3)' }}>
+                <input
+                  type="checkbox"
+                  checked={gameRunning}
+                  onChange={(e) => setGameRunning(e.target.checked)}
+                />
+                <span style={{ fontSize: '0.8rem', color: '#ff6b6b', fontWeight: 'bold' }}>DEV: Game Running</span>
+              </label>
+              <button
+                onClick={handleDevInstallPanel}
+                style={{
+                  background: 'rgba(255, 165, 0, 0.1)',
+                  color: 'orange',
+                  border: '1px solid rgba(255, 165, 0, 0.3)',
+                  padding: '4px 8px',
+                  borderRadius: '4px',
+                  fontSize: '0.8rem',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
+                }}
+              >
+                DEV: Install Panel
+              </button>
+            </>
+          )}
           {gameRunning && (
             <div className="game-running-indicator">
               <span className="blink-icon">⚠️</span>
@@ -1461,7 +1457,6 @@ function App() {
             </div>
           </motion.div>
 
-          {/* Resize Handle */}
           {/* Resize Handle */}
           <motion.div
             className="resize-handle"

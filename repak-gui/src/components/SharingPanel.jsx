@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Share as ShareIcon, 
-  Download as DownloadIcon, 
+import {
+  Share as ShareIcon,
+  Download as DownloadIcon,
   Close as CloseIcon,
   ContentCopy as CopyIcon,
   CheckCircle as CheckIcon,
@@ -17,13 +17,14 @@ import {
   Cancel as CancelIcon,
   Search as SearchIcon
 } from '@mui/icons-material';
+import Checkbox from './ui/Checkbox';
 import './SharingPanel.css';
 
 export default function SharingPanel({ onClose, gamePath, installedMods, selectedMods }) {
   const [activeTab, setActiveTab] = useState('share'); // 'share' or 'receive'
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
-  
+
   // Share State
   const [packName, setPackName] = useState('');
   const [packDesc, setPackDesc] = useState('');
@@ -100,7 +101,7 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
     try {
       const sharing = await invoke('p2p_is_sharing');
       setIsSharing(sharing);
-      
+
       if (sharing) {
         const session = await invoke('p2p_get_share_session');
         setShareSession(session);
@@ -113,8 +114,8 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
         const prog = await invoke('p2p_get_receive_progress');
         setProgress(prog);
         if (prog && prog.status && prog.status.hasOwnProperty('Completed')) {
-            setReceiveComplete(true);
-            setIsReceiving(false);
+          setReceiveComplete(true);
+          setIsReceiving(false);
         }
       }
     } catch (err) {
@@ -129,12 +130,12 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
     if (shareSession.connection_string) return shareSession.connection_string;
     // If it's ShareInfo (new libp2p), encode it
     if (shareSession.peer_id && shareSession.share_code) {
-        try {
-            return btoa(JSON.stringify(shareSession));
-        } catch (e) {
-            console.error("Failed to encode session", e);
-            return '';
-        }
+      try {
+        return btoa(JSON.stringify(shareSession));
+      } catch (e) {
+        console.error("Failed to encode session", e);
+        return '';
+      }
     }
     return '';
   };
@@ -143,18 +144,18 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
     if (selectedModPaths.size === 0) return;
     setCalculatingPreview(true);
     try {
-        const preview = await invoke('p2p_create_mod_pack_preview', {
-            name: packName || "Untitled",
-            description: packDesc || "",
-            modPaths: Array.from(selectedModPaths),
-            creator: creatorName
-        });
-        setPackPreview(preview);
+      const preview = await invoke('p2p_create_mod_pack_preview', {
+        name: packName || "Untitled",
+        description: packDesc || "",
+        modPaths: Array.from(selectedModPaths),
+        creator: creatorName
+      });
+      setPackPreview(preview);
     } catch (err) {
-        console.error("Preview failed", err);
-        setError("Failed to calculate preview: " + err);
+      console.error("Preview failed", err);
+      setError("Failed to calculate preview: " + err);
     } finally {
-        setCalculatingPreview(false);
+      setCalculatingPreview(false);
     }
   };
 
@@ -211,16 +212,16 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
     try {
       setError('');
       setStatus('Connecting...');
-      
+
       // Validate first
       await invoke('p2p_validate_connection_string', { connectionString });
-      
+
       // Start receiving
       await invoke('p2p_start_receiving', {
         connectionString,
         clientName: clientName
       });
-      
+
       setIsReceiving(true);
       setReceiveComplete(false);
       setStatus('Download started...');
@@ -259,7 +260,7 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
 
   return (
     <div className="p2p-overlay">
-      <motion.div 
+      <motion.div
         className="p2p-modal"
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -276,13 +277,13 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
         </div>
 
         <div className="p2p-tabs">
-          <button 
+          <button
             className={`p2p-tab ${activeTab === 'share' ? 'active' : ''}`}
             onClick={() => setActiveTab('share')}
           >
             <UploadIcon fontSize="small" /> Share Mods
           </button>
-          <button 
+          <button
             className={`p2p-tab ${activeTab === 'receive' ? 'active' : ''}`}
             onClick={() => setActiveTab('receive')}
           >
@@ -296,7 +297,7 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
               <ErrorIcon fontSize="small" /> {error}
             </div>
           )}
-          
+
           {status && !error && (
             <div className="p2p-status">
               <InfoIcon fontSize="small" /> {status}
@@ -311,18 +312,18 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
                     <div className="share-left-col">
                       <div className="form-group">
                         <label>Pack Name</label>
-                        <input 
-                          type="text" 
-                          value={packName} 
+                        <input
+                          type="text"
+                          value={packName}
                           onChange={(e) => setPackName(e.target.value)}
-                          placeholder="e.g. My Awesome Skin Pack"
+                          placeholder="e.g. My Repak modpack"
                           className="p2p-input"
                         />
                       </div>
                       <div className="form-group">
                         <label>Description (Optional)</label>
-                        <textarea 
-                          value={packDesc} 
+                        <textarea
+                          value={packDesc}
                           onChange={(e) => setPackDesc(e.target.value)}
                           placeholder="Describe what's in this pack..."
                           className="p2p-textarea"
@@ -330,9 +331,9 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
                       </div>
                       <div className="form-group">
                         <label>Creator Name (Optional)</label>
-                        <input 
-                          type="text" 
-                          value={creatorName} 
+                        <input
+                          type="text"
+                          value={creatorName}
                           onChange={(e) => setCreatorName(e.target.value)}
                           placeholder="Your Name"
                           className="p2p-input"
@@ -341,20 +342,20 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
 
                       {selectedModPaths.size > 0 && (
                         <div className="pack-preview-section">
-                            {!packPreview ? (
-                                <button 
-                                    onClick={handleCalculatePreview} 
-                                    className="btn-secondary btn-small"
-                                    disabled={calculatingPreview}
-                                >
-                                    {calculatingPreview ? "Calculating..." : "Calculate Pack Size"}
-                                </button>
-                            ) : (
-                                <div className="preview-info">
-                                    <span>Total Size: {(packPreview.total_size / 1024 / 1024).toFixed(2)} MB</span>
-                                    <span>Files: {packPreview.file_count}</span>
-                                </div>
-                            )}
+                          {!packPreview ? (
+                            <button
+                              onClick={handleCalculatePreview}
+                              className="btn-secondary btn-small"
+                              disabled={calculatingPreview}
+                            >
+                              {calculatingPreview ? "Calculating..." : "Calculate Pack Size"}
+                            </button>
+                          ) : (
+                            <div className="preview-info">
+                              <span>Total Size: {(packPreview.total_size / 1024 / 1024).toFixed(2)} MB</span>
+                              <span>Files: {packPreview.file_count}</span>
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -366,41 +367,41 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
                     <div className="share-right-col">
                       <div className="mod-selection-list">
                         <div className="mod-list-header">
-                            <label>Select Mods to Share ({selectedModPaths.size})</label>
-                            <div className="search-box">
-                                <SearchIcon fontSize="small" className="search-icon"/>
-                                <input 
-                                    type="text" 
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    placeholder="Search mods..."
-                                />
-                            </div>
+                          <label>Select Mods to Share ({selectedModPaths.size})</label>
+                          <div className="search-box">
+                            <SearchIcon fontSize="small" className="search-icon" />
+                            <input
+                              type="text"
+                              value={searchTerm}
+                              onChange={(e) => setSearchTerm(e.target.value)}
+                              placeholder="Search mods..."
+                            />
+                          </div>
                         </div>
                         <div className="mod-list-scroll">
                           {installedMods.filter(mod => {
-                              const filename = mod.path.split('\\').pop();
-                              const name = mod.custom_name || filename.replace(/_9999999_P/g, '').replace(/\.pak$/i, '');
-                              return name.toLowerCase().includes(searchTerm.toLowerCase());
+                            const filename = mod.path.split('\\').pop();
+                            const name = mod.custom_name || filename.replace(/_9999999_P/g, '').replace(/\.pak$/i, '');
+                            return name.toLowerCase().includes(searchTerm.toLowerCase());
                           }).map(mod => {
                             const filename = mod.path.split('\\').pop();
                             const displayName = mod.custom_name || filename.replace(/_9999999_P/g, '').replace(/\.pak$/i, '');
                             return (
-                            <div 
-                              key={mod.path} 
-                              className={`mod-select-item ${selectedModPaths.has(mod.path) ? 'selected' : ''}`}
-                              onClick={() => toggleModSelection(mod.path)}
-                            >
-                              <input 
-                                type="checkbox" 
-                                checked={selectedModPaths.has(mod.path)}
-                                readOnly
-                              />
-                              <span className="mod-name">
-                                {displayName}
-                              </span>
-                            </div>
-                          )})}
+                              <div
+                                key={mod.path}
+                                className={`mod-select-item ${selectedModPaths.has(mod.path) ? 'selected' : ''}`}
+                                onClick={() => toggleModSelection(mod.path)}
+                              >
+                                <Checkbox
+                                  checked={selectedModPaths.has(mod.path)}
+                                  size="sm"
+                                />
+                                <span className="mod-name">
+                                  {displayName}
+                                </span>
+                              </div>
+                            )
+                          })}
                         </div>
                       </div>
                     </div>
@@ -411,12 +412,12 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
                   <div className="success-banner">
                     <CheckIcon /> Sharing Active
                   </div>
-                  
+
                   <div className="share-code-display">
                     <label>SHARE CODE</label>
                     <div className="code-box">
                       {getConnectionString()}
-                      <button 
+                      <button
                         onClick={() => copyToClipboard(getConnectionString())}
                         className="btn-copy"
                         title="Copy to clipboard"
@@ -442,7 +443,7 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
                     </div>
                     <div className="info-row">
                       <span>Security:</span>
-                      <span className="secure-badge"><SecurityIcon fontSize="inherit"/> AES-256 Encrypted</span>
+                      <span className="secure-badge"><SecurityIcon fontSize="inherit" /> AES-256 Encrypted</span>
                     </div>
                   </div>
 
@@ -461,23 +462,23 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
                   <div className="form-group">
                     <label>Enter Share Code</label>
                     <div className="input-with-validation">
-                        <input 
-                        type="text" 
-                        value={connectionString} 
+                      <input
+                        type="text"
+                        value={connectionString}
                         onChange={(e) => setConnectionString(e.target.value)}
                         placeholder="Paste the connection string here..."
                         className={`p2p-input code-input ${isValidCode === true ? 'valid' : isValidCode === false ? 'invalid' : ''}`}
-                        />
-                        {isValidCode === true && <CheckIcon className="validation-icon valid" />}
-                        {isValidCode === false && <CancelIcon className="validation-icon invalid" />}
+                      />
+                      {isValidCode === true && <CheckIcon className="validation-icon valid" />}
+                      {isValidCode === false && <CancelIcon className="validation-icon invalid" />}
                     </div>
                   </div>
-                  
+
                   <div className="form-group">
                     <label>Your Name (Optional)</label>
-                    <input 
-                      type="text" 
-                      value={clientName} 
+                    <input
+                      type="text"
+                      value={clientName}
                       onChange={(e) => setClientName(e.target.value)}
                       placeholder="Enter your name"
                       className="p2p-input"
@@ -489,8 +490,8 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
                     <p>Only connect to people you trust. All transfers are encrypted.</p>
                   </div>
 
-                  <button 
-                    onClick={handleStartReceiving} 
+                  <button
+                    onClick={handleStartReceiving}
                     className="btn-primary btn-large"
                     disabled={isValidCode === false}
                   >
@@ -504,13 +505,13 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
                       <CheckIcon className="success-icon-large" />
                       <h3>Download Complete!</h3>
                       <p>All mods have been installed successfully.</p>
-                      <button 
+                      <button
                         onClick={() => {
                           setReceiveComplete(false);
                           setConnectionString('');
                           setProgress(null);
                           setIsValidCode(null);
-                        }} 
+                        }}
                         className="btn-secondary"
                       >
                         Download Another
@@ -526,7 +527,7 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
                             <span>{Math.round((progress.files_completed / progress.total_files) * 100)}%</span>
                           </div>
                           <div className="progress-bar-track">
-                            <div 
+                            <div
                               className="progress-bar-fill"
                               style={{ width: `${(progress.files_completed / progress.total_files) * 100}%` }}
                             />

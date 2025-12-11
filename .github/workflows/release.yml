@@ -235,11 +235,12 @@ jobs:
           
           # Create Discord embed
           $payload = @{
+            content = "<@&1448687070296936600>"
             embeds = @(
               @{
-                title = "🚀 New Release: Repak GUI Revamped v$version"
-                description = "A new version has been automatically released!`n`n**What's New:**`n• Version bumped from $oldVersion → $version`n• Fresh build with latest changes"
-                color = 3066993  # Green color
+                title = "🚀 New Release: Repak X v$version"
+                description = "A new version has been released!`n`n**What's New:**`n• Version bumped from $oldVersion → $version`n• Fresh build with latest changes"
+                color = 9109504 # Dark Red color
                 fields = @(
                   @{
                     name = "📦 Package"
@@ -259,7 +260,7 @@ jobs:
                 )
                 timestamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
                 footer = @{
-                  text = "Repak GUI Revamped • Auto-Release"
+                  text = "Repak X • Auto-Release"
                 }
               }
             )
