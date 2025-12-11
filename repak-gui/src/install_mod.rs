@@ -42,6 +42,8 @@ pub struct InstallableMod {
     pub is_archived: bool,
     pub enabled: bool,
     // pub audio_mod: bool,
+    /// Target subfolder for installation (relative to mods root). None = install to root.
+    pub target_folder: Option<String>,
 }
 
 impl Default for InstallableMod {
@@ -67,6 +69,7 @@ impl Default for InstallableMod {
             iostore: false,
             is_archived: false,
             enabled: true,
+            target_folder: None,
         }
     }
 }

@@ -979,14 +979,174 @@ struct ModToInstall {
     path: String,
     #[serde(rename = "customName")]
     custom_name: Option<String>,
-    #[serde(rename = "fixMesh")]
+    #[serde(rename = "fixMesh", default)]
     fix_mesh: bool,
-    #[serde(rename = "fixTexture")]
+    #[serde(rename = "fixTexture", default)]
     fix_texture: bool,
-    #[serde(rename = "fixSerializeSize")]
+    #[serde(rename = "fixSerializeSize", default)]
     fix_serialize_size: bool,
-    #[serde(rename = "toRepak")]
+    #[serde(rename = "toRepak", default)]
     to_repak: bool,
+    #[serde(rename = "targetFolder")]
+    target_folder: Option<String>,
+    // Fields from parse_dropped_files (InstallableModInfo) - used for Quick Organize
+    #[serde(rename = "autoFixMesh", default)]
+    auto_fix_mesh: bool,
+    #[serde(rename = "autoFixTexture", default)]
+    auto_fix_texture: bool,
+    #[serde(rename = "autoFixSerializeSize", default)]
+    auto_fix_serialize_size: bool,
+    #[serde(rename = "autoToRepak", default)]
+    auto_to_repak: bool,
+}
+
+/// Quick Organize: Simply copy/move files to a target folder without any repak processing
+/// This is for organizing existing mod files into subfolders
+#[tauri::command]
+async fn quick_organize(
+    paths: Vec<String>,
+    target_folder: String,
+    state: State<'_, Arc<Mutex<AppState>>>,
+    window: Window,
+) -> Result<i32, String> {
+    use crate::install_mod::install_mod_logic::archives::{extract_zip, extract_rar, extract_7z};
+    use walkdir::WalkDir;
+    
+    let state_guard = state.lock().unwrap();
+    let mod_directory = state_guard.game_path.clone();
+    drop(state_guard);
+    
+    // Determine the output directory
+    let output_dir = if target_folder.is_empty() || target_folder == "~mods" {
+        mod_directory.clone()
+    } else {
+        mod_directory.join(&target_folder)
+    };
+    
+    // Ensure output directory exists
+    if let Err(e) = std::fs::create_dir_all(&output_dir) {
+        return Err(format!("Failed to create target folder '{}': {}", target_folder, e));
+    }
+    
+    info!("[QuickOrganize] Copying {} file(s) to '{}'", paths.len(), output_dir.display());
+    let _ = window.emit("install_log", format!("[QuickOrganize] Copying to folder: {}", target_folder));
+    
+    let mut copied_count = 0;
+    
+    for path_str in paths {
+        let path = PathBuf::from(&path_str);
+        
+        if !path.exists() {
+            warn!("[QuickOrganize] Path does not exist: {}", path_str);
+            continue;
+        }
+        
+        let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+        
+        // Handle archives - extract and copy contents
+        if ext == "zip" || ext == "rar" || ext == "7z" {
+            let _ = window.emit("install_log", format!("[QuickOrganize] Extracting archive: {}", path.file_name().unwrap_or_default().to_string_lossy()));
+            
+            let temp_dir = tempfile::tempdir().map_err(|e| format!("Failed to create temp dir: {}", e))?;
+            let temp_path = temp_dir.path().to_str().unwrap();
+            
+            // Extract archive
+            let extract_result = if ext == "zip" {
+                extract_zip(path.to_str().unwrap(), temp_path)
+            } else if ext == "rar" {
+                extract_rar(path.to_str().unwrap(), temp_path).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+            } else {
+                extract_7z(path.to_str().unwrap(), temp_path)
+            };
+            
+            if let Err(e) = extract_result {
+                error!("[QuickOrganize] Failed to extract archive: {}", e);
+                let _ = window.emit("install_log", format!("[QuickOrganize] ERROR: Failed to extract archive: {}", e));
+                continue;
+            }
+            
+            // Find and copy all pak/utoc/ucas files from extracted content
+            for entry in WalkDir::new(temp_path).into_iter().filter_map(|e| e.ok()) {
+                let entry_path = entry.path();
+                if let Some(entry_ext) = entry_path.extension().and_then(|s| s.to_str()) {
+                    if entry_ext == "pak" || entry_ext == "utoc" || entry_ext == "ucas" {
+                        let file_name = entry_path.file_name().unwrap();
+                        let dest = output_dir.join(file_name);
+                        
+                        if let Err(e) = std::fs::copy(entry_path, &dest) {
+                            error!("[QuickOrganize] Failed to copy {}: {}", file_name.to_string_lossy(), e);
+                        } else {
+                            info!("[QuickOrganize] Copied: {}", file_name.to_string_lossy());
+                            let _ = window.emit("install_log", format!("[QuickOrganize] Copied: {}", file_name.to_string_lossy()));
+                            copied_count += 1;
+                        }
+                    }
+                }
+            }
+        }
+        // Handle pak files (and their iostore companions)
+        else if ext == "pak" {
+            let file_name = path.file_name().unwrap();
+            let dest = output_dir.join(file_name);
+            
+            // Copy the pak file
+            if let Err(e) = std::fs::copy(&path, &dest) {
+                error!("[QuickOrganize] Failed to copy {}: {}", file_name.to_string_lossy(), e);
+                continue;
+            }
+            
+            info!("[QuickOrganize] Copied: {}", file_name.to_string_lossy());
+            let _ = window.emit("install_log", format!("[QuickOrganize] Copied: {}", file_name.to_string_lossy()));
+            copied_count += 1;
+            
+            // Also copy utoc and ucas if they exist (IoStore package)
+            let utoc_path = path.with_extension("utoc");
+            let ucas_path = path.with_extension("ucas");
+            
+            if utoc_path.exists() {
+                let utoc_name = utoc_path.file_name().unwrap();
+                if let Err(e) = std::fs::copy(&utoc_path, output_dir.join(utoc_name)) {
+                    error!("[QuickOrganize] Failed to copy {}: {}", utoc_name.to_string_lossy(), e);
+                } else {
+                    copied_count += 1;
+                }
+            }
+            
+            if ucas_path.exists() {
+                let ucas_name = ucas_path.file_name().unwrap();
+                if let Err(e) = std::fs::copy(&ucas_path, output_dir.join(ucas_name)) {
+                    error!("[QuickOrganize] Failed to copy {}: {}", ucas_name.to_string_lossy(), e);
+                } else {
+                    copied_count += 1;
+                }
+            }
+        }
+        // Handle directories - copy all pak/utoc/ucas files
+        else if path.is_dir() {
+            for entry in WalkDir::new(&path).into_iter().filter_map(|e| e.ok()) {
+                let entry_path = entry.path();
+                if let Some(entry_ext) = entry_path.extension().and_then(|s| s.to_str()) {
+                    if entry_ext == "pak" || entry_ext == "utoc" || entry_ext == "ucas" {
+                        let file_name = entry_path.file_name().unwrap();
+                        let dest = output_dir.join(file_name);
+                        
+                        if let Err(e) = std::fs::copy(entry_path, &dest) {
+                            error!("[QuickOrganize] Failed to copy {}: {}", file_name.to_string_lossy(), e);
+                        } else {
+                            info!("[QuickOrganize] Copied: {}", file_name.to_string_lossy());
+                            let _ = window.emit("install_log", format!("[QuickOrganize] Copied: {}", file_name.to_string_lossy()));
+                            copied_count += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    let _ = window.emit("install_log", format!("[QuickOrganize] Done! Copied {} file(s)", copied_count));
+    info!("[QuickOrganize] Completed: {} files copied to {}", copied_count, output_dir.display());
+    
+    Ok(copied_count)
 }
 
 #[tauri::command]
@@ -1049,7 +1209,23 @@ async fn install_mods(
         return Err("No valid mods found to install. Check the install logs for details.".to_string());
     }
 
-    // Apply user settings to each mod
+    // Check if this is a Quick Organize operation (any mod has a target folder)
+    // If so, apply the same target folder to ALL mods (archives expand to multiple mods that replace the archive entry)
+    let batch_target_folder = mods.iter()
+        .find_map(|m| m.target_folder.clone());
+    
+    // If we have a batch target folder (Quick Organize), apply it to ALL installable mods first
+    // This handles archives where the archive entry is filtered out and replaced by extracted mods
+    if let Some(ref target) = batch_target_folder {
+        info!("[Install] Quick Organize mode: applying target folder '{}' to all {} mods", target, installable_mods.len());
+        let _ = window.emit("install_log", format!("[Install] Quick Organize: installing to folder '{}'", target));
+        for installable in installable_mods.iter_mut() {
+            installable.target_folder = Some(target.clone());
+            installable.usmap_path = usmap_filename.clone();
+        }
+    }
+    
+    // Apply user settings to each mod (for non-archive cases where indices match)
     for (idx, mod_to_install) in mods.iter().enumerate() {
         if let Some(installable) = installable_mods.get_mut(idx) {
             // Apply custom name if provided
@@ -1059,12 +1235,17 @@ async fn install_mods(
                 }
             }
 
-            // Apply fix settings
-            installable.fix_mesh = mod_to_install.fix_mesh;
-            installable.fix_textures = mod_to_install.fix_texture;
-            installable.fix_serialsize_header = mod_to_install.fix_serialize_size;
-            installable.repak = mod_to_install.to_repak;
+            // Apply fix settings - use auto_ fields as fallback (from Quick Organize / parse_dropped_files)
+            installable.fix_mesh = mod_to_install.fix_mesh || mod_to_install.auto_fix_mesh;
+            installable.fix_textures = mod_to_install.fix_texture || mod_to_install.auto_fix_texture;
+            installable.fix_serialsize_header = mod_to_install.fix_serialize_size || mod_to_install.auto_fix_serialize_size;
+            installable.repak = mod_to_install.to_repak || mod_to_install.auto_to_repak;
             installable.usmap_path = usmap_filename.clone();
+            
+            // Apply target folder for Quick Organize feature (may override batch if specific)
+            if mod_to_install.target_folder.is_some() {
+                installable.target_folder = mod_to_install.target_folder.clone();
+            }
         }
     }
 
@@ -2944,6 +3125,7 @@ fn main() {
             get_pak_files,
             parse_dropped_files,
             install_mods,
+            quick_organize,
             delete_mod,
             create_folder,
             get_folders,
