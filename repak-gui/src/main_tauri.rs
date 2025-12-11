@@ -979,25 +979,14 @@ struct ModToInstall {
     path: String,
     #[serde(rename = "customName")]
     custom_name: Option<String>,
-    #[serde(rename = "fixMesh", default)]
+    #[serde(rename = "fixMesh")]
     fix_mesh: bool,
-    #[serde(rename = "fixTexture", default)]
+    #[serde(rename = "fixTexture")]
     fix_texture: bool,
-    #[serde(rename = "fixSerializeSize", default)]
+    #[serde(rename = "fixSerializeSize")]
     fix_serialize_size: bool,
-    #[serde(rename = "toRepak", default)]
+    #[serde(rename = "toRepak")]
     to_repak: bool,
-    #[serde(rename = "targetFolder")]
-    target_folder: Option<String>,
-    // Fields from parse_dropped_files (InstallableModInfo) - used for Quick Organize
-    #[serde(rename = "autoFixMesh", default)]
-    auto_fix_mesh: bool,
-    #[serde(rename = "autoFixTexture", default)]
-    auto_fix_texture: bool,
-    #[serde(rename = "autoFixSerializeSize", default)]
-    auto_fix_serialize_size: bool,
-    #[serde(rename = "autoToRepak", default)]
-    auto_to_repak: bool,
 }
 
 /// Quick Organize: Simply copy/move files to a target folder without any repak processing
@@ -1209,23 +1198,7 @@ async fn install_mods(
         return Err("No valid mods found to install. Check the install logs for details.".to_string());
     }
 
-    // Check if this is a Quick Organize operation (any mod has a target folder)
-    // If so, apply the same target folder to ALL mods (archives expand to multiple mods that replace the archive entry)
-    let batch_target_folder = mods.iter()
-        .find_map(|m| m.target_folder.clone());
-    
-    // If we have a batch target folder (Quick Organize), apply it to ALL installable mods first
-    // This handles archives where the archive entry is filtered out and replaced by extracted mods
-    if let Some(ref target) = batch_target_folder {
-        info!("[Install] Quick Organize mode: applying target folder '{}' to all {} mods", target, installable_mods.len());
-        let _ = window.emit("install_log", format!("[Install] Quick Organize: installing to folder '{}'", target));
-        for installable in installable_mods.iter_mut() {
-            installable.target_folder = Some(target.clone());
-            installable.usmap_path = usmap_filename.clone();
-        }
-    }
-    
-    // Apply user settings to each mod (for non-archive cases where indices match)
+    // Apply user settings to each mod
     for (idx, mod_to_install) in mods.iter().enumerate() {
         if let Some(installable) = installable_mods.get_mut(idx) {
             // Apply custom name if provided
@@ -1235,17 +1208,12 @@ async fn install_mods(
                 }
             }
 
-            // Apply fix settings - use auto_ fields as fallback (from Quick Organize / parse_dropped_files)
-            installable.fix_mesh = mod_to_install.fix_mesh || mod_to_install.auto_fix_mesh;
-            installable.fix_textures = mod_to_install.fix_texture || mod_to_install.auto_fix_texture;
-            installable.fix_serialsize_header = mod_to_install.fix_serialize_size || mod_to_install.auto_fix_serialize_size;
-            installable.repak = mod_to_install.to_repak || mod_to_install.auto_to_repak;
+            // Apply fix settings
+            installable.fix_mesh = mod_to_install.fix_mesh;
+            installable.fix_textures = mod_to_install.fix_texture;
+            installable.fix_serialsize_header = mod_to_install.fix_serialize_size;
+            installable.repak = mod_to_install.to_repak;
             installable.usmap_path = usmap_filename.clone();
-            
-            // Apply target folder for Quick Organize feature (may override batch if specific)
-            if mod_to_install.target_folder.is_some() {
-                installable.target_folder = mod_to_install.target_folder.clone();
-            }
         }
     }
 

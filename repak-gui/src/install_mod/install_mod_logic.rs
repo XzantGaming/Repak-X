@@ -109,26 +109,6 @@ pub fn install_mods_in_viewport(
             break;
         }
 
-        // Determine the actual output directory based on target_folder
-        let output_dir = if let Some(ref target) = installable_mod.target_folder {
-            // Filter out root folder identifiers (e.g., "~mods" or empty)
-            if target.is_empty() || target == "~mods" {
-                mod_directory.to_path_buf()
-            } else {
-                let target_path = mod_directory.join(target);
-                // Ensure target folder exists
-                if let Err(e) = std::fs::create_dir_all(&target_path) {
-                    error!("Failed to create target folder '{}': {}", target, e);
-                    mod_directory.to_path_buf()
-                } else {
-                    info!("Installing to target folder: {}", target);
-                    target_path
-                }
-            }
-        } else {
-            mod_directory.to_path_buf()
-        };
-
         if installable_mod.iostore {
             // copy the iostore files
             let pak_path = installable_mod.mod_path.with_extension("pak");
@@ -144,7 +124,7 @@ pub fn install_mods_in_viewport(
             ];
 
             for (src, dest_name) in dests {
-                if let Err(e) = std::fs::copy(&src, output_dir.join(&dest_name)) {
+                if let Err(e) = std::fs::copy(&src, mod_directory.join(&dest_name)) {
                     error!("Unable to copy file {:?}: {:?}", src, e);
                 }
             }
@@ -156,7 +136,7 @@ pub fn install_mods_in_viewport(
         if installable_mod.repak {
             if let Err(e) = create_repak_from_pak(
                 installable_mod,
-                output_dir.clone(),
+                mod_directory.to_path_buf(),
                 installed_mods_ptr,
             ) {
                 error!("Failed to create repak from pak: {}", e);
@@ -174,7 +154,7 @@ pub fn install_mods_in_viewport(
                 installable_mod.mod_name
             );
             let base = normalize_mod_base_name(&installable_mod.mod_name, 7);
-            std::fs::copy(&installable_mod.mod_path, output_dir.join(format!("{}.pak", &base)))
+            std::fs::copy(&installable_mod.mod_path, mod_directory.join(format!("{}.pak", &base)))
             .unwrap();
             record_installed_tags(&base, &installable_mod.custom_tags);
             installed_mods_ptr.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
@@ -184,7 +164,7 @@ pub fn install_mods_in_viewport(
         if installable_mod.is_dir {
             let res = convert_to_iostore_directory(
                 installable_mod,
-                output_dir.clone(),
+                mod_directory.to_path_buf(),
                 PathBuf::from(&installable_mod.mod_path),
                 installed_mods_ptr,
             );
