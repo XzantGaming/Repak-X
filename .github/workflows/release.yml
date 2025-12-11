@@ -118,8 +118,8 @@ jobs:
           dotnet publish $bridgeProject -c Release -r win-x64 --self-contained false -o $bridgeOutput
           
           Write-Host "Building UAssetMeshFixer..." -ForegroundColor Cyan
-          $fixerProject = "uasset_toolkit\tools\StaticMeshSerializeSizeFixer\StaticMeshSerializeSizeFixer.csproj"
-          $fixerOutput = "target\serialsizefixer"
+          $fixerProject = "UAssetAPI\StaticMeshSerializeSizeFixer\UAssetMeshFixer.csproj"
+          $fixerOutput = "target\uassetmeshfixer"
           New-Item -ItemType Directory -Force -Path $fixerOutput | Out-Null
           dotnet publish $fixerProject -c Release -r win-x64 --self-contained false -o $fixerOutput
 
