@@ -1613,6 +1613,23 @@ async fn add_custom_tag(
     Ok(())
 }
 
+#[tauri::command]
+async fn remove_custom_tag(
+    mod_path: String,
+    tag: String,
+    state: State<'_, Arc<Mutex<AppState>>>,
+) -> Result<(), String> {
+    let mut state = state.lock().unwrap();
+    let path = PathBuf::from(&mod_path);
+
+    if let Some(metadata) = state.mod_metadata.iter_mut().find(|m| m.path == path) {
+        metadata.custom_tags.retain(|t| t != &tag);
+    }
+
+    save_state(&state).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Copy a USMAP file to the roaming folder, replacing any existing USMAP files.
 /// 
 /// # Arguments
@@ -3102,6 +3119,7 @@ fn main() {
             delete_folder,
             assign_mod_to_folder,
             add_custom_tag,
+            remove_custom_tag,
             // USMAP management commands
             copy_usmap_to_folder,
             set_usmap_path,
