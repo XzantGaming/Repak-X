@@ -20,6 +20,7 @@ export default function SettingsPanel({ settings, onSave, onClose, theme, setThe
   const [globalUsmap, setGlobalUsmap] = useState(settings.globalUsmap || '');
   const [hideSuffix, setHideSuffix] = useState(settings.hideSuffix || false);
   const [autoOpenDetails, setAutoOpenDetails] = useState(settings.autoOpenDetails || false);
+  const [showHeroIcons, setShowHeroIcons] = useState(settings.showHeroIcons || false);
   const [usmapStatus, setUsmapStatus] = useState('');
   const [isUpdatingChars, setIsUpdatingChars] = useState(false);
   const [charUpdateStatus, setCharUpdateStatus] = useState('');
@@ -64,7 +65,8 @@ export default function SettingsPanel({ settings, onSave, onClose, theme, setThe
     onSave({
       globalUsmap,
       hideSuffix,
-      autoOpenDetails
+      autoOpenDetails,
+      showHeroIcons
     });
     onClose();
   };
@@ -269,6 +271,14 @@ export default function SettingsPanel({ settings, onSave, onClose, theme, setThe
                   onChange={(checked) => setAutoOpenDetails(checked)}
                 >
                   <span style={{ paddingLeft: '4px', fontWeight: 'normal', opacity: 0.9 }}>Auto-open details panel on click</span>
+                </Checkbox>
+              </div>
+              <div style={{ marginTop: '0.5rem' }}>
+                <Checkbox
+                  checked={showHeroIcons}
+                  onChange={(checked) => setShowHeroIcons(checked)}
+                >
+                  <span style={{ paddingLeft: '4px', fontWeight: 'normal', opacity: 0.9 }}>Show hero icon and background on mod cards (Experimental)</span>
                 </Checkbox>
               </div>
             </div>

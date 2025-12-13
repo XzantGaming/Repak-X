@@ -147,14 +147,21 @@ export default function InstallModPanel({ mods, allTags, onCreateTag, onInstall,
                     <div className="install-mod-card__header">
                       <div className="install-mod-card__title">
                         <label className="field-label">Custom Name</label>
-                        <input
-                          type="text"
-                          placeholder={mod.mod_name}
-                          value={modSettings[idx]?.customName || ''}
-                          onChange={(e) => updateModSetting(idx, 'customName', e.target.value)}
-                          className="mod-name-input"
-                        />
-                        <span className="install-mod-card__hint" title={mod.path}>{mod.mod_name}</span>
+                        <div className="mod-name-input-wrapper">
+                          <input
+                            type="text"
+                            placeholder="Insert custom name here"
+                            value={modSettings[idx]?.customName || ''}
+                            onChange={(e) => updateModSetting(idx, 'customName', e.target.value)}
+                            className="mod-name-input"
+                          />
+                          <span className="mod-name-suffix-hint">_9999999_P</span>
+                        </div>
+                        <span className="install-mod-card__hint" title={mod.path}>
+                          {modSettings[idx]?.customName
+                            ? `${modSettings[idx].customName}_9999999_P.pak`
+                            : mod.mod_name}
+                        </span>
                       </div>
                       <span className={`install-mod-card__pill ${mod.is_dir ? 'pill-folder' : 'pill-pak'}`}>
                         {modLabel}

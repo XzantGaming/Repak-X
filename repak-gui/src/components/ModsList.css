@@ -25,10 +25,11 @@
     padding: 12px;
 }
 
-.mod-list-grid.view-compact .mod-card {
+.mod-list-grid.view-compact .mod-card,
+.mod-list-grid.view-compact .mod-card.has-hero-bg {
+    display: block;
     padding: 8px 10px;
     gap: 4px;
-    min-height: auto;
 }
 
 .mod-list-grid.view-compact .mod-name-button {
@@ -52,6 +53,11 @@
 
 .mod-list-grid.view-compact .mod-size {
     font-size: 0.7rem;
+}
+
+.mod-list-grid.view-compact .mod-hero-icon-badge {
+    width: 24px;
+    height: 24px;
 }
 
 /* List View (Legacy/Functional) */
@@ -98,6 +104,7 @@
     color: var(--text-primary);
     min-height: 120px;
     position: relative;
+    overflow: hidden;
 }
 
 .mod-card:hover {
@@ -111,6 +118,56 @@
 .mod-card.selected {
     border-color: var(--accent-primary);
     background: color-mix(in srgb, var(--accent-primary), var(--bg-darkest) 88%);
+}
+
+.mod-card.viewing {
+    border-left: 3px solid var(--accent-primary);
+    background: color-mix(in srgb, var(--accent-primary), var(--bg-darkest) 94%);
+    box-shadow: inset 4px 0 12px -6px var(--accent-primary);
+}
+
+.mod-card.viewing.selected {
+    background: color-mix(in srgb, var(--accent-primary), var(--bg-darkest) 85%);
+}
+
+/* Hero background blur effect */
+.mod-card-hero-bg {
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background-size: cover;
+    background-position: center;
+    filter: blur(60px) saturate(1.5);
+    opacity: 0.35;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.mod-card.has-hero-bg>*:not(.mod-card-hero-bg) {
+    position: relative;
+    z-index: 1;
+}
+
+/* Hero icon inline (for list view - before mod name) */
+.mod-hero-icon-inline {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+/* Hero icon badge (for card views - on tags row) */
+.mod-hero-icon-badge {
+    width: 32px;
+    height: 32px;
+    border-radius: 4px;
+    object-fit: cover;
+    flex-shrink: 0;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 /* Row 1: Checkbox + Name */

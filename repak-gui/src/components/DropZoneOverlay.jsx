@@ -202,7 +202,7 @@ const DropZoneOverlay = ({
                             <h2>Install Mods</h2>
                             <p>Drop files here to open the install panel with full configuration options</p>
                             <div className="zone-hint">
-                                Supports .pak, .ucas, .utoc, .zip, folders
+                                Supports .pak, .zip, .rar, .7z, folders
                             </div>
                         </motion.div>
 

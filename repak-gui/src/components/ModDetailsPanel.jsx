@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import { listen } from '@tauri-apps/api/event'
 import { Tooltip } from '@mui/material'
 import { FaTag } from "react-icons/fa6"
 import FileTree from './FileTree'
@@ -8,34 +7,10 @@ import './ModDetailsPanel.css'
 
 const heroImages = import.meta.glob('../assets/hero/*.png', { eager: true })
 
-export default function ModDetailsPanel({ mod, initialDetails, onClose }) {
+export default function ModDetailsPanel({ mod, initialDetails, onClose, characterData = [] }) {
   const [details, setDetails] = useState(initialDetails || null)
   const [loading, setLoading] = useState(!initialDetails)
   const [error, setError] = useState(null)
-  const [characterData, setCharacterData] = useState([])
-
-  // Fetch character data from Roaming folder via backend
-  useEffect(() => {
-    const loadCharacterData = async () => {
-      try {
-        const data = await invoke('get_character_data')
-        setCharacterData(data)
-      } catch (err) {
-        console.error('Failed to load character data:', err)
-        setCharacterData([])
-      }
-    }
-    loadCharacterData()
-
-    // Listen for character data updates (e.g., after GitHub sync)
-    const unlisten = listen('character_data_updated', () => {
-      invoke('get_character_data').then(setCharacterData)
-    })
-
-    return () => {
-      unlisten.then(fn => fn())
-    }
-  }, [])
 
   useEffect(() => {
     let cancelled = false

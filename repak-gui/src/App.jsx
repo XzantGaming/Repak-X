@@ -37,7 +37,7 @@ import DropZoneOverlay from './components/DropZoneOverlay'
 import { AuroraText } from './components/ui/AuroraText'
 import Switch from './components/ui/Switch'
 import NumberInput from './components/ui/NumberInput'
-import characterData from './data/character_data.json'
+import characterDataStatic from './data/character_data.json'
 import './App.css'
 import './styles/theme.css'
 import './styles/Badges.css'
@@ -71,7 +71,7 @@ function detectHeroes(files) {
   // Map IDs to names
   const heroNames = new Set()
   heroIds.forEach(id => {
-    const char = characterData.find(c => c.id === id)
+    const char = characterDataStatic.find(c => c.id === id)
     if (char) {
       heroNames.add(char.name)
     }
@@ -98,6 +98,7 @@ function App() {
   const [globalUsmap, setGlobalUsmap] = useState('');
   const [hideSuffix, setHideSuffix] = useState(false);
   const [autoOpenDetails, setAutoOpenDetails] = useState(false);
+  const [showHeroIcons, setShowHeroIcons] = useState(false);
 
   const [theme, setTheme] = useState('dark');
   const [accentColor, setAccentColor] = useState('#4a9eff');
@@ -142,6 +143,7 @@ function App() {
   const [clashes, setClashes] = useState([])
   const [showClashPanel, setShowClashPanel] = useState(false)
   const [launchSuccess, setLaunchSuccess] = useState(false)
+  const [characterData, setCharacterData] = useState(characterDataStatic)
   const [isDragging, setIsDragging] = useState(false)
   const [dropTargetFolder, setDropTargetFolder] = useState(null)
   const dropTargetFolderRef = useRef(null)
@@ -234,7 +236,13 @@ function App() {
     })
 
     // Refresh mod list when character data is updated
-    const unlistenCharUpdate = listen('character_data_updated', () => {
+    const unlistenCharUpdate = listen('character_data_updated', async () => {
+      try {
+        const data = await invoke('get_character_data')
+        setCharacterData(data)
+      } catch (err) {
+        console.error('Failed to refresh character data:', err)
+      }
       loadMods()
     })
 
@@ -368,6 +376,14 @@ function App() {
       const ver = await invoke('get_app_version')
       setVersion(ver)
 
+      // Fetch character data from backend (up-to-date from GitHub sync)
+      try {
+        const charData = await invoke('get_character_data')
+        setCharacterData(charData)
+      } catch (charErr) {
+        console.error('Failed to fetch character data:', charErr)
+      }
+
       await loadMods()
       await loadFolders()
       await checkGame()
@@ -441,8 +457,21 @@ function App() {
     modList.forEach(m => {
       const d = detailsMap[m.path]
       if (!d) return
-      if (d.character_name) charSet.add(d.character_name)
-      if (typeof d.mod_type === 'string' && d.mod_type.startsWith('Multiple Heroes')) hasMulti = true
+
+      // Add single-character mods
+      if (d.character_name && !d.character_name.startsWith('Multiple Heroes')) {
+        charSet.add(d.character_name)
+      }
+
+      // For Multiple Heroes mods, extract individual character names from files
+      if (typeof d.mod_type === 'string' && d.mod_type.startsWith('Multiple Heroes')) {
+        hasMulti = true
+        // Extract individual heroes from the mod's file list
+        if (d.files && Array.isArray(d.files)) {
+          const heroes = detectHeroes(d.files)
+          heroes.forEach(h => charSet.add(h))
+        }
+      }
     })
     const catSet = new Set()
     modList.forEach(m => {
@@ -993,10 +1022,12 @@ function App() {
     setGlobalUsmap(settings.globalUsmap || '')
     setHideSuffix(settings.hideSuffix || false)
     setAutoOpenDetails(settings.autoOpenDetails || false)
+    setShowHeroIcons(settings.showHeroIcons || false)
 
     // Save to localStorage for persistence
     localStorage.setItem('hideSuffix', JSON.stringify(settings.hideSuffix || false))
     localStorage.setItem('autoOpenDetails', JSON.stringify(settings.autoOpenDetails || false))
+    localStorage.setItem('showHeroIcons', JSON.stringify(settings.showHeroIcons || false))
 
     setStatus('Settings saved')
   }
@@ -1010,12 +1041,14 @@ function App() {
     // Load Mods View Settings
     const savedHideSuffix = JSON.parse(localStorage.getItem('hideSuffix') || 'false');
     const savedAutoOpenDetails = JSON.parse(localStorage.getItem('autoOpenDetails') || 'false');
+    const savedShowHeroIcons = JSON.parse(localStorage.getItem('showHeroIcons') || 'false');
 
     handleThemeChange(savedTheme);
     handleAccentChange(savedAccent);
     setViewMode(savedViewMode);
     setHideSuffix(savedHideSuffix);
     setAutoOpenDetails(savedAutoOpenDetails);
+    setShowHeroIcons(savedShowHeroIcons);
   }, []);
 
   // Add these handlers
@@ -1060,7 +1093,7 @@ function App() {
 
       {showSettings && (
         <SettingsPanel
-          settings={{ globalUsmap, hideSuffix, autoOpenDetails }}
+          settings={{ globalUsmap, hideSuffix, autoOpenDetails, showHeroIcons }}
           onSave={handleSaveSettings}
           onClose={() => setShowSettings(false)}
           theme={theme}
@@ -1470,6 +1503,9 @@ function App() {
                 onContextMenu={handleContextMenu}
                 formatFileSize={formatFileSize}
                 hideSuffix={hideSuffix}
+                showHeroIcons={showHeroIcons}
+                modDetails={modDetails}
+                characterData={characterData}
               />
             </div>
           </motion.div>
@@ -1496,6 +1532,7 @@ function App() {
                     mod={selectedMod}
                     initialDetails={modDetails[selectedMod.path]}
                     onClose={() => setSelectedMod(null)}
+                    characterData={characterData}
                   />
                 </div>
 

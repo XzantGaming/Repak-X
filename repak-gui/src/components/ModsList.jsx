@@ -9,11 +9,59 @@ import NumberInput from './ui/NumberInput'
 import './ModsList.css'
 import './ModDetailsPanel.css'
 
+const heroImages = import.meta.glob('../assets/hero/*.png', { eager: true })
+
 const toTagArray = (tags) => Array.isArray(tags) ? tags : (tags ? [tags] : [])
+
+// Get hero image by character name
+function getHeroImage(heroName, characterData) {
+    const fallbackKey = '../assets/hero/9999.png'
+    const fallbackImage = heroImages[fallbackKey]?.default
+    const charData = characterData || []
+
+    // Return fallback for missing, Unknown, or Multiple Heroes
+    if (!heroName) return fallbackImage
+    if (heroName.toLowerCase().includes('unknown') || heroName.toLowerCase().includes('multiple')) {
+        return fallbackImage
+    }
+
+    // Check for ID at start (e.g. "1025XXX" -> 1025)
+    const idMatch = heroName.match(/^(10\d{2})/)
+    if (idMatch) {
+        const id = idMatch[1]
+        const key = `../assets/hero/${id}.png`
+        if (heroImages[key]) return heroImages[key].default
+    }
+
+    // Find by name in character data (partial match)
+    const char = charData.find(c => heroName.includes(c.name))
+    if (char) {
+        const key = `../assets/hero/${char.id}.png`
+        if (heroImages[key]?.default) return heroImages[key].default
+    }
+
+    // Fallback: Try to find any 4-digit hero ID (10XX) pattern anywhere in name
+    const anyIdMatch = heroName.match(/\b(10\d{2})\b/)
+    if (anyIdMatch) {
+        const id = anyIdMatch[1]
+        const key = `../assets/hero/${id}.png`
+        if (heroImages[key]) return heroImages[key].default
+    }
+
+    // Last resort: Check if heroName exactly matches any character and use their ID
+    const charExact = charData.find(c => c.name === heroName)
+    if (charExact) {
+        const key = `../assets/hero/${charExact.id}.png`
+        if (heroImages[key]?.default) return heroImages[key].default
+    }
+
+    return fallbackImage
+}
 
 // Mod Item Component
 function ModItem({
     mod,
+    selectedMod,
     selectedMods,
     handleToggleModSelection,
     onSelect,
@@ -23,7 +71,11 @@ function ModItem({
     handleRemoveTag,
     formatFileSize,
     hideSuffix,
-    onContextMenu
+    onContextMenu,
+    showHeroIcons,
+    characterName,
+    viewMode,
+    characterData
 }) {
     const [isDeleteHolding, setIsDeleteHolding] = useState(false)
     const holdTimeoutRef = useRef(null)
@@ -68,16 +120,27 @@ function ModItem({
         setIsDeleteHolding(false)
     }
 
+    // Get hero image for background/badge
+    const heroImage = showHeroIcons ? getHeroImage(characterName, characterData) : null
+    const isCardView = viewMode === 'grid' || viewMode === 'compact'
+
     return (
         <motion.div
             layout
-            className={`mod-card ${selectedMods.has(mod.path) ? 'selected' : ''}`}
+            className={`mod-card ${selectedMods.has(mod.path) ? 'selected' : ''} ${selectedMod?.path === mod.path ? 'viewing' : ''} ${heroImage && showHeroIcons ? 'has-hero-bg' : ''}`}
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ duration: 0.2, layout: { duration: 0.3, ease: "circOut" } }}
             onContextMenu={(e) => onContextMenu(e, mod)}
         >
+            {/* Blurred hero background for all views */}
+            {heroImage && showHeroIcons && (
+                <div
+                    className="mod-card-hero-bg"
+                    style={{ backgroundImage: `url(${heroImage})` }}
+                />
+            )}
             <div className="mod-main-row">
                 <div className="mod-checkbox-wrapper">
                     <Checkbox
@@ -92,6 +155,10 @@ function ModItem({
                         className="mod-checkbox"
                     />
                 </div>
+                {/* Hero icon before name in list view */}
+                {heroImage && showHeroIcons && viewMode === 'list' && (
+                    <img src={heroImage} alt="" className="mod-hero-icon-inline" />
+                )}
                 <motion.button
                     type="button"
                     className="mod-name-button"
@@ -112,8 +179,14 @@ function ModItem({
                 </motion.button>
             </div>
 
-            {tags.length > 0 && (
+            {/* Hero icon + Tags row for card views */}
+            {(heroImage && showHeroIcons && isCardView) || tags.length > 0 ? (
                 <div className="mod-tags-row">
+                    {heroImage && showHeroIcons && isCardView && (
+                        <Tooltip title={characterName || 'Unknown Hero'}>
+                            <img src={heroImage} alt="" className="mod-hero-icon-badge" />
+                        </Tooltip>
+                    )}
                     {visibleTags.map(tag => (
                         <span key={tag} className="tag">
                             <FaTag />
@@ -158,7 +231,7 @@ function ModItem({
                         </Tooltip>
                     )}
                 </div>
-            )}
+            ) : null}
 
             <div className="mod-actions-row">
                 <span className="mod-size">{formatFileSize(mod.file_size)}</span>
@@ -198,7 +271,7 @@ function ModItem({
                     </Tooltip>
                 </div>
             </div>
-        </motion.div>
+        </motion.div >
     )
 }
 
@@ -219,7 +292,10 @@ export default function ModsList({
     onSetPriority,
     onContextMenu,
     formatFileSize,
-    hideSuffix
+    hideSuffix,
+    showHeroIcons,
+    modDetails,
+    characterData
 }) {
     return (
         <div
@@ -232,23 +308,30 @@ export default function ModsList({
                     <p>No mods found in this folder.</p>
                 </div>
             ) : (
-                mods.map(mod => (
-                    <ModItem
-                        key={mod.path}
-                        mod={mod}
-                        selectedMod={selectedMod}
-                        selectedMods={selectedMods}
-                        onSelect={onSelect}
-                        handleToggleModSelection={onToggleSelection}
-                        handleToggleMod={onToggleMod}
-                        handleDeleteMod={onDeleteMod}
-                        handleRemoveTag={onRemoveTag}
-                        handleSetPriority={onSetPriority}
-                        onContextMenu={onContextMenu}
-                        formatFileSize={formatFileSize}
-                        hideSuffix={hideSuffix}
-                    />
-                ))
+                mods.map(mod => {
+                    const details = modDetails?.[mod.path]
+                    return (
+                        <ModItem
+                            key={mod.path}
+                            mod={mod}
+                            selectedMod={selectedMod}
+                            selectedMods={selectedMods}
+                            onSelect={onSelect}
+                            handleToggleModSelection={onToggleSelection}
+                            handleToggleMod={onToggleMod}
+                            handleDeleteMod={onDeleteMod}
+                            handleRemoveTag={onRemoveTag}
+                            handleSetPriority={onSetPriority}
+                            onContextMenu={onContextMenu}
+                            formatFileSize={formatFileSize}
+                            hideSuffix={hideSuffix}
+                            showHeroIcons={showHeroIcons}
+                            characterName={details?.character_name}
+                            viewMode={viewMode}
+                            characterData={characterData}
+                        />
+                    )
+                })
             )}
         </div>
     )

@@ -104,6 +104,10 @@ const ContextMenu = ({ x, y, mod, folder, onClose, onAssignTag, onMoveTo, onCrea
         {mod.enabled ? 'Disable' : 'Enable'}
       </div>
 
+      <div className="context-menu-item disabled">
+        Rename
+      </div>
+
       <div
         className={`context-menu-item danger ${isDeleting ? 'holding' : ''}`}
         onMouseDown={handleDeleteDown}

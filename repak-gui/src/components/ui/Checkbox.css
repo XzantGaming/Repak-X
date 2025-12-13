@@ -42,9 +42,9 @@
   width: 20px;
   height: 20px;
   border-radius: 6px;
-  border: 2px solid var(--checkbox-border, var(--panel-border, rgba(255, 255, 255, 0.25)));
-  background: transparent;
-  transition: 
+  border: 2px solid var(--checkbox-border, rgba(255, 255, 255, 0.5));
+  background: rgba(255, 255, 255, 0.1);
+  transition:
     background 0.2s cubic-bezier(0.4, 0, 0.2, 1),
     border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
     transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
@@ -71,7 +71,7 @@
   color: var(--btn-text, #ffffff);
   opacity: 0;
   transform: scale(0.5);
-  transition: 
+  transition:
     opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1),
     transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
@@ -123,61 +123,49 @@
 /* Color Variants - Checked State */
 .heroui-checkbox.primary.checked .heroui-checkbox-box,
 .heroui-checkbox.primary.indeterminate .heroui-checkbox-box {
-  background: linear-gradient(
-    135deg,
-    var(--accent-primary, #4a9eff),
-    color-mix(in srgb, var(--accent-primary, #4a9eff), white 15%)
-  );
+  background: linear-gradient(135deg,
+      var(--accent-primary, #4a9eff),
+      color-mix(in srgb, var(--accent-primary, #4a9eff), white 15%));
   border-color: var(--accent-primary, #4a9eff);
 }
 
 .heroui-checkbox.secondary.checked .heroui-checkbox-box,
 .heroui-checkbox.secondary.indeterminate .heroui-checkbox-box {
-  background: linear-gradient(
-    135deg,
-    var(--accent-secondary, #b245ff),
-    color-mix(in srgb, var(--accent-secondary, #b245ff), white 15%)
-  );
+  background: linear-gradient(135deg,
+      var(--accent-secondary, #b245ff),
+      color-mix(in srgb, var(--accent-secondary, #b245ff), white 15%));
   border-color: var(--accent-secondary, #b245ff);
 }
 
 .heroui-checkbox.success.checked .heroui-checkbox-box,
 .heroui-checkbox.success.indeterminate .heroui-checkbox-box {
-  background: linear-gradient(
-    135deg,
-    var(--success, #4CAF50),
-    color-mix(in srgb, var(--success, #4CAF50), white 15%)
-  );
+  background: linear-gradient(135deg,
+      var(--success, #4CAF50),
+      color-mix(in srgb, var(--success, #4CAF50), white 15%));
   border-color: var(--success, #4CAF50);
 }
 
 .heroui-checkbox.warning.checked .heroui-checkbox-box,
 .heroui-checkbox.warning.indeterminate .heroui-checkbox-box {
-  background: linear-gradient(
-    135deg,
-    var(--warning, #ff9800),
-    color-mix(in srgb, var(--warning, #ff9800), white 15%)
-  );
+  background: linear-gradient(135deg,
+      var(--warning, #ff9800),
+      color-mix(in srgb, var(--warning, #ff9800), white 15%));
   border-color: var(--warning, #ff9800);
 }
 
 .heroui-checkbox.danger.checked .heroui-checkbox-box,
 .heroui-checkbox.danger.indeterminate .heroui-checkbox-box {
-  background: linear-gradient(
-    135deg,
-    var(--danger, #ff5252),
-    color-mix(in srgb, var(--danger, #ff5252), white 15%)
-  );
+  background: linear-gradient(135deg,
+      var(--danger, #ff5252),
+      color-mix(in srgb, var(--danger, #ff5252), white 15%));
   border-color: var(--danger, #ff5252);
 }
 
 .heroui-checkbox.default.checked .heroui-checkbox-box,
 .heroui-checkbox.default.indeterminate .heroui-checkbox-box {
-  background: linear-gradient(
-    135deg,
-    var(--text-secondary, #7a7a7a),
-    color-mix(in srgb, var(--text-secondary, #7a7a7a), white 20%)
-  );
+  background: linear-gradient(135deg,
+      var(--text-secondary, #7a7a7a),
+      color-mix(in srgb, var(--text-secondary, #7a7a7a), white 20%));
   border-color: var(--text-secondary, #7a7a7a);
 }
 

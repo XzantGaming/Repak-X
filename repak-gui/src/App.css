@@ -1831,12 +1831,15 @@ input[type="text"]:focus {
   border: 1px solid var(--panel-border);
   background: var(--bg-dark);
   color: var(--text-secondary);
-  border-radius: 999px;
+  border-radius: 16px;
   padding: 0.15rem 0.45rem;
   font-size: 0.75rem;
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
   white-space: nowrap;
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
 }
 
 .filter-chip:hover,
