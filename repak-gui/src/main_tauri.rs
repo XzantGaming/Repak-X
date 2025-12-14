@@ -1439,43 +1439,56 @@ async fn delete_mod(path: String) -> Result<(), String> {
 async fn open_in_explorer(path: String) -> Result<(), String> {
     let path_buf = PathBuf::from(&path);
     
-    // Get the parent directory if it's a file, or the path itself if it's a directory
-    let dir_to_open = if path_buf.is_file() {
-        path_buf.parent().map(|p| p.to_path_buf()).unwrap_or(path_buf.clone())
-    } else {
-        path_buf.clone()
-    };
+    info!("open_in_explorer called: path={}", path);
     
-    if !dir_to_open.exists() {
-        return Err(format!("Path does not exist: {}", dir_to_open.display()));
+    if !path_buf.exists() {
+        return Err(format!("Path does not exist: {}", path_buf.display()));
     }
     
     #[cfg(target_os = "windows")]
     {
-        // On Windows, use explorer.exe with /select to highlight the file
-        if path_buf.is_file() {
-            std::process::Command::new("explorer.exe")
-                .args(["/select,", &path_buf.to_string_lossy()])
-                .spawn()
-                .map_err(|e| format!("Failed to open explorer: {}", e))?;
+        use std::os::windows::process::CommandExt;
+        
+        // On Windows, use explorer.exe with /select, to highlight the file
+        // The path must be quoted if it contains spaces, and use backslashes
+        let canonical_path = path_buf.canonicalize()
+            .unwrap_or_else(|_| path_buf.clone());
+        
+        // Remove the \\?\ prefix that canonicalize adds on Windows
+        let path_str = canonical_path.to_string_lossy();
+        let clean_path = if path_str.starts_with(r"\\?\") {
+            path_str[4..].to_string()
         } else {
-            std::process::Command::new("explorer.exe")
-                .arg(&dir_to_open)
-                .spawn()
-                .map_err(|e| format!("Failed to open explorer: {}", e))?;
-        }
+            path_str.to_string()
+        };
+        
+        info!("open_in_explorer: using path={}", clean_path);
+        
+        // Use /select, with the path - explorer handles the quoting
+        let select_arg = format!("/select,\"{}\"", clean_path);
+        std::process::Command::new("explorer.exe")
+            .raw_arg(&select_arg)
+            .spawn()
+            .map_err(|e| format!("Failed to open explorer: {}", e))?;
     }
     
     #[cfg(target_os = "macos")]
     {
+        // On macOS, use open -R to reveal the file in Finder
         std::process::Command::new("open")
-            .arg(&dir_to_open)
+            .args(["-R", &path_buf.to_string_lossy()])
             .spawn()
             .map_err(|e| format!("Failed to open Finder: {}", e))?;
     }
     
     #[cfg(target_os = "linux")]
     {
+        // On Linux, open the parent directory
+        let dir_to_open = if path_buf.is_file() {
+            path_buf.parent().map(|p| p.to_path_buf()).unwrap_or(path_buf.clone())
+        } else {
+            path_buf.clone()
+        };
         std::process::Command::new("xdg-open")
             .arg(&dir_to_open)
             .spawn()
@@ -1563,25 +1576,74 @@ async fn copy_to_clipboard(text: String, window: Window) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn rename_mod(old_path: String, new_name: String) -> Result<String, String> {
-    let old_path_buf = PathBuf::from(&old_path);
+async fn rename_mod(mod_path: String, new_name: String) -> Result<String, String> {
+    let old_path_buf = PathBuf::from(&mod_path);
+    
+    info!("rename_mod called: mod_path={}, new_name={}", mod_path, new_name);
     
     if !old_path_buf.exists() {
-        return Err(format!("File does not exist: {}", old_path));
+        return Err(format!("File does not exist: {}", mod_path));
     }
     
-    // Get the parent directory and extension
+    // Get the parent directory
     let parent = old_path_buf.parent()
         .ok_or_else(|| "Cannot get parent directory".to_string())?;
-    let extension = old_path_buf.extension()
-        .map(|e| e.to_string_lossy().to_string())
+    
+    // Get the full filename to detect extension properly
+    let filename = old_path_buf.file_name()
+        .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_default();
     
-    // Build the new path with the new name but same extension
-    let new_file_name = if extension.is_empty() {
-        new_name.clone()
+    // Detect extension - handle .bak_repak as disabled .pak
+    let (extension, is_pak_type) = if filename.ends_with(".bak_repak") {
+        ("bak_repak".to_string(), true)
+    } else if filename.ends_with(".pak") {
+        ("pak".to_string(), true)
     } else {
-        format!("{}.{}", new_name, extension)
+        let ext = old_path_buf.extension()
+            .map(|e| e.to_string_lossy().to_string())
+            .unwrap_or_default();
+        (ext, false)
+    };
+    
+    // Get the old stem (filename without extension) BEFORE renaming
+    // For .bak_repak files, we need to strip that suffix manually
+    let old_stem = if filename.ends_with(".bak_repak") {
+        filename.trim_end_matches(".bak_repak").to_string()
+    } else {
+        old_path_buf.file_stem()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_default()
+    };
+    
+    // Extract the priority suffix (e.g., _9999999_P) from the old stem
+    let priority_suffix_regex = regex_lite::Regex::new(r"(_\d+_P)+$").unwrap();
+    let old_priority_suffix = priority_suffix_regex.find(&old_stem)
+        .map(|m| m.as_str().to_string())
+        .unwrap_or_default();
+    
+    // Check if new_name already has a priority suffix
+    let new_name_has_suffix = priority_suffix_regex.is_match(&new_name);
+    
+    // Build the final new stem: new_name + priority suffix (if not already present)
+    let new_stem = if new_name_has_suffix {
+        new_name.clone()
+    } else if !old_priority_suffix.is_empty() {
+        // Preserve the old priority suffix
+        format!("{}{}", new_name, old_priority_suffix)
+    } else {
+        // Add default priority suffix if none existed
+        format!("{}_9999999_P", new_name)
+    };
+    
+    info!("rename_mod: old_stem={}, extension={}, is_pak_type={}, new_stem={}", 
+          old_stem, extension, is_pak_type, new_stem);
+    
+    // Build the new path with the new stem and same extension
+    let new_file_name = if extension.is_empty() {
+        new_stem.clone()
+    } else {
+        format!("{}.{}", new_stem, extension)
     };
     let new_path = parent.join(&new_file_name);
     
@@ -1589,30 +1651,37 @@ async fn rename_mod(old_path: String, new_name: String) -> Result<String, String
         return Err(format!("A file with name '{}' already exists", new_file_name));
     }
     
-    // Rename the main file
-    std::fs::rename(&old_path_buf, &new_path)
-        .map_err(|e| format!("Failed to rename file: {}", e))?;
-    
-    // If it's a .pak file, also rename associated IoStore files (.ucas, .utoc)
-    if extension.to_lowercase() == "pak" {
-        let old_stem = old_path_buf.file_stem()
-            .map(|s| s.to_string_lossy().to_string())
-            .unwrap_or_default();
-        
+    // If it's a .pak or .bak_repak file, rename associated IoStore files (.ucas, .utoc) FIRST
+    // Do this before renaming the main file to ensure we have the correct old stem
+    if is_pak_type {
         // Rename .ucas file if it exists
         let old_ucas = parent.join(format!("{}.ucas", old_stem));
+        let new_ucas = parent.join(format!("{}.ucas", new_stem));
+        info!("rename_mod: checking ucas: {} exists={}", old_ucas.display(), old_ucas.exists());
         if old_ucas.exists() {
-            let new_ucas = parent.join(format!("{}.ucas", new_name));
-            let _ = std::fs::rename(&old_ucas, &new_ucas);
+            match std::fs::rename(&old_ucas, &new_ucas) {
+                Ok(_) => info!("rename_mod: renamed ucas to {}", new_ucas.display()),
+                Err(e) => warn!("rename_mod: failed to rename ucas: {}", e),
+            }
         }
         
         // Rename .utoc file if it exists
         let old_utoc = parent.join(format!("{}.utoc", old_stem));
+        let new_utoc = parent.join(format!("{}.utoc", new_stem));
+        info!("rename_mod: checking utoc: {} exists={}", old_utoc.display(), old_utoc.exists());
         if old_utoc.exists() {
-            let new_utoc = parent.join(format!("{}.utoc", new_name));
-            let _ = std::fs::rename(&old_utoc, &new_utoc);
+            match std::fs::rename(&old_utoc, &new_utoc) {
+                Ok(_) => info!("rename_mod: renamed utoc to {}", new_utoc.display()),
+                Err(e) => warn!("rename_mod: failed to rename utoc: {}", e),
+            }
         }
     }
+    
+    // Rename the main file
+    std::fs::rename(&old_path_buf, &new_path)
+        .map_err(|e| format!("Failed to rename file: {}", e))?;
+    
+    info!("rename_mod: successfully renamed {} to {}", mod_path, new_path.display());
     
     Ok(new_path.to_string_lossy().to_string())
 }
