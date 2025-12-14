@@ -24,7 +24,7 @@
 }
 
 .heroui-checkbox-control:focus-visible {
-  outline: 2px solid rgba(74, 158, 255, 0.8);
+  outline: 2px solid color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 20%);
   outline-offset: 3px;
   border-radius: 4px;
 }
@@ -42,8 +42,8 @@
   width: 20px;
   height: 20px;
   border-radius: 6px;
-  border: 2px solid var(--checkbox-border, rgba(255, 255, 255, 0.5));
-  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid var(--checkbox-border, var(--text-secondary));
+  background: var(--checkbox-bg, var(--bg-darker));
   transition:
     background 0.2s cubic-bezier(0.4, 0, 0.2, 1),
     border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
@@ -60,15 +60,15 @@
 }
 
 .heroui-checkbox.disabled .heroui-checkbox-box {
-  border-color: var(--panel-border, rgba(255, 255, 255, 0.1));
-  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--panel-border);
+  background: var(--bg-dark);
 }
 
 /* Checkmark Icon */
 .heroui-checkbox-icon {
   width: 14px;
   height: 14px;
-  color: var(--btn-text, #ffffff);
+  color: #ffffff;
   opacity: 0;
   transform: scale(0.5);
   transition:

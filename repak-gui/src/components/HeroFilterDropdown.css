@@ -1,0 +1,197 @@
+.hero-filter-dropdown {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+/* Special filters - always visible at top */
+.hero-filter-special {
+    display: flex;
+    gap: 4px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--panel-border);
+    flex-shrink: 0;
+}
+
+.hero-filter-special .filter-chip-compact {
+    flex: 1;
+    justify-content: center;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.chip-count {
+    padding: 1px 4px;
+    background: color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 85%);
+    border-radius: 3px;
+    font-size: 0.6rem;
+}
+
+.filter-chip-compact.active .chip-count {
+    background: color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 60%);
+}
+
+/* Scrollable hero list */
+.hero-filter-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    max-height: 250px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.hero-filter-list::-webkit-scrollbar {
+    width: 4px;
+}
+
+.hero-filter-list::-webkit-scrollbar-thumb {
+    background: var(--text-secondary);
+    border-radius: 4px;
+    opacity: 0.5;
+}
+
+.hero-filter-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.hero-filter-row {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.hero-expand-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 0.55rem;
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity 0.15s ease;
+    flex-shrink: 0;
+}
+
+.hero-expand-btn:hover {
+    opacity: 1;
+}
+
+.hero-filter-base {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex: 1;
+    padding: 5px 8px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    color: var(--text-secondary);
+    font-size: 0.72rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    text-align: left;
+}
+
+.hero-filter-base.no-skins {
+    margin-left: 18px;
+}
+
+.hero-filter-base:hover {
+    background: color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 90%);
+    border-color: color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 70%);
+    color: var(--text-primary);
+}
+
+.hero-filter-base.has-selection {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.hero-filter-base.active {
+    background: color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 75%);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+.hero-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.hero-mod-count,
+.skin-mod-count {
+    flex-shrink: 0;
+    padding: 1px 5px;
+    background: var(--bg-lighter);
+    border-radius: 4px;
+    font-size: 0.6rem;
+    color: var(--text-secondary);
+    margin-left: 6px;
+}
+
+.hero-filter-base:hover .hero-mod-count,
+.hero-filter-base.active .hero-mod-count {
+    background: color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 80%);
+    color: var(--accent-primary);
+}
+
+/* Nested skins - inline below hero */
+.hero-skins-nested {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    margin-left: 18px;
+    padding-left: 8px;
+    border-left: 1px solid var(--panel-border);
+}
+
+.hero-skin-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+    padding: 4px 8px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    color: var(--text-secondary);
+    font-size: 0.68rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    text-align: left;
+}
+
+.hero-skin-item:hover {
+    background: color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 90%);
+    border-color: color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 70%);
+    color: var(--text-primary);
+}
+
+.hero-skin-item.active {
+    background: color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 75%);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+.hero-skin-item:hover .skin-mod-count,
+.hero-skin-item.active .skin-mod-count {
+    background: color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 80%);
+    color: var(--accent-primary);
+}
+
+.skin-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

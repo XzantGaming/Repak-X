@@ -170,6 +170,25 @@
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
+/* Mod type badge - inherits colors from category-badge in Badges.css */
+.mod-type-badge {
+    display: inline-flex;
+    align-items: center;
+    height: 22px;
+    padding: 0 8px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    border-radius: 4px;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+/* Override category-badge padding for mod list */
+.mod-type-badge.category-badge {
+    padding: 0 8px;
+}
+
 /* Row 1: Checkbox + Name */
 .mod-main-row {
     display: flex;
@@ -224,8 +243,6 @@
     padding-bottom: 0;
     scrollbar-width: none;
     -ms-overflow-style: none;
-    mask-image: linear-gradient(to right, black 95%, transparent 100%);
-    -webkit-mask-image: linear-gradient(to right, black 95%, transparent 100%);
     flex-shrink: 0;
     /* Prevent squashing */
     min-height: 26px;
@@ -284,6 +301,8 @@
 .mod-size {
     font-size: 0.75rem;
     color: var(--text-secondary);
+    min-width: 56px;
+    text-align: right;
 }
 
 /* Status Icons */

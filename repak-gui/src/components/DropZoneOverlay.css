@@ -3,7 +3,7 @@
     position: fixed;
     inset: 0;
     z-index: 99999;
-    background: rgba(0, 0, 0, 0.75);
+    background: var(--overlay-bg, rgba(0, 0, 0, 0.75));
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     display: flex;
@@ -33,8 +33,8 @@
     flex-direction: column;
     align-items: center;
     padding: 2rem;
-    background: rgba(30, 30, 35, 0.9);
-    border: 2px dashed rgba(255, 255, 255, 0.2);
+    background: var(--panel-bg);
+    border: 2px dashed var(--panel-border);
     border-radius: 16px;
     transition: all 0.25s ease;
     overflow: hidden;
@@ -43,10 +43,10 @@
 .dropzone-card:hover,
 .dropzone-card.active {
     border-color: var(--accent-primary, #4a9eff);
-    background: rgba(40, 40, 50, 0.95);
+    background: var(--bg-lighter);
     box-shadow:
-        0 0 40px rgba(74, 158, 255, 0.15),
-        inset 0 0 60px rgba(74, 158, 255, 0.05);
+        0 0 40px color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 85%),
+        inset 0 0 60px color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 95%);
 }
 
 .dropzone-card.active {
@@ -73,12 +73,12 @@
     font-size: 1.5rem;
     font-weight: 600;
     margin: 0 0 0.5rem 0;
-    color: var(--text-primary, #ffffff);
+    color: var(--text-primary);
 }
 
 .dropzone-card p {
     font-size: 0.9rem;
-    color: var(--text-secondary, #aaaaaa);
+    color: var(--text-secondary);
     text-align: center;
     margin: 0 0 1rem 0;
     max-width: 280px;
@@ -86,10 +86,10 @@
 
 .zone-hint {
     font-size: 0.75rem;
-    color: var(--text-secondary, #888888);
+    color: var(--text-secondary);
     opacity: 0.7;
     padding: 0.5rem 1rem;
-    background: rgba(0, 0, 0, 0.3);
+    background: var(--bg-dark);
     border-radius: 20px;
 }
 
@@ -109,21 +109,62 @@
     flex-shrink: 0;
 }
 
+/* Folder Tree Wrapper */
+.folder-tree-wrapper {
+    flex: 1;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    min-height: 0;
+    margin-top: 0.5rem;
+}
+
+/* Scroll Zones */
+.scroll-zone {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 40px;
+    z-index: 10;
+    pointer-events: auto;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.scroll-zone:hover {
+    opacity: 1;
+}
+
+.scroll-zone-top {
+    top: 0;
+    background: linear-gradient(to bottom,
+            color-mix(in srgb, var(--accent-primary), transparent 50%) 0%,
+            transparent 100%);
+    border-radius: 8px 8px 0 0;
+}
+
+.scroll-zone-bottom {
+    bottom: 0;
+    background: linear-gradient(to top,
+            color-mix(in srgb, var(--accent-primary), transparent 50%) 0%,
+            transparent 100%);
+    border-radius: 0 0 8px 8px;
+}
+
 /* Folder Tree Container */
 .folder-tree-container {
     flex: 1;
     width: 100%;
-    max-height: 100%;
     overflow-y: auto;
-    background: rgba(0, 0, 0, 0.3);
+    background: var(--bg-dark);
     border-radius: 8px;
     padding: 0.5rem;
-    margin-top: 0.5rem;
 }
 
 .drop-folder-tree {
     margin-left: 0.5rem;
-    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    border-left: 1px solid var(--panel-border);
     padding-left: 0.5rem;
 }
 
@@ -137,15 +178,15 @@
     cursor: pointer;
     transition: all 0.15s ease;
     font-size: 0.85rem;
-    color: var(--text-primary, #ffffff);
+    color: var(--text-primary);
 }
 
 .drop-folder-item:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--bg-lighter);
 }
 
 .drop-folder-item.selected {
-    background: rgba(74, 158, 255, 0.25);
+    background: color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 75%);
     color: var(--accent-primary, #4a9eff);
 }
 
@@ -183,8 +224,8 @@
 .selected-folder-hint {
     margin-top: 1rem;
     padding: 0.75rem 1rem;
-    background: rgba(74, 158, 255, 0.15);
-    border: 1px solid rgba(74, 158, 255, 0.3);
+    background: color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 85%);
+    border: 1px solid color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 70%);
     border-radius: 8px;
     font-size: 0.8rem;
     color: var(--accent-primary, #4a9eff);
@@ -193,7 +234,7 @@
 }
 
 .selected-folder-hint strong {
-    color: #ffffff;
+    color: var(--text-primary);
 }
 
 /* Scrollbar */
@@ -206,12 +247,13 @@
 }
 
 .folder-tree-container::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
+    background: var(--text-secondary);
+    opacity: 0.3;
     border-radius: 3px;
 }
 
 .folder-tree-container::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.3);
+    opacity: 0.5;
 }
 
 /* Responsive */

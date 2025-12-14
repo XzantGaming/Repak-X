@@ -44,6 +44,7 @@ import './styles/Badges.css'
 import './styles/Fonts.css'
 import logo from './assets/app-icons/RepakIcon-x256.png'
 import ClashPanel from './components/ClashPanel'
+import HeroFilterDropdown from './components/HeroFilterDropdown'
 
 const toTagArray = (tags) => Array.isArray(tags) ? tags : (tags ? [tags] : [])
 
@@ -99,6 +100,8 @@ function App() {
   const [hideSuffix, setHideSuffix] = useState(false);
   const [autoOpenDetails, setAutoOpenDetails] = useState(false);
   const [showHeroIcons, setShowHeroIcons] = useState(false);
+  const [showHeroBg, setShowHeroBg] = useState(false);
+  const [showModType, setShowModType] = useState(false);
 
   const [theme, setTheme] = useState('dark');
   const [accentColor, setAccentColor] = useState('#4a9eff');
@@ -788,6 +791,25 @@ function App() {
     }
   }
 
+  // Rename a mod (calls backend to rename actual file)
+  const handleRenameMod = async (modPath, newName) => {
+    if (gameRunning) {
+      setStatus('Cannot rename mods while game is running')
+      return
+    }
+
+    try {
+      // TODO: Implement rename_mod command in backend
+      await invoke('rename_mod', { modPath, newName })
+      setStatus(`Renamed to "${newName}"`)
+      await loadMods()
+    } catch (error) {
+      // Fallback: if command doesn't exist yet, just show error
+      setStatus(`Error renaming mod: ${error}`)
+      console.error('rename_mod not implemented yet:', error)
+    }
+  }
+
   const handleDragStart = (e, mod) => {
     if (gameRunning) {
       e.preventDefault()
@@ -1023,11 +1045,15 @@ function App() {
     setHideSuffix(settings.hideSuffix || false)
     setAutoOpenDetails(settings.autoOpenDetails || false)
     setShowHeroIcons(settings.showHeroIcons || false)
+    setShowHeroBg(settings.showHeroBg || false)
+    setShowModType(settings.showModType || false)
 
     // Save to localStorage for persistence
     localStorage.setItem('hideSuffix', JSON.stringify(settings.hideSuffix || false))
     localStorage.setItem('autoOpenDetails', JSON.stringify(settings.autoOpenDetails || false))
     localStorage.setItem('showHeroIcons', JSON.stringify(settings.showHeroIcons || false))
+    localStorage.setItem('showHeroBg', JSON.stringify(settings.showHeroBg || false))
+    localStorage.setItem('showModType', JSON.stringify(settings.showModType || false))
 
     setStatus('Settings saved')
   }
@@ -1042,6 +1068,8 @@ function App() {
     const savedHideSuffix = JSON.parse(localStorage.getItem('hideSuffix') || 'false');
     const savedAutoOpenDetails = JSON.parse(localStorage.getItem('autoOpenDetails') || 'false');
     const savedShowHeroIcons = JSON.parse(localStorage.getItem('showHeroIcons') || 'false');
+    const savedShowHeroBg = JSON.parse(localStorage.getItem('showHeroBg') || 'false');
+    const savedShowModType = JSON.parse(localStorage.getItem('showModType') || 'false');
 
     handleThemeChange(savedTheme);
     handleAccentChange(savedAccent);
@@ -1049,6 +1077,8 @@ function App() {
     setHideSuffix(savedHideSuffix);
     setAutoOpenDetails(savedAutoOpenDetails);
     setShowHeroIcons(savedShowHeroIcons);
+    setShowHeroBg(savedShowHeroBg);
+    setShowModType(savedShowModType);
   }, []);
 
   // Add these handlers
@@ -1093,7 +1123,7 @@ function App() {
 
       {showSettings && (
         <SettingsPanel
-          settings={{ globalUsmap, hideSuffix, autoOpenDetails, showHeroIcons }}
+          settings={{ globalUsmap, hideSuffix, autoOpenDetails, showHeroIcons, showHeroBg, showModType }}
           onSave={handleSaveSettings}
           onClose={() => setShowSettings(false)}
           theme={theme}
@@ -1299,7 +1329,7 @@ function App() {
               {/* Filters Section */}
               <div className="sidebar-filters" style={{ padding: '0.5rem 0.6rem', borderBottom: '1px solid var(--panel-border)' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                  <div className="filter-title-row">
                     <div style={{ fontSize: '0.75rem', opacity: 0.7, fontWeight: 600 }}>FILTERS</div>
                     {(selectedCharacters.size > 0 || selectedCategories.size > 0) && (
                       <button
@@ -1322,36 +1352,16 @@ function App() {
                     <span style={{ fontSize: '0.7rem', opacity: 0.5 }}>{showCharacterFilters ? '\u25bc' : '\u25b6'}</span>
                   </div>
                   {showCharacterFilters && (
-                    <div className="filter-chips-scroll">
-                      {availableCharacters.map(c => {
-                        const active = selectedCharacters.has(c)
-                        return (
-                          <button
-                            key={c}
-                            className={`filter-chip-compact ${active ? 'active' : ''}`}
-                            onClick={() => setSelectedCharacters(prev => { const next = new Set(prev); active ? next.delete(c) : next.add(c); return next; })}
-                            title={c}
-                          >
-                            {c}
-                          </button>
-                        )
+                    <HeroFilterDropdown
+                      availableCharacters={availableCharacters}
+                      selectedCharacters={selectedCharacters}
+                      modDetails={modDetails}
+                      onToggle={(char) => setSelectedCharacters(prev => {
+                        const next = new Set(prev);
+                        next.has(char) ? next.delete(char) : next.add(char);
+                        return next;
                       })}
-                      {/* Special chips */}
-                      <button
-                        className={`filter-chip-compact ${selectedCharacters.has('__multi') ? 'active' : ''}`}
-                        onClick={() => setSelectedCharacters(prev => { const next = new Set(prev); next.has('__multi') ? next.delete('__multi') : next.add('__multi'); return next; })}
-                        title="Multiple Heroes"
-                      >
-                        Multi
-                      </button>
-                      <button
-                        className={`filter-chip-compact ${selectedCharacters.has('__generic') ? 'active' : ''}`}
-                        onClick={() => setSelectedCharacters(prev => { const next = new Set(prev); next.has('__generic') ? next.delete('__generic') : next.add('__generic'); return next; })}
-                        title="Generic/Global"
-                      >
-                        Generic
-                      </button>
-                    </div>
+                    />
                   )}
 
                   {/* Category Chips */}
@@ -1504,6 +1514,8 @@ function App() {
                 formatFileSize={formatFileSize}
                 hideSuffix={hideSuffix}
                 showHeroIcons={showHeroIcons}
+                showHeroBg={showHeroBg}
+                showModType={showModType}
                 modDetails={modDetails}
                 characterData={characterData}
               />
@@ -1576,6 +1588,7 @@ function App() {
               }
             }}
             onToggle={() => contextMenu.mod && handleToggleMod(contextMenu.mod.path)}
+            onRename={(newName) => contextMenu.mod && handleRenameMod(contextMenu.mod.path, newName)}
             allTags={allTags}
           />
         )

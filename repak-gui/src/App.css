@@ -15,6 +15,8 @@ body {
   margin: 0;
   background: var(--bg-darkest);
   color: var(--text-primary);
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .app {
@@ -1831,13 +1833,13 @@ input[type="text"]:focus {
   border: 1px solid var(--panel-border);
   background: var(--bg-dark);
   color: var(--text-secondary);
-  border-radius: 16px;
-  padding: 0.15rem 0.45rem;
-  font-size: 0.75rem;
+  border-radius: 12px;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.72rem;
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
   white-space: nowrap;
-  min-height: 24px;
+  min-height: 16px;
   display: inline-flex;
   align-items: center;
 }
@@ -1864,6 +1866,7 @@ input[type="text"]:focus {
   font-size: 0.7rem;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
+  min-height: 20px;
 }
 
 .btn-ghost-mini:hover {
@@ -1874,4 +1877,12 @@ input[type="text"]:focus {
 .filter-section-header {
   user-select: none;
   padding: 0.15rem 0;
+}
+
+.filter-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 22px;
+  margin-bottom: 0.25rem;
 }

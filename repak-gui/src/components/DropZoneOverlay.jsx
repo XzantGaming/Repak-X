@@ -106,6 +106,8 @@ const DropZoneOverlay = ({
     const [hoveredZone, setHoveredZone] = useState(null); // 'install' | 'organize'
     const [selectedFolderId, setSelectedFolderId] = useState(null);
     const overlayRef = useRef(null);
+    const folderTreeRef = useRef(null);
+    const scrollIntervalRef = useRef(null);
 
     const rootFolder = useMemo(() => folders.find(f => f.is_root), [folders]);
     const subfolders = useMemo(() => folders.filter(f => !f.is_root), [folders]);
@@ -122,6 +124,34 @@ const DropZoneOverlay = ({
         }
     }, [isVisible]);
 
+    // Cleanup scroll interval on unmount
+    useEffect(() => {
+        return () => {
+            if (scrollIntervalRef.current) {
+                clearInterval(scrollIntervalRef.current);
+            }
+        };
+    }, []);
+
+    // Edge scroll handlers
+    const startScrolling = (direction) => {
+        if (scrollIntervalRef.current) return;
+
+        const scrollAmount = direction === 'up' ? -8 : 8;
+        scrollIntervalRef.current = setInterval(() => {
+            if (folderTreeRef.current) {
+                folderTreeRef.current.scrollTop += scrollAmount;
+            }
+        }, 16); // ~60fps
+    };
+
+    const stopScrolling = () => {
+        if (scrollIntervalRef.current) {
+            clearInterval(scrollIntervalRef.current);
+            scrollIntervalRef.current = null;
+        }
+    };
+
     // Listen to Tauri drag-over event for position-based detection
     useEffect(() => {
         if (!isVisible) return;
@@ -131,6 +161,20 @@ const DropZoneOverlay = ({
             if (!position) return;
 
             const { x, y } = position;
+
+            // Check if over scroll zones and auto-scroll
+            if (folderTreeRef.current) {
+                const rect = folderTreeRef.current.getBoundingClientRect();
+                const edgeSize = 40; // Size of scroll zone in pixels
+
+                if (y >= rect.top && y <= rect.top + edgeSize && y >= rect.top) {
+                    startScrolling('up');
+                } else if (y >= rect.bottom - edgeSize && y <= rect.bottom) {
+                    startScrolling('down');
+                } else {
+                    stopScrolling();
+                }
+            }
 
             // Find element at this position
             const element = document.elementFromPoint(x, y);
@@ -173,6 +217,7 @@ const DropZoneOverlay = ({
 
         return () => {
             unlistenDragOver.then(f => f());
+            stopScrolling();
         };
     }, [isVisible, selectedFolderId, onInstallDrop, onQuickOrganizeDrop]);
 
@@ -220,31 +265,47 @@ const DropZoneOverlay = ({
                             <h2>Quick Organize</h2>
                             <p>Hover over a folder below, then drop to install there</p>
 
-                            <div className="folder-tree-container">
-                                {/* Root folder */}
-                                {rootFolder && (
-                                    <div
-                                        className={`drop-folder-item root-item ${selectedFolderId === rootFolder.id ? 'selected' : ''}`}
-                                        data-folder-id={rootFolder.id}
-                                        data-dropzone="folder"
-                                        onClick={() => setSelectedFolderId(rootFolder.id)}
-                                    >
-                                        <span className="folder-icon"><VscFolderOpened /></span>
-                                        <span className="folder-name">{rootFolder.name}</span>
-                                    </div>
-                                )}
+                            <div className="folder-tree-wrapper">
+                                {/* Scroll zone - Top */}
+                                <div
+                                    className="scroll-zone scroll-zone-top"
+                                    onMouseEnter={() => startScrolling('up')}
+                                    onMouseLeave={stopScrolling}
+                                />
 
-                                {/* Subfolders */}
-                                <div className="drop-folder-tree">
-                                    {treeData.map(node => (
-                                        <DropFolderNode
-                                            key={node.fullPath || node.id}
-                                            node={node}
-                                            selectedFolderId={selectedFolderId}
-                                            onSelect={setSelectedFolderId}
-                                        />
-                                    ))}
+                                <div className="folder-tree-container" ref={folderTreeRef}>
+                                    {/* Root folder */}
+                                    {rootFolder && (
+                                        <div
+                                            className={`drop-folder-item root-item ${selectedFolderId === rootFolder.id ? 'selected' : ''}`}
+                                            data-folder-id={rootFolder.id}
+                                            data-dropzone="folder"
+                                            onClick={() => setSelectedFolderId(rootFolder.id)}
+                                        >
+                                            <span className="folder-icon"><VscFolderOpened /></span>
+                                            <span className="folder-name">{rootFolder.name}</span>
+                                        </div>
+                                    )}
+
+                                    {/* Subfolders */}
+                                    <div className="drop-folder-tree">
+                                        {treeData.map(node => (
+                                            <DropFolderNode
+                                                key={node.fullPath || node.id}
+                                                node={node}
+                                                selectedFolderId={selectedFolderId}
+                                                onSelect={setSelectedFolderId}
+                                            />
+                                        ))}
+                                    </div>
                                 </div>
+
+                                {/* Scroll zone - Bottom */}
+                                <div
+                                    className="scroll-zone scroll-zone-bottom"
+                                    onMouseEnter={() => startScrolling('down')}
+                                    onMouseLeave={stopScrolling}
+                                />
                             </div>
 
                             {selectedFolderId && (
@@ -261,3 +322,4 @@ const DropZoneOverlay = ({
 };
 
 export default DropZoneOverlay;
+

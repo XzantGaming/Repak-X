@@ -21,6 +21,8 @@ export default function SettingsPanel({ settings, onSave, onClose, theme, setThe
   const [hideSuffix, setHideSuffix] = useState(settings.hideSuffix || false);
   const [autoOpenDetails, setAutoOpenDetails] = useState(settings.autoOpenDetails || false);
   const [showHeroIcons, setShowHeroIcons] = useState(settings.showHeroIcons || false);
+  const [showHeroBg, setShowHeroBg] = useState(settings.showHeroBg || false);
+  const [showModType, setShowModType] = useState(settings.showModType || false);
   const [usmapStatus, setUsmapStatus] = useState('');
   const [isUpdatingChars, setIsUpdatingChars] = useState(false);
   const [charUpdateStatus, setCharUpdateStatus] = useState('');
@@ -66,7 +68,9 @@ export default function SettingsPanel({ settings, onSave, onClose, theme, setThe
       globalUsmap,
       hideSuffix,
       autoOpenDetails,
-      showHeroIcons
+      showHeroIcons,
+      showHeroBg,
+      showModType
     });
     onClose();
   };
@@ -278,7 +282,23 @@ export default function SettingsPanel({ settings, onSave, onClose, theme, setThe
                   checked={showHeroIcons}
                   onChange={(checked) => setShowHeroIcons(checked)}
                 >
-                  <span style={{ paddingLeft: '4px', fontWeight: 'normal', opacity: 0.9 }}>Show hero icon and background on mod cards (Experimental)</span>
+                  <span style={{ paddingLeft: '4px', fontWeight: 'normal', opacity: 0.9 }}>Show hero icons on mod cards (experimental)</span>
+                </Checkbox>
+              </div>
+              <div style={{ marginTop: '0.5rem' }}>
+                <Checkbox
+                  checked={showHeroBg}
+                  onChange={(checked) => setShowHeroBg(checked)}
+                >
+                  <span style={{ paddingLeft: '4px', fontWeight: 'normal', opacity: 0.9 }}>Show hero background on mod cards (experimental)</span>
+                </Checkbox>
+              </div>
+              <div style={{ marginTop: '0.5rem' }}>
+                <Checkbox
+                  checked={showModType}
+                  onChange={(checked) => setShowModType(checked)}
+                >
+                  <span style={{ paddingLeft: '4px', fontWeight: 'normal', opacity: 0.9 }}>Show mod type badge on cards</span>
                 </Checkbox>
               </div>
             </div>

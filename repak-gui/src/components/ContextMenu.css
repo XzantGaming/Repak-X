@@ -1,22 +1,22 @@
 /* Context Menu */
 .context-menu {
   position: fixed;
-  background: #2a2a2a;
-  border: 1px solid #3a3a3a;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
   border-radius: 6px;
   padding: 4px 0;
   min-width: 180px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
   z-index: 9999;
-  color: #e0e0e0;
+  color: var(--text-primary);
   font-size: 0.9rem;
 }
 
 .context-menu-header {
   padding: 6px 12px;
   font-size: 0.8rem;
-  color: #888;
-  border-bottom: 1px solid #3a3a3a;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--panel-border);
   margin-bottom: 4px;
   white-space: nowrap;
   overflow: hidden;
@@ -31,26 +31,28 @@
   justify-content: space-between;
   align-items: center;
   position: relative;
+  color: var(--text-primary);
 }
 
 .context-menu-item:hover {
-  background: #4a9eff;
+  background: var(--accent-primary);
   color: white;
 }
 
 .context-menu-item.disabled {
-  color: #666;
+  color: var(--text-secondary);
+  opacity: 0.5;
   cursor: default;
 }
 
 .context-menu-item.disabled:hover {
   background: transparent;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .context-menu-separator {
   height: 1px;
-  background: #3a3a3a;
+  background: var(--panel-border);
   margin: 4px 0;
 }
 
@@ -66,27 +68,27 @@
   position: absolute;
   left: 100%;
   top: -4px;
-  background: #2a2a2a;
-  border: 1px solid #3a3a3a;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
   border-radius: 6px;
   padding: 4px 0;
   min-width: 160px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
 
-.context-menu-item:hover > .submenu {
+.context-menu-item:hover>.submenu {
   display: block;
 }
 
 
 .context-menu-item.danger {
-  color: #ff6b6b;
+  color: var(--danger);
   position: relative;
   overflow: hidden;
 }
 
 .context-menu-item.danger:hover {
-  background: #ff4757;
+  background: var(--danger);
   color: white;
 }
 
@@ -96,7 +98,7 @@
   left: 0;
   bottom: 0;
   width: 100%;
-  background: #ff4757;
+  background: var(--danger);
   z-index: 1;
   transform-origin: left;
   transform: scaleX(0);
@@ -119,4 +121,125 @@
 
 .context-menu-item.danger:hover {
   background: transparent;
+}
+
+/* Active state for menu items */
+.context-menu-item.active {
+  background: color-mix(in srgb, var(--accent-primary), transparent 80%);
+  color: var(--accent-primary);
+}
+
+/* Rename Panel */
+.rename-panel {
+  position: fixed;
+  background: var(--panel-bg);
+  border: 1px solid var(--accent-primary);
+  border-radius: 8px;
+  padding: 12px;
+  min-width: 220px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  z-index: 10000;
+}
+
+.rename-panel-header {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+}
+
+.rename-input-wrapper {
+  display: flex;
+  align-items: center;
+  background: var(--bg-darker);
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.rename-input-wrapper:focus-within {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary), transparent 80%);
+}
+
+.rename-input {
+  flex: 1;
+  padding: 8px 10px;
+  font-size: 0.9rem;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  outline: none;
+  min-width: 0;
+}
+
+.rename-suffix-hint {
+  padding: 8px 10px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  background: var(--bg-dark);
+  border-left: 1px solid var(--panel-border);
+  white-space: nowrap;
+  font-family: monospace;
+}
+
+.rename-preview {
+  margin-top: 8px;
+  padding: 6px 8px;
+  background: var(--bg-dark);
+  border-radius: 4px;
+  font-size: 0.75rem;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.rename-preview-label {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.rename-preview-filename {
+  color: var(--accent-primary);
+  font-family: monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rename-panel-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  justify-content: flex-end;
+}
+
+.rename-btn {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.rename-btn.cancel {
+  background: transparent;
+  border-color: var(--panel-border);
+  color: var(--text-secondary);
+}
+
+.rename-btn.cancel:hover {
+  background: var(--bg-lighter);
+  color: var(--text-primary);
+}
+
+.rename-btn.confirm {
+  background: var(--accent-primary);
+  color: white;
+}
+
+.rename-btn.confirm:hover {
+  filter: brightness(1.1);
 }

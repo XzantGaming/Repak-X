@@ -73,7 +73,10 @@ function ModItem({
     hideSuffix,
     onContextMenu,
     showHeroIcons,
+    showHeroBg,
+    showModType,
     characterName,
+    category,
     viewMode,
     characterData
 }) {
@@ -120,14 +123,14 @@ function ModItem({
         setIsDeleteHolding(false)
     }
 
-    // Get hero image for background/badge
-    const heroImage = showHeroIcons ? getHeroImage(characterName, characterData) : null
+    // Get hero image for background/badge (only if either icons or bg are enabled)
+    const heroImage = (showHeroIcons || showHeroBg) ? getHeroImage(characterName, characterData) : null
     const isCardView = viewMode === 'grid' || viewMode === 'compact'
 
     return (
         <motion.div
             layout
-            className={`mod-card ${selectedMods.has(mod.path) ? 'selected' : ''} ${selectedMod?.path === mod.path ? 'viewing' : ''} ${heroImage && showHeroIcons ? 'has-hero-bg' : ''}`}
+            className={`mod-card ${selectedMods.has(mod.path) ? 'selected' : ''} ${selectedMod?.path === mod.path ? 'viewing' : ''} ${heroImage && showHeroBg ? 'has-hero-bg' : ''}`}
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
@@ -135,7 +138,7 @@ function ModItem({
             onContextMenu={(e) => onContextMenu(e, mod)}
         >
             {/* Blurred hero background for all views */}
-            {heroImage && showHeroIcons && (
+            {heroImage && showHeroBg && (
                 <div
                     className="mod-card-hero-bg"
                     style={{ backgroundImage: `url(${heroImage})` }}
@@ -170,6 +173,7 @@ function ModItem({
                         }
                     }}
                     whileHover={{ color: 'var(--accent-primary)' }}
+                    transition={{ duration: 0 }}
                     title={rawName}
                 >
                     <span className="mod-name-text">
@@ -179,13 +183,19 @@ function ModItem({
                 </motion.button>
             </div>
 
-            {/* Hero icon + Tags row for card views */}
-            {(heroImage && showHeroIcons && isCardView) || tags.length > 0 ? (
+            {/* Hero icon + Mod Type Badge + Tags row */}
+            {((heroImage && showHeroIcons && isCardView) || (showModType && category) || tags.length > 0) ? (
                 <div className="mod-tags-row">
                     {heroImage && showHeroIcons && isCardView && (
                         <Tooltip title={characterName || 'Unknown Hero'}>
                             <img src={heroImage} alt="" className="mod-hero-icon-badge" />
                         </Tooltip>
+                    )}
+                    {/* Type badge at start for card views */}
+                    {showModType && category && isCardView && (
+                        <span className={`mod-type-badge category-badge ${category.toLowerCase().replace(/\s+/g, '-')}-badge`}>
+                            {category}
+                        </span>
                     )}
                     {visibleTags.map(tag => (
                         <span key={tag} className="tag">
@@ -229,6 +239,12 @@ function ModItem({
                                 +{hiddenTags.length}
                             </span>
                         </Tooltip>
+                    )}
+                    {/* Type badge at end for list view */}
+                    {showModType && category && !isCardView && (
+                        <span className={`mod-type-badge category-badge ${category.toLowerCase().replace(/\s+/g, '-')}-badge`}>
+                            {category}
+                        </span>
                     )}
                 </div>
             ) : null}
@@ -294,6 +310,8 @@ export default function ModsList({
     formatFileSize,
     hideSuffix,
     showHeroIcons,
+    showHeroBg,
+    showModType,
     modDetails,
     characterData
 }) {
@@ -326,7 +344,10 @@ export default function ModsList({
                             formatFileSize={formatFileSize}
                             hideSuffix={hideSuffix}
                             showHeroIcons={showHeroIcons}
+                            showHeroBg={showHeroBg}
+                            showModType={showModType}
                             characterName={details?.character_name}
+                            category={details?.category}
                             viewMode={viewMode}
                             characterData={characterData}
                         />
