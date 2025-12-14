@@ -1,0 +1,196 @@
+ver 0.6.1
+- Added support for non-2D textures with mipmaps.
+- Fixed errors when reading some ucas/utoc assets from UE5.4 games
+- Fixed some error messages about input paths.
+- Fixed errors when reading some broken dds files.
+
+ver 0.6.0
+- Supported ucas/utoc assets.
+- Added support for UE5.4.
+- Updated DirectXTex to the March 2024 release.
+- Updated GUI to v0.6.4
+- Fixed typos.
+- Removed unused python libraries.
+- Fixed an error when reading non-texture assets for UE5.2 or later.
+
+ver 0.5.6
+- Added support for ETC formats. (ETC1, ETC2_RGB, and ETC2_RGBA)
+- Fixed an error when injecting texture arrays.
+- Fixed an error when injecting ASTC textures.
+- Updated GUI to v0.6.3
+
+ver 0.5.5
+- Supported UE5.3
+
+ver 0.5.4
+- Added support for ASTC formats. (6x6, 8x8, 10x10, and 12x12)
+- Fixed a bug that the DDS converter will accept unknown DXGI formats.
+- Fixed a bug that the portable python can refer the installed python with some environment variables.
+- Fixed a bug that the imported size will be used as the actual size.
+- Updated GUI to v0.5.1
+
+ver 0.5.3
+- Supported UE5.2
+- Fixed a bug that python requires installed vcruntime.
+- Fixed an error for some UE4.25 assets.
+- Fixed a bug that check mode won't work with cubemaps for UE4.24 and 4.25
+- Fixed an error when UE4.16 assets have no .uexp files
+- Updated GUI to v0.4.1
+
+ver 0.5.2
+- Supported *.uptnl files.
+- Introduced multiprocessing.
+- Updated python from 3.9 to 3.10.
+- Removed unnecessary files from embeddable python.
+- Fixed an error when loading empty textures.
+- Fixed an error when exporting BC6 textures.
+- Fixed an error when exports have positive values for class ids.
+- Fixed an error when exporting cubemaps as tga.
+
+ver 0.5.1
+- Updated GUI to v0.3.0
+- Added tooltips to GUI
+- Fixed a bug that max size will be uexp's max size.
+- Fixed a bug that ubulk flags won't be updated correctly.
+- Enabled "skip_non_texture" option and cubic filter as default.
+
+ver 0.5.0
+- Supported Texture2DArray, TextureCubeArray, and VolumeTexture
+- Restored the batch file method for injection
+- Added "save detected version" option for check mode
+- Added "copy" mode
+- Fixed a bug that num slices won't be saved correctly for some old UE versions.
+- Refactored serialize functions
+- Removed file list method (txt will be used for batch file method)
+
+ver 0.4.5
+- Supported ShadowMapTexture2D
+- Added filter options (Possible to use bicubic interpolation for mip generation)
+- Updated GUI to v0.2.2 (GUI can save output path for each mode)
+- Improved error massages for dds files
+- Fixed a bug that the tool can't load uncompressed mipmaps correctly
+- Fixed an error when loading non-zero values for FObjectExport.TemplateIndex
+- Added tests
+
+ver 0.4.4
+- Supported UE4.0 ~ 4.9.
+- Added "Skip non-texture assets" option.
+- Fixed an error when loading assets that have multiple textures.
+- Improved check mode (removed unnecessary versions from the check list)
+- Removed parse errors for unsupported pixel formats
+- Refined codes
+
+ver 0.4.3
+- Supported UE4.10 ~ 4.12
+- Supported assets that have multiple texture objects
+- Supported LightMapTexture2D
+- Added a function to update PackageSource (use "MOD " for PackageSource)
+- Updated texconv
+
+ver 0.4.2
+- Supported UE5.1
+- Supported assets that have multiple texture objects (only for export mode)
+- Fixed an error when assets have non-ascii characters.
+- Fixed a bug that it won't update file size when updating name map.
+- Refined codes
+
+ver 0.4.1
+- Supported more pixel formats
+- Supported dds files that have no fourCC
+- Added "force_uncompressed" option to inject mode
+
+ver 0.4.0 (Introduced Texconv-Custom-DLL)
+- Updated GUI (v0.1.2 to v0.2.1)
+- Introduced tempfile for temporary files
+- Introduced custom build for texconv (Texconv-Custom-DLL)
+- Supported cubemaps
+- Improved DDS handling
+
+ver 0.3.3
+- Supported UE5.0 assets
+- Supported unversioned header
+- Supported PF_ASTC_4X4
+
+ver 0.3.2-hotfix
+- Fixed a bug check mode won't work if the imported size is not the same as the actual size.
+
+
+ver 0.3.2
+- Added support for Borderlands3
+- Removed legacy method (2-step injection with batch files)
+- Improved folder method
+- Minor updates for GUI
+
+ver 0.3.1
+- Added support for UE4.13, 4.14
+- Fixed a bug check mode is not working
+- Fixed an error when extracting uncompressed HDR textures (FloatRGBA)
+- Minor updates for GUI
+
+ver 0.3.0 (Introduced Texconv)
+- Added support for tga, hdr, png, jpg, bmp. (You can inject non-dds files.)
+- Added support for 4.16, 4.17
+- Added --no_mipmaps option
+
+ver 0.2.6
+- Added support for 4.15, 4.20~4.24
+- Added support for texconv to GUI
+
+ver 0.2.5
+- Added check mode (You can check which versions are the same format as your assets)
+- Added check mode and export mode to GUI
+- Fixed an error when loading assets corrupted by name table editing
+- Modified comparison function
+- Minor updates for GUI
+
+ver 0.2.4
+- Added support for UE4.25 games
+- Added support for UE4.26 games
+- Minor updates for GUI
+
+ver 0.2.3
+- Added support for GUI
+- Made folder loader recursive
+- Modified data structure
+- Improved readability
+
+ver 0.2.2
+- Added support for Bloodstained
+
+ver 0.2.1
+- Added support for UE4.27 games
+- Added support for cube maps
+- Fixed an error when loading some assets.
+
+ver 0.2.0 (Supported other UE versions)
+- Added support for UE4.18 and UE4.19 games
+
+ver 0.1.7
+- Added support for .DDS
+- Added feature to specify files in txt
+- Fixed an error when loading some assets
+
+ver 0.1.6
+- Added support for BC7, DXT5/BC3, BC1
+- Removed header files
+
+ver 0.1.5
+- Ignored sign when importing BC6H
+- Added support for B8G8R8A8(sRGB)
+
+ver 0.1.4
+ - Added support for BC6H(unsigned)
+ - Added support for any size mipmaps (no need to use power of 2 as height and width)
+
+ver 0.1.3
+ - Added export function
+ - Bugfix
+
+ver 0.1.2
+ - Added support for ATI1 and ATI2
+
+ver 0.1.1
+ - Allow an folder as input.
+
+ver 0.1.0
+ - Initial version

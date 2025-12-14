@@ -1,0 +1,3 @@
+E:\WindsurfCoding\repak_rivals-remastered\Repak_Gui-Revamped-TauriUpdate\uasset_toolkit\tools\UAssetTool\bin\Release\net8.0\win-x64\publish\UAssetTool.pdb
+E:\WindsurfCoding\repak_rivals-remastered\Repak_Gui-Revamped-TauriUpdate\uasset_toolkit\tools\UAssetTool\bin\Release\net8.0\win-x64\publish\UAssetAPI.pdb
+E:\WindsurfCoding\repak_rivals-remastered\Repak_Gui-Revamped-TauriUpdate\uasset_toolkit\tools\UAssetTool\bin\Release\net8.0\win-x64\publish\UAssetTool.exe
