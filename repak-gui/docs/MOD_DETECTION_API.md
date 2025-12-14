@@ -76,7 +76,7 @@ The pure mod category without character information.
 - `"VFX"` - Visual effects mods
 - `"UI"` - User interface mods
 - `"Movies"` - Video/cutscene mods
-- `"Retexture"` - Texture mods
+- `"Texture"` - Texture mods
 - `"Unknown"` - Could not determine type
 
 ---
@@ -341,7 +341,7 @@ You can use icons to represent different mod categories:
 - **VFX**: ✨ or 🎆
 - **UI**: 🖥️ or 📱
 - **Movies**: 🎬 or 📹
-- **Retexture**: 🎨 or 🖼️
+- **Texture**: 🎨 or 🖼️
 - **Static Mesh**: 🏗️ or 📦
 
 ---

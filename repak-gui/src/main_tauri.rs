@@ -1563,6 +1563,61 @@ async fn copy_to_clipboard(text: String, window: Window) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn rename_mod(old_path: String, new_name: String) -> Result<String, String> {
+    let old_path_buf = PathBuf::from(&old_path);
+    
+    if !old_path_buf.exists() {
+        return Err(format!("File does not exist: {}", old_path));
+    }
+    
+    // Get the parent directory and extension
+    let parent = old_path_buf.parent()
+        .ok_or_else(|| "Cannot get parent directory".to_string())?;
+    let extension = old_path_buf.extension()
+        .map(|e| e.to_string_lossy().to_string())
+        .unwrap_or_default();
+    
+    // Build the new path with the new name but same extension
+    let new_file_name = if extension.is_empty() {
+        new_name.clone()
+    } else {
+        format!("{}.{}", new_name, extension)
+    };
+    let new_path = parent.join(&new_file_name);
+    
+    if new_path.exists() {
+        return Err(format!("A file with name '{}' already exists", new_file_name));
+    }
+    
+    // Rename the main file
+    std::fs::rename(&old_path_buf, &new_path)
+        .map_err(|e| format!("Failed to rename file: {}", e))?;
+    
+    // If it's a .pak file, also rename associated IoStore files (.ucas, .utoc)
+    if extension.to_lowercase() == "pak" {
+        let old_stem = old_path_buf.file_stem()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_default();
+        
+        // Rename .ucas file if it exists
+        let old_ucas = parent.join(format!("{}.ucas", old_stem));
+        if old_ucas.exists() {
+            let new_ucas = parent.join(format!("{}.ucas", new_name));
+            let _ = std::fs::rename(&old_ucas, &new_ucas);
+        }
+        
+        // Rename .utoc file if it exists
+        let old_utoc = parent.join(format!("{}.utoc", old_stem));
+        if old_utoc.exists() {
+            let new_utoc = parent.join(format!("{}.utoc", new_name));
+            let _ = std::fs::rename(&old_utoc, &new_utoc);
+        }
+    }
+    
+    Ok(new_path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
 async fn create_folder(name: String, state: State<'_, Arc<Mutex<AppState>>>) -> Result<String, String> {
     let state = state.lock().unwrap();
     let game_path = &state.game_path;
@@ -3344,6 +3399,7 @@ fn main() {
             install_mods,
             quick_organize,
             delete_mod,
+            rename_mod,
             open_in_explorer,
             copy_to_clipboard,
             create_folder,

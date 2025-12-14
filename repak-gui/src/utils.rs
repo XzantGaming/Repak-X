@@ -242,7 +242,7 @@ pub fn get_pak_characteristics_detailed(mod_contents: Vec<String>) -> ModCharact
     heroes.sort();
 
     // Determine the pure category (without character name)
-    // Priority order: Audio/Movies/UI (pure) > Mesh > Static Mesh > VFX > Audio (mixed) > Retexture
+    // Priority order: Audio/Movies/UI (pure) > Mesh > Static Mesh > VFX > Audio (mixed) > Texture
     // Note: Blueprint and Text are now additive categories and handled separately
     let category = if has_audio && !has_skeletal_mesh && !has_static_mesh && !has_texture && !has_material {
         "Audio"
@@ -259,7 +259,7 @@ pub fn get_pak_characteristics_detailed(mod_contents: Vec<String>) -> ModCharact
     } else if has_audio {
         "Audio"
     } else if has_texture {
-        "Retexture"
+        "Texture"
     } else if has_blueprint {
         // Blueprint-only mod (no other primary category detected)
         "Blueprint"
