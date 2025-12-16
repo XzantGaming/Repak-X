@@ -5,7 +5,6 @@ import { AnimatedThemeToggler } from './ui/AnimatedThemeToggler'
 import Checkbox from './ui/Checkbox'
 import { LuFolderInput } from "react-icons/lu"
 import { RiSparkling2Fill } from "react-icons/ri"
-import { IoMdRefresh, IoIosSkipForward } from "react-icons/io"
 import './SettingsPanel.css'
 
 const ACCENT_COLORS = {
@@ -24,34 +23,16 @@ export default function SettingsPanel({ settings, onSave, onClose, theme, setThe
   const [showHeroBg, setShowHeroBg] = useState(settings.showHeroBg || false);
   const [showModType, setShowModType] = useState(settings.showModType || false);
   const [usmapStatus, setUsmapStatus] = useState('');
-  const [isUpdatingChars, setIsUpdatingChars] = useState(false);
-  const [charUpdateStatus, setCharUpdateStatus] = useState('');
-  const [isSkippingLauncher, setIsSkippingLauncher] = useState(false);
-  const [skipLauncherStatus, setSkipLauncherStatus] = useState('');
-  const [isLauncherPatchEnabled, setIsLauncherPatchEnabled] = useState(false);
+  const [showRatMode, setShowRatMode] = useState(false);
 
-  // Check skip launcher status on mount
-  React.useEffect(() => {
-    const checkStatus = async () => {
-      try {
-        const isEnabled = await invoke('get_skip_launcher_status');
-        setIsLauncherPatchEnabled(isEnabled);
-      } catch (error) {
-        console.error('Failed to check skip launcher status:', error);
-      }
-    };
-    checkStatus();
-  }, []);
-
-  // Clear skip launcher status after 5 seconds
-  React.useEffect(() => {
-    if (skipLauncherStatus) {
-      const timer = setTimeout(() => {
-        setSkipLauncherStatus('');
-      }, 5000);
-      return () => clearTimeout(timer);
+  // Easter egg: briefly show "Rat Mode" when switching to light theme
+  const handleThemeToggle = (newTheme) => {
+    if (newTheme === 'light') {
+      setShowRatMode(true);
+      setTimeout(() => setShowRatMode(false), 300);
     }
-  }, [skipLauncherStatus]);
+    setTheme(newTheme);
+  };
 
   // Clear usmap status after 5 seconds
   React.useEffect(() => {
@@ -73,47 +54,6 @@ export default function SettingsPanel({ settings, onSave, onClose, theme, setThe
       showModType
     });
     onClose();
-  };
-
-  const handleUpdateCharacterData = async () => {
-    setIsUpdatingChars(true);
-    setCharUpdateStatus('Updating...');
-    try {
-      const count = await invoke('update_character_data_from_github');
-      setCharUpdateStatus(`✓ Successfully updated! ${count} new skins added.`);
-    } catch (error) {
-      setCharUpdateStatus(`Error: ${error}`);
-    } finally {
-      setIsUpdatingChars(false);
-    }
-  };
-
-  const handleCancelUpdate = async () => {
-    try {
-      await invoke('cancel_character_update');
-      setCharUpdateStatus('Cancelling...');
-    } catch (error) {
-      console.error('Failed to cancel:', error);
-    }
-  };
-
-  const handleSkipLauncherPatch = async () => {
-    setIsSkippingLauncher(true);
-    setSkipLauncherStatus('');
-    try {
-      // Toggle the skip launcher patch
-      const isEnabled = await invoke('skip_launcher_patch');
-      setIsLauncherPatchEnabled(isEnabled);
-      setSkipLauncherStatus(
-        isEnabled
-          ? '✓ Skip launcher enabled (launch_record = 0)'
-          : '✓ Skip launcher disabled (launch_record = 6)'
-      );
-    } catch (error) {
-      setSkipLauncherStatus(`Error: ${error}`);
-    } finally {
-      setIsSkippingLauncher(false);
-    }
   };
 
   const handleBrowseUsmap = async () => {
@@ -217,50 +157,6 @@ export default function SettingsPanel({ settings, onSave, onClose, theme, setThe
           </div>
 
           <div className="setting-section">
-            <h3>Skip Launcher Patch</h3>
-            <div className="setting-group">
-              <p style={{ fontSize: '0.9rem', opacity: 0.7, marginBottom: '0.5rem' }}>
-                Sets <b>launch_record</b> value to 0.
-              </p>
-              <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                <button
-                  onClick={handleSkipLauncherPatch}
-                  disabled={isSkippingLauncher}
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-                >
-                  <IoIosSkipForward size={16} />
-                  {isSkippingLauncher ? 'Applying...' : 'Skip Launcher Patch'}
-                </button>
-                <span style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.4rem',
-                  fontSize: '0.85rem',
-                  fontWeight: 600,
-                  color: isLauncherPatchEnabled ? '#4CAF50' : '#ff5252'
-                }}>
-                  <span style={{
-                    width: '8px',
-                    height: '8px',
-                    borderRadius: '50%',
-                    backgroundColor: isLauncherPatchEnabled ? '#4CAF50' : '#ff5252'
-                  }}></span>
-                  {isLauncherPatchEnabled ? 'Enabled' : 'Disabled'}
-                </span>
-              </div>
-              {skipLauncherStatus && (
-                <p style={{
-                  fontSize: '0.85rem',
-                  marginTop: '0.5rem',
-                  color: skipLauncherStatus.includes('Error') ? '#ff5252' : '#4CAF50'
-                }}>
-                  {skipLauncherStatus}
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div className="setting-section">
             <h3>Mods View Settings</h3>
             <div className="setting-group">
               <Checkbox
@@ -305,40 +201,12 @@ export default function SettingsPanel({ settings, onSave, onClose, theme, setThe
           </div>
 
           <div className="setting-section">
-            <h3>Character Database</h3>
-            <div className="setting-group">
-              <p style={{ fontSize: '0.9rem', opacity: 0.7, marginBottom: '0.5rem' }}>
-                Update the character database from GitHub to support new heroes and skins.
-              </p>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <button
-                  onClick={handleUpdateCharacterData}
-                  disabled={isUpdatingChars}
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-                >
-                  <IoMdRefresh size={18} className={isUpdatingChars ? 'spin-animation' : ''} />
-                  {isUpdatingChars ? 'Updating...' : 'Update Heroes Database'}
-                </button>
-              </div>
-              {charUpdateStatus && (
-                <p style={{
-                  fontSize: '0.85rem',
-                  marginTop: '0.5rem',
-                  color: charUpdateStatus.includes('Error') || charUpdateStatus.includes('Cancelled') ? '#ff5252' : '#4CAF50'
-                }}>
-                  {charUpdateStatus}
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div className="setting-section">
             <h3>Theme</h3>
             <div className="setting-group">
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-                <AnimatedThemeToggler theme={theme} setTheme={setTheme} />
+                <AnimatedThemeToggler theme={theme} setTheme={handleThemeToggle} />
                 <span style={{ fontSize: '0.9rem', opacity: 0.8 }}>
-                  {theme === 'dark' ? 'Dark Mode' : 'Light Mode'}
+                  {theme === 'dark' ? 'Dark Mode' : (showRatMode ? 'Rat Mode 🐀' : 'Light Mode')}
                 </span>
               </div>
 

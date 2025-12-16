@@ -23,11 +23,13 @@ import {
 } from '@mui/icons-material'
 import { RiDeleteBin2Fill } from 'react-icons/ri'
 import { FaTag } from "react-icons/fa6"
+import { FaTools } from "react-icons/fa"
 import Checkbox from './components/ui/Checkbox'
 import ModDetailsPanel from './components/ModDetailsPanel'
 import ModsList from './components/ModsList'
 import InstallModPanel from './components/InstallModPanel'
 import SettingsPanel from './components/SettingsPanel'
+import ToolsPanel from './components/ToolsPanel'
 import SharingPanel from './components/SharingPanel'
 import FileTree from './components/FileTree'
 import FolderTree from './components/FolderTree'
@@ -107,6 +109,7 @@ function App() {
   const [theme, setTheme] = useState('dark');
   const [accentColor, setAccentColor] = useState('#4a9eff');
   const [showSettings, setShowSettings] = useState(false);
+  const [showToolsPanel, setShowToolsPanel] = useState(false);
   const [showSharingPanel, setShowSharingPanel] = useState(false);
 
   const [gamePath, setGamePath] = useState('')
@@ -1179,6 +1182,12 @@ function App() {
         />
       )}
 
+      {showToolsPanel && (
+        <ToolsPanel
+          onClose={() => setShowToolsPanel(false)}
+        />
+      )}
+
       {showSharingPanel && (
         <SharingPanel
           onClose={() => setShowSharingPanel(false)}
@@ -1312,6 +1321,14 @@ function App() {
             title="Share Mods"
           >
             <WifiIcon /> Share
+          </button>
+          <button
+            onClick={() => setShowToolsPanel(true)}
+            className="btn-settings"
+            title="Tools"
+            style={{ minHeight: '42px' }}
+          >
+            <FaTools size={18} /> Tools
           </button>
           <button
             onClick={() => setShowSettings(true)}
