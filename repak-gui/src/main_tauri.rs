@@ -25,7 +25,7 @@ use simplelog::{ColorChoice, CombinedLogger, Config, TermLogger, TerminalMode, W
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use tauri::{Emitter, Listener, State, Window};
+use tauri::{Emitter, Listener, Manager, State, Window};
 use utils::find_marvel_rivals;
 use walkdir::WalkDir;
 use regex_lite::Regex;
@@ -3409,6 +3409,47 @@ async fn p2p_hash_file(file_path: String) -> Result<String, String> {
 }
 
 // ============================================================================
+// PROTOCOL REGISTRATION (Portable App Support)
+// ============================================================================
+
+/// Registers the repakx:// protocol handler in Windows Registry (HKCU)
+/// This enables the browser extension to communicate with the app.
+/// Safe to call on every startup - it will just update the path if needed.
+#[cfg(target_os = "windows")]
+fn register_protocol_handler() -> Result<(), Box<dyn std::error::Error>> {
+    use winreg::enums::*;
+    use winreg::RegKey;
+    
+    let exe_path = std::env::current_exe()?;
+    let exe_path_str = exe_path.to_string_lossy();
+    
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    
+    // Create or open the protocol key
+    let (protocol_key, _) = hkcu.create_subkey(r"Software\Classes\repakx")?;
+    protocol_key.set_value("", &"URL:Repak X Protocol")?;
+    protocol_key.set_value("URL Protocol", &"")?;
+    
+    // Create the DefaultIcon key (optional, for nice icon in Windows)
+    let (icon_key, _) = hkcu.create_subkey(r"Software\Classes\repakx\DefaultIcon")?;
+    icon_key.set_value("", &format!("\"{}\",0", exe_path_str))?;
+    
+    // Create the shell\open\command key
+    let (command_key, _) = hkcu.create_subkey(r"Software\Classes\repakx\shell\open\command")?;
+    let command = format!("\"{}\" \"%1\"", exe_path_str);
+    command_key.set_value("", &command)?;
+    
+    info!("Registered repakx:// protocol handler for: {}", exe_path_str);
+    Ok(())
+}
+
+#[cfg(not(target_os = "windows"))]
+fn register_protocol_handler() -> Result<(), Box<dyn std::error::Error>> {
+    // No-op on non-Windows platforms
+    Ok(())
+}
+
+// ============================================================================
 // DEEP LINK PROTOCOL HANDLER
 // ============================================================================
 
@@ -3472,6 +3513,11 @@ fn main() {
     setup_logging();
     info!("Starting Repak Gui Revamped v{}", env!("CARGO_PKG_VERSION"));
     
+    // Register protocol handler for portable app support (self-healing registry)
+    if let Err(e) = register_protocol_handler() {
+        warn!("Failed to register repakx:// protocol handler: {} - browser extension may not work", e);
+    }
+    
     // Initialize UAssetToolkit global singleton on startup
     // This starts the UAssetTool process once and keeps it alive for the app lifetime
     info!("Initializing UAssetToolkit global singleton...");
@@ -3505,6 +3551,25 @@ fn main() {
         .manage(watcher_state)
         .manage(crash_state)
         .manage(p2p_state)
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            // This closure is called when a second instance is launched
+            // `args` contains command line arguments including the deep-link URL
+            info!("Single instance callback triggered with args: {:?}", args);
+            
+            // Focus the main window
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_focus();
+                let _ = window.unminimize();
+            }
+            
+            // Check if args contains a repakx:// URL
+            for arg in args.iter() {
+                if arg.starts_with("repakx://") {
+                    info!("Received deep link from second instance: {}", arg);
+                    handle_deep_link_url(arg, app);
+                }
+            }
+        }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())

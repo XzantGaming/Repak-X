@@ -43,7 +43,7 @@ fn main() {
                 "-r",
                 "win-x64",
                 "--self-contained",
-                "false",
+                "true",
                 "-o",
                 &tool_output_dir.to_string_lossy(),
             ])
@@ -91,7 +91,7 @@ fn main() {
         }
 
         if !copied {
-            panic!("UAssetTool.exe is required but was not produced. Ensure .NET SDK is installed or precompile via: 'dotnet publish uasset_toolkit/tools/UAssetTool -c Release -r win-x64 --self-contained false'");
+            panic!("UAssetTool.exe is required but was not produced. Ensure .NET SDK is installed or precompile via: 'dotnet publish uasset_toolkit/tools/UAssetTool -c Release -r win-x64 --self-contained true'");
         }
     }
 }

@@ -30,7 +30,7 @@ urlencoding = "2"
 
 ---
 
-### ⚠️ CRITICAL: Single-Instance Support (TODO for Backend)
+### ✅ Single-Instance Support (Implemented)
 
 **Problem:** When `repakx://` URL is opened while the app is already running, Windows launches a **new instance** instead of sending the URL to the existing instance.
 
@@ -205,7 +205,7 @@ HKEY_CURRENT_USER\Software\Classes\repakx\shell\open\command
 
 ---
 
-## ⚠️ Portable App Support - Self-Registration (TODO for Backend)
+## ✅ Portable App Support - Self-Registration (Implemented)
 
 For portable apps (no installer), the protocol must be registered on first launch. This ensures the `repakx://` protocol works without requiring users to run a separate script.
 
@@ -295,25 +295,30 @@ fn main() {
 
 ## Summary
 
-| Component                      | Status             |
-| ------------------------------ | ------------------ |
-| Chrome Extension               | ✅ Complete         |
-| Button Injection               | ✅ Working          |
-| Auto-click Slow Download       | ✅ Working          |
-| Download Detection             | ✅ Working          |
-| Protocol URL Generation        | ✅ Working          |
-| **Protocol Handler in Tauri**  | ✅ **Implemented**  |
-| **Frontend Integration**       | ✅ **Implemented**  |
-| **Single-Instance Support**    | ⚠️ **TODO Backend** |
-| **Portable Self-Registration** | ⚠️ **TODO Backend** |
+| Component                      | Status              |
+| ------------------------------ | ------------------- |
+| Chrome Extension               | ✅ Complete          |
+| Button Injection               | ✅ Working           |
+| Auto-click Slow Download       | ✅ Working           |
+| Download Detection             | ✅ Working           |
+| Protocol URL Generation        | ✅ Working           |
+| **Protocol Handler in Tauri**  | ✅ **Implemented**   |
+| **Frontend Integration**       | ✅ **Implemented**   |
+| **Single-Instance Support**    | ✅ **Implemented**   |
+| **Portable Self-Registration** | ✅ **Implemented**   |
 
-### ⚠️ Current Blocker
+### ✅ All Backend Work Complete
 
-The frontend integration is complete, but **single-instance support is required** for the protocol handler to work when the app is already running. Without it, opening `repakx://` URLs launches a new instance instead of sending to the running instance.
+The protocol handler system is fully implemented:
 
-### Backend TODOs
+1. **Single-Instance Support** - Uses `tauri-plugin-single-instance` to forward deep-link URLs to the running instance
+2. **Portable Self-Registration** - Uses `winreg` crate to register the `repakx://` protocol on every app startup (HKCU, no admin required)
+3. **Deep-Link Handling** - Parses URLs, validates files, and emits events to frontend
 
-1. **Add `tauri-plugin-single-instance`** - See "CRITICAL: Single-Instance Support" section
-2. **Add self-registration for portable apps** - See "Portable App Support" section
+### Testing
+
+1. Run the app (registers protocol automatically)
+2. Open browser and navigate to: `repakx://install?file=C%3A%5Ctest%5Cmod.zip`
+3. App should focus and show the extension mod overlay
 
 
