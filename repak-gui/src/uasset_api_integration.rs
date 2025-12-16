@@ -2,15 +2,13 @@ use std::path::Path;
 use log::{info, error};
 
 // ============================================================================
-// TEXTURE MIPMAP STRIPPING IMPLEMENTATION TOGGLE
+// TEXTURE MIPMAP STRIPPING IMPLEMENTATION
 // ============================================================================
-// Options:
-//   "python"  - Use Python UE4-DDS-Tools via UAssetToolkit (proven, requires Python)
-//   "csharp"  - Use native C# UAssetAPI TextureExport (new, no Python needed)
-//   "rust"    - Use Rust uasset-texture-patch crate (experimental, has issues)
+// The batch_convert_textures_to_inline function is the primary entry point.
+// It processes multiple textures in a single UAssetTool call for performance.
 // 
-// Recommended: "csharp" - Native C# using UAssetAPI (fixing Write implementation)
-const TEXTURE_IMPLEMENTATION: &str = "csharp";
+// The single-file functions below are kept for compatibility but are not used
+// in the main workflow anymore.
 // ============================================================================
 
 /// Integration module for texture processing
@@ -20,10 +18,11 @@ const TEXTURE_IMPLEMENTATION: &str = "csharp";
 /// This removes all mipmaps except the first one and embeds the data in .uexp,
 /// eliminating the need for .ubulk files.
 /// 
-/// Uses one of three implementations based on TEXTURE_IMPLEMENTATION constant:
-/// - "python" - Python UE4-DDS-Tools via UAssetToolkit (proven, requires Python)
-/// - "csharp" - Native C# UAssetAPI TextureExport (new, no Python needed)
-/// - "rust"   - Rust uasset-texture-patch crate (experimental)
+/// NOTE: This single-file function is deprecated. Use batch_convert_textures_to_inline instead.
+#[allow(dead_code)]
+const TEXTURE_IMPLEMENTATION: &str = "csharp";
+
+#[allow(dead_code)]
 pub fn convert_texture_to_inline(uasset_path: &Path) -> Result<bool, Box<dyn std::error::Error>> {
     match TEXTURE_IMPLEMENTATION {
         "csharp" => convert_texture_to_inline_csharp(uasset_path),
@@ -33,6 +32,7 @@ pub fn convert_texture_to_inline(uasset_path: &Path) -> Result<bool, Box<dyn std
 }
 
 /// Native C# implementation using UAssetAPI TextureExport via UAssetTool
+#[allow(dead_code)]
 fn convert_texture_to_inline_csharp(uasset_path: &Path) -> Result<bool, Box<dyn std::error::Error>> {
     use uasset_toolkit::UAssetToolkitSync;
     
@@ -101,6 +101,39 @@ fn convert_texture_to_inline_python(uasset_path: &Path) -> Result<bool, Box<dyn 
         }
         Err(e) => {
             error!("[Python] Failed to initialize UAssetToolkit: {}", e);
+            Err(e.into())
+        }
+    }
+}
+
+/// Batch convert multiple textures to inline format by stripping mipmaps.
+/// This is much faster than calling convert_texture_to_inline for each file individually
+/// because it processes all files in a single UAssetTool process call.
+/// 
+/// Uses the global UAssetToolkit singleton for optimal performance.
+/// 
+/// Returns (success_count, skip_count, error_count, processed_file_names)
+pub fn batch_convert_textures_to_inline(uasset_paths: &[std::path::PathBuf]) -> Result<(usize, usize, usize, Vec<String>), Box<dyn std::error::Error>> {
+    if uasset_paths.is_empty() {
+        return Ok((0, 0, 0, Vec::new()));
+    }
+    
+    info!("[C#] Batch stripping mipmaps for {} textures using global UAssetToolkit singleton", uasset_paths.len());
+    
+    // Convert paths to strings
+    let path_strings: Vec<String> = uasset_paths
+        .iter()
+        .map(|p| p.to_string_lossy().to_string())
+        .collect();
+    
+    // Use the global singleton function
+    match uasset_toolkit::batch_strip_mipmaps_native(&path_strings) {
+        Ok((success, skip, errors, processed)) => {
+            info!("[C#] Batch complete: {} stripped, {} skipped, {} errors", success, skip, errors);
+            Ok((success, skip, errors, processed))
+        }
+        Err(e) => {
+            error!("[C#] Batch strip mipmaps failed: {}", e);
             Err(e.into())
         }
     }

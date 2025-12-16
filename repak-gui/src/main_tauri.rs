@@ -25,7 +25,7 @@ use simplelog::{ColorChoice, CombinedLogger, Config, TermLogger, TerminalMode, W
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use tauri::{Emitter, State, Window};
+use tauri::{Emitter, Listener, State, Window};
 use utils::find_marvel_rivals;
 use walkdir::WalkDir;
 use regex_lite::Regex;
@@ -3409,6 +3409,47 @@ async fn p2p_hash_file(file_path: String) -> Result<String, String> {
 }
 
 // ============================================================================
+// DEEP LINK PROTOCOL HANDLER
+// ============================================================================
+
+fn handle_deep_link_url(url: &str, app_handle: &tauri::AppHandle) {
+    info!("Processing deep link URL: {}", url);
+    
+    if let Ok(parsed) = url::Url::parse(url) {
+        if parsed.scheme() == "repakx" && parsed.host_str() == Some("install") {
+            if let Some(file_path) = parsed.query_pairs()
+                .find(|(key, _)| key == "file")
+                .map(|(_, value)| value.to_string()) 
+            {
+                let decoded_path = urlencoding::decode(&file_path)
+                    .unwrap_or(file_path.clone().into())
+                    .to_string();
+                
+                info!("Received mod file from extension: {}", decoded_path);
+                
+                let path = std::path::Path::new(&decoded_path);
+                if path.exists() {
+                    if let Err(e) = app_handle.emit("extension-mod-received", &decoded_path) {
+                        error!("Failed to emit extension-mod-received event: {}", e);
+                    } else {
+                        info!("Emitted extension-mod-received event for: {}", decoded_path);
+                    }
+                } else {
+                    warn!("Deep link file does not exist: {}", decoded_path);
+                    let _ = app_handle.emit("extension-mod-error", format!("File not found: {}", decoded_path));
+                }
+            } else {
+                warn!("Deep link URL missing 'file' parameter: {}", url);
+            }
+        } else {
+            warn!("Unknown deep link action: scheme={}, host={:?}", parsed.scheme(), parsed.host_str());
+        }
+    } else {
+        error!("Failed to parse deep link URL: {}", url);
+    }
+}
+
+// ============================================================================
 // MAIN
 // ============================================================================
 
@@ -3430,6 +3471,15 @@ fn main() {
 
     setup_logging();
     info!("Starting Repak Gui Revamped v{}", env!("CARGO_PKG_VERSION"));
+    
+    // Initialize UAssetToolkit global singleton on startup
+    // This starts the UAssetTool process once and keeps it alive for the app lifetime
+    info!("Initializing UAssetToolkit global singleton...");
+    if let Err(e) = uasset_toolkit::init_global_toolkit() {
+        warn!("Failed to initialize UAssetToolkit singleton: {} - detection features may be slower", e);
+    } else {
+        info!("UAssetToolkit global singleton initialized successfully");
+    }
     
     // Initialize character data cache on startup
     info!("Initializing character data cache...");
@@ -3458,6 +3508,27 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_deep_link::init())
+        .setup(|app| {
+            #[cfg(any(windows, target_os = "linux"))]
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                if let Err(e) = app.deep_link().register("repakx") {
+                    warn!("Failed to register repakx:// protocol: {}", e);
+                } else {
+                    info!("Successfully registered repakx:// protocol handler");
+                }
+            }
+            
+            let app_handle = app.handle().clone();
+            app.listen("deep-link://new-url", move |event| {
+                let payload = event.payload();
+                info!("Received deep link URL: {}", payload);
+                handle_deep_link_url(payload, &app_handle);
+            });
+            
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             get_game_path,
             set_game_path,

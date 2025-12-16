@@ -2,13 +2,122 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::process::Stdio;
+use std::sync::OnceLock;
 use tokio::process::{Command as AsyncCommand, Child, ChildStdin, ChildStdout};
 use tokio::io::{BufReader, AsyncBufReadExt, AsyncWriteExt, Lines};
-use tokio::sync::Mutex;
+use tokio::sync::Mutex as TokioMutex;
 
 #[cfg(windows)]
 #[allow(unused_imports)]
 use std::os::windows::process::CommandExt;
+
+// ============================================================================
+// GLOBAL SINGLETON FOR PERSISTENT UASSETTOOL PROCESS
+// ============================================================================
+// This singleton keeps the UAssetTool process alive for the entire app lifetime,
+// eliminating process startup overhead on each operation.
+//
+// Thread-safety: Uses OnceLock for one-time initialization and tokio::sync::Mutex
+// for async-safe access to the child process.
+// ============================================================================
+
+/// Global singleton for the async UAssetToolkit
+/// Uses Option to handle initialization errors gracefully
+static GLOBAL_TOOLKIT: OnceLock<Option<UAssetToolkit>> = OnceLock::new();
+
+/// Global singleton for the sync wrapper with its own runtime
+static GLOBAL_TOOLKIT_SYNC: OnceLock<Option<GlobalToolkitSync>> = OnceLock::new();
+
+/// Wrapper that holds a dedicated runtime for sync operations
+struct GlobalToolkitSync {
+    runtime: tokio::runtime::Runtime,
+}
+
+impl GlobalToolkitSync {
+    fn new() -> Option<Self> {
+        match tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build() 
+        {
+            Ok(runtime) => Some(Self { runtime }),
+            Err(e) => {
+                log::error!("[UAssetToolkit] Failed to create sync runtime: {}", e);
+                None
+            }
+        }
+    }
+    
+    fn block_on<F: std::future::Future>(&self, future: F) -> F::Output {
+        self.runtime.block_on(future)
+    }
+}
+
+/// Get or initialize the global async UAssetToolkit singleton
+pub fn get_global_toolkit() -> Result<&'static UAssetToolkit> {
+    let toolkit_opt = GLOBAL_TOOLKIT.get_or_init(|| {
+        log::info!("[UAssetToolkit] Initializing global singleton...");
+        match UAssetToolkit::new(None) {
+            Ok(toolkit) => {
+                log::info!("[UAssetToolkit] Global singleton created successfully");
+                Some(toolkit)
+            }
+            Err(e) => {
+                log::error!("[UAssetToolkit] Failed to create global singleton: {}", e);
+                None
+            }
+        }
+    });
+    
+    toolkit_opt.as_ref().ok_or_else(|| {
+        anyhow::anyhow!("UAssetToolkit global singleton failed to initialize")
+    })
+}
+
+/// Initialize the global toolkit at app startup (optional, for eager initialization)
+/// Call this early in main() to start the UAssetTool process immediately
+pub fn init_global_toolkit() -> Result<()> {
+    get_global_toolkit()?;
+    // Also initialize the sync wrapper's runtime
+    get_global_toolkit_sync()?;
+    log::info!("[UAssetToolkit] Global singleton initialized successfully");
+    Ok(())
+}
+
+/// Get or initialize the global sync runtime for blocking operations
+fn get_global_toolkit_sync() -> Result<&'static GlobalToolkitSync> {
+    let sync_opt = GLOBAL_TOOLKIT_SYNC.get_or_init(|| {
+        log::info!("[UAssetToolkit] Initializing global sync runtime...");
+        GlobalToolkitSync::new()
+    });
+    
+    sync_opt.as_ref().ok_or_else(|| {
+        anyhow::anyhow!("UAssetToolkit sync runtime failed to initialize")
+    })
+}
+
+// ============================================================================
+// SYNC API USING GLOBAL SINGLETON
+// ============================================================================
+// These functions provide a simple sync API that uses the global singleton.
+// They handle runtime context detection automatically.
+// ============================================================================
+
+/// Helper to run async code on the global singleton, handling runtime context
+fn run_on_global<F, T>(future: F) -> Result<T>
+where
+    F: std::future::Future<Output = Result<T>>,
+{
+    // Check if we're already inside a tokio runtime
+    if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        // We're inside a runtime - use block_in_place to avoid nested runtime panic
+        tokio::task::block_in_place(|| handle.block_on(future))
+    } else {
+        // Not in a runtime - use the global sync runtime
+        let sync = get_global_toolkit_sync()?;
+        sync.block_on(future)
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "action")]
@@ -46,6 +155,9 @@ pub enum UAssetRequest {
     // Native C# mipmap stripping using UAssetAPI TextureExport
     #[serde(rename = "strip_mipmaps_native")]
     StripMipmapsNative { file_path: String },
+    // Batch native C# mipmap stripping - processes multiple files in one call
+    #[serde(rename = "batch_strip_mipmaps_native")]
+    BatchStripMipmapsNative { file_paths: Vec<String> },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -79,7 +191,7 @@ struct ChildProcess {
 
 pub struct UAssetToolkit {
     tool_path: String,
-    process: Mutex<Option<ChildProcess>>,
+    process: TokioMutex<Option<ChildProcess>>,
 }
 
 impl UAssetToolkit {
@@ -119,7 +231,7 @@ impl UAssetToolkit {
 
         Ok(Self { 
             tool_path,
-            process: Mutex::new(None),
+            process: TokioMutex::new(None),
         })
     }
 
@@ -414,6 +526,47 @@ impl UAssetToolkit {
         Ok(true)
     }
 
+    /// Batch strip mipmaps from multiple textures using native UAssetAPI TextureExport
+    /// Returns (success_count, skip_count, error_count) and list of successfully processed file names
+    pub async fn batch_strip_mipmaps_native(&self, file_paths: &[String]) -> Result<(usize, usize, usize, Vec<String>)> {
+        let request = UAssetRequest::BatchStripMipmapsNative {
+            file_paths: file_paths.to_vec(),
+        };
+        
+        let response = self.send_request(request).await?;
+        
+        if !response.success {
+            anyhow::bail!("Failed to batch strip mipmaps: {}", response.message);
+        }
+        
+        // Parse the response data
+        let data = response.data.unwrap_or(serde_json::json!({}));
+        let success_count = data.get("success_count").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+        let skip_count = data.get("skip_count").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+        let error_count = data.get("error_count").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+        
+        // Extract successfully processed file names
+        let mut processed_files = Vec::new();
+        if let Some(results) = data.get("results").and_then(|v| v.as_array()) {
+            for result in results {
+                if result.get("success").and_then(|v| v.as_bool()).unwrap_or(false) {
+                    // Skip files that were already processed (skipped)
+                    if result.get("skipped").and_then(|v| v.as_bool()).unwrap_or(false) {
+                        continue;
+                    }
+                    if let Some(path) = result.get("path").and_then(|v| v.as_str()) {
+                        // Extract just the file stem (name without extension)
+                        if let Some(file_name) = std::path::Path::new(path).file_stem() {
+                            processed_files.push(file_name.to_string_lossy().to_string());
+                        }
+                    }
+                }
+            }
+        }
+        
+        Ok((success_count, skip_count, error_count, processed_files))
+    }
+
     /// Batch detect skeletal meshes - sends all paths at once, returns true if any match
     pub async fn batch_detect_skeletal_mesh(&self, file_paths: &[String]) -> Result<bool> {
         let request = UAssetRequest::BatchDetectSkeletalMesh {
@@ -588,4 +741,79 @@ impl UAssetToolkitSync {
     pub fn strip_mipmaps_native(&self, file_path: &str) -> Result<bool> {
         self.block_on(self.toolkit.strip_mipmaps_native(file_path))
     }
+
+    /// Batch strip mipmaps from multiple textures using native UAssetAPI TextureExport
+    /// Returns (success_count, skip_count, error_count) and list of successfully processed file names
+    pub fn batch_strip_mipmaps_native(&self, file_paths: &[String]) -> Result<(usize, usize, usize, Vec<String>)> {
+        self.block_on(self.toolkit.batch_strip_mipmaps_native(file_paths))
+    }
+}
+
+// ============================================================================
+// GLOBAL SYNC API - Preferred way to use UAssetToolkit
+// ============================================================================
+// These module-level functions use the global singleton, eliminating the need
+// to create new UAssetToolkitSync instances. The UAssetTool process is started
+// once and reused for all operations.
+// ============================================================================
+
+/// Check if a file is a texture asset (using global singleton)
+pub fn is_texture_uasset(file_path: &str) -> Result<bool> {
+    let toolkit = get_global_toolkit()?;
+    run_on_global(toolkit.is_texture_uasset(file_path))
+}
+
+/// Check if a file is a mesh asset (using global singleton)
+pub fn is_mesh_uasset(file_path: &str) -> Result<bool> {
+    let toolkit = get_global_toolkit()?;
+    run_on_global(toolkit.is_mesh_uasset(file_path))
+}
+
+/// Check if a file is a skeletal mesh asset (using global singleton)
+pub fn is_skeletal_mesh_uasset(file_path: &str) -> Result<bool> {
+    let toolkit = get_global_toolkit()?;
+    run_on_global(toolkit.is_skeletal_mesh_uasset(file_path))
+}
+
+/// Check if a file is a static mesh asset (using global singleton)
+pub fn is_static_mesh_uasset(file_path: &str) -> Result<bool> {
+    let toolkit = get_global_toolkit()?;
+    run_on_global(toolkit.is_static_mesh_uasset(file_path))
+}
+
+/// Batch detect skeletal meshes (using global singleton)
+pub fn batch_detect_skeletal_mesh(file_paths: &[String]) -> Result<bool> {
+    let toolkit = get_global_toolkit()?;
+    run_on_global(toolkit.batch_detect_skeletal_mesh(file_paths))
+}
+
+/// Batch detect static meshes (using global singleton)
+pub fn batch_detect_static_mesh(file_paths: &[String]) -> Result<bool> {
+    let toolkit = get_global_toolkit()?;
+    run_on_global(toolkit.batch_detect_static_mesh(file_paths))
+}
+
+/// Batch detect textures (using global singleton)
+pub fn batch_detect_texture(file_paths: &[String]) -> Result<bool> {
+    let toolkit = get_global_toolkit()?;
+    run_on_global(toolkit.batch_detect_texture(file_paths))
+}
+
+/// Batch detect blueprints (using global singleton)
+pub fn batch_detect_blueprint(file_paths: &[String]) -> Result<bool> {
+    let toolkit = get_global_toolkit()?;
+    run_on_global(toolkit.batch_detect_blueprint(file_paths))
+}
+
+/// Strip mipmaps using native UAssetAPI (using global singleton)
+pub fn strip_mipmaps_native(file_path: &str) -> Result<bool> {
+    let toolkit = get_global_toolkit()?;
+    run_on_global(toolkit.strip_mipmaps_native(file_path))
+}
+
+/// Batch strip mipmaps from multiple textures (using global singleton)
+/// Returns (success_count, skip_count, error_count, processed_file_names)
+pub fn batch_strip_mipmaps_native(file_paths: &[String]) -> Result<(usize, usize, usize, Vec<String>)> {
+    let toolkit = get_global_toolkit()?;
+    run_on_global(toolkit.batch_strip_mipmaps_native(file_paths))
 }

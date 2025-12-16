@@ -280,6 +280,7 @@ public class Program
                 "convert_texture" => ConvertTexture(request.FilePath),
                 "strip_mipmaps" => StripMipmaps(request.FilePath),
                 "strip_mipmaps_native" => StripMipmapsNative(request.FilePath),
+                "batch_strip_mipmaps_native" => BatchStripMipmapsNative(request.FilePaths),
                 
                 // Mesh operations
                 "patch_mesh" => PatchMesh(request.FilePath, request.UexpPath),
@@ -977,6 +978,239 @@ public class Program
             Console.Error.WriteLine($"[UAssetTool] Native strip error: {ex.Message}");
             Console.Error.WriteLine($"[UAssetTool] Stack: {ex.StackTrace}");
             return new UAssetResponse { Success = false, Message = $"Error: {ex.Message}" };
+        }
+    }
+    
+    /// <summary>
+    /// Batch strip mipmaps from multiple textures using native UAssetAPI TextureExport.
+    /// This processes all files in a single call for better performance.
+    /// </summary>
+    private static UAssetResponse BatchStripMipmapsNative(List<string>? filePaths)
+    {
+        if (filePaths == null || filePaths.Count == 0)
+            return new UAssetResponse { Success = false, Message = "file_paths required" };
+
+        try
+        {
+            Console.Error.WriteLine($"[UAssetTool] Batch stripping mipmaps for {filePaths.Count} files");
+            
+            string? usmapPath = Environment.GetEnvironmentVariable("USMAP_PATH");
+            Usmap? mappings = LoadMappings(usmapPath);
+            
+            var results = new List<object>();
+            int successCount = 0;
+            int skipCount = 0;
+            int errorCount = 0;
+            
+            foreach (var filePath in filePaths)
+            {
+                if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
+                {
+                    results.Add(new { path = filePath, success = false, message = "File not found" });
+                    errorCount++;
+                    continue;
+                }
+                
+                try
+                {
+                    var asset = LoadAssetWithMappings(filePath, mappings);
+                    
+                    // Find TextureExport
+                    TextureExport? textureExport = null;
+                    foreach (var export in asset.Exports)
+                    {
+                        if (export is TextureExport tex)
+                        {
+                            textureExport = tex;
+                            break;
+                        }
+                    }
+                    
+                    if (textureExport == null)
+                    {
+                        results.Add(new { path = filePath, success = false, message = "No TextureExport found" });
+                        errorCount++;
+                        continue;
+                    }
+                    
+                    if (textureExport.PlatformData == null)
+                    {
+                        results.Add(new { path = filePath, success = false, message = "No PlatformData (texture not parsed)" });
+                        errorCount++;
+                        continue;
+                    }
+                    
+                    int originalMipCount = textureExport.MipCount;
+                    
+                    if (originalMipCount <= 1)
+                    {
+                        results.Add(new { path = filePath, success = true, message = "Already has 1 mipmap", skipped = true });
+                        skipCount++;
+                        continue;
+                    }
+                    
+                    // Target data_resource_id = 5 for Marvel Rivals textures
+                    int targetDataResourceId = 5;
+                    
+                    // Strip mipmaps
+                    bool stripped = textureExport.StripMipmaps();
+                    if (!stripped)
+                    {
+                        results.Add(new { path = filePath, success = false, message = "Failed to strip mipmaps" });
+                        errorCount++;
+                        continue;
+                    }
+                    
+                    // Update DataResources
+                    if (asset.DataResources != null && textureExport.PlatformData?.Mips?.Count > 0)
+                    {
+                        var mip = textureExport.PlatformData.Mips[0];
+                        int dataSize = mip.BulkData?.Data?.Length ?? 0;
+                        
+                        var inlineResource = new UAssetAPI.UnrealTypes.FObjectDataResource(
+                            (UAssetAPI.UnrealTypes.EObjectDataResourceFlags)0,
+                            0,
+                            -1,
+                            dataSize,
+                            dataSize,
+                            new UAssetAPI.UnrealTypes.FPackageIndex(1),
+                            0x48
+                        );
+                        
+                        asset.DataResources.Clear();
+                        asset.DataResources.Add(inlineResource);
+                        mip.BulkData.Header.DataResourceIndex = targetDataResourceId;
+                    }
+                    
+                    // Save the modified asset (first pass)
+                    asset.Write(filePath);
+                    
+                    // Second pass: Find inline data offset and update DataResource
+                    string uexpPath = Path.ChangeExtension(filePath, ".uexp");
+                    if (File.Exists(uexpPath) && asset.DataResources != null && asset.DataResources.Count > 0)
+                    {
+                        var mip = textureExport.PlatformData?.Mips?[0];
+                        if (mip?.BulkData?.Data != null && mip.BulkData.Data.Length >= 4)
+                        {
+                            int drIndex = mip.BulkData.Header.DataResourceIndex;
+                            if (drIndex < 0 || drIndex >= asset.DataResources.Count)
+                                drIndex = asset.DataResources.Count - 1;
+                            
+                            byte[] uexpData = File.ReadAllBytes(uexpPath);
+                            byte[] searchPattern = new byte[4];
+                            Array.Copy(mip.BulkData.Data, 0, searchPattern, 0, 4);
+                            
+                            long inlineOffset = -1;
+                            for (int i = 0; i < uexpData.Length - 4; i++)
+                            {
+                                if (uexpData[i] == searchPattern[0] && 
+                                    uexpData[i+1] == searchPattern[1] &&
+                                    uexpData[i+2] == searchPattern[2] &&
+                                    uexpData[i+3] == searchPattern[3])
+                                {
+                                    inlineOffset = i;
+                                    break;
+                                }
+                            }
+                            
+                            if (inlineOffset >= 0)
+                            {
+                                var dr = asset.DataResources[drIndex];
+                                asset.DataResources[drIndex] = new UAssetAPI.UnrealTypes.FObjectDataResource(
+                                    dr.Flags,
+                                    inlineOffset,
+                                    dr.DuplicateSerialOffset,
+                                    dr.SerialSize,
+                                    dr.RawSize,
+                                    dr.OuterIndex,
+                                    dr.LegacyBulkDataFlags,
+                                    dr.CookedIndex
+                                );
+                                asset.Write(filePath);
+                            }
+                        }
+                    }
+                    
+                    // Patch data_resource_id in .uexp
+                    if (File.Exists(uexpPath))
+                    {
+                        byte[] uexpBytes = File.ReadAllBytes(uexpPath);
+                        int targetValue = targetDataResourceId;
+                        
+                        if (targetValue > 0 && targetValue < 100)
+                        {
+                            int firstPos = -1;
+                            int secondPos = -1;
+                            
+                            for (int i = 100; i < Math.Min(uexpBytes.Length - 8, 300); i++)
+                            {
+                                int val1 = BitConverter.ToInt32(uexpBytes, i);
+                                int val2 = BitConverter.ToInt32(uexpBytes, i + 4);
+                                
+                                if (val1 == 1 && val2 == 0 && firstPos == -1)
+                                    firstPos = i + 4;
+                                else if (val1 == 1 && val2 == targetValue && secondPos == -1 && firstPos >= 0)
+                                    secondPos = i + 4;
+                            }
+                            
+                            if (firstPos >= 0 && secondPos >= 0 && (secondPos - firstPos) == 64)
+                            {
+                                byte[] targetBytes = BitConverter.GetBytes(targetValue);
+                                byte[] zeroBytes = BitConverter.GetBytes(0);
+                                
+                                Array.Copy(targetBytes, 0, uexpBytes, firstPos, 4);
+                                Array.Copy(zeroBytes, 0, uexpBytes, secondPos, 4);
+                                
+                                File.WriteAllBytes(uexpPath, uexpBytes);
+                            }
+                        }
+                    }
+                    
+                    // Delete .ubulk file
+                    string ubulkPath = Path.ChangeExtension(filePath, ".ubulk");
+                    if (File.Exists(ubulkPath))
+                    {
+                        File.Delete(ubulkPath);
+                    }
+                    
+                    results.Add(new { 
+                        path = filePath, 
+                        success = true, 
+                        message = $"Stripped {originalMipCount} -> {textureExport.MipCount}",
+                        original_mips = originalMipCount,
+                        new_mips = textureExport.MipCount
+                    });
+                    successCount++;
+                    
+                    Console.Error.WriteLine($"[UAssetTool] Stripped: {Path.GetFileName(filePath)} ({originalMipCount} -> {textureExport.MipCount})");
+                }
+                catch (Exception ex)
+                {
+                    results.Add(new { path = filePath, success = false, message = ex.Message });
+                    errorCount++;
+                    Console.Error.WriteLine($"[UAssetTool] Error processing {Path.GetFileName(filePath)}: {ex.Message}");
+                }
+            }
+            
+            Console.Error.WriteLine($"[UAssetTool] Batch complete: {successCount} stripped, {skipCount} skipped, {errorCount} errors");
+            
+            return new UAssetResponse
+            {
+                Success = true,
+                Message = $"Batch processed {filePaths.Count} files: {successCount} stripped, {skipCount} skipped, {errorCount} errors",
+                Data = new { 
+                    total = filePaths.Count,
+                    success_count = successCount,
+                    skip_count = skipCount,
+                    error_count = errorCount,
+                    results = results
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[UAssetTool] Batch strip error: {ex.Message}");
+            return new UAssetResponse { Success = false, Message = $"Batch error: {ex.Message}" };
         }
     }
     

@@ -2,9 +2,12 @@
 //! 
 //! All detection is done via UAssetAPI - no heuristic fallbacks.
 //! If UAssetAPI fails (e.g., missing USMAP), detection returns false.
+//!
+//! Uses the global UAssetToolkit singleton for optimal performance -
+//! the UAssetTool process is started once and reused for all operations.
 
 use log::info;
-use uasset_toolkit::{UAssetToolkit, UAssetToolkitSync};
+use uasset_toolkit::get_global_toolkit;
 
 /// Detects SKELETAL mesh files using UAssetAPI batch detection
 /// Async version for use in Tauri commands
@@ -19,10 +22,10 @@ pub async fn detect_mesh_files_async(mod_contents: &[String]) -> bool {
         return false;
     }
     
-    // Use UAssetAPI batch detection
-    match UAssetToolkit::new(None) {
+    // Use global UAssetToolkit singleton for batch detection
+    match get_global_toolkit() {
         Ok(toolkit) => {
-            info!("[Detection] UAssetToolkit initialized successfully");
+            info!("[Detection] Using global UAssetToolkit singleton");
             info!("[Detection] Passing {} files to UAssetAPI batch_detect_skeletal_mesh", uasset_files.len());
             
             // Log first few files being checked
@@ -48,7 +51,7 @@ pub async fn detect_mesh_files_async(mod_contents: &[String]) -> bool {
             }
         }
         Err(e) => {
-            info!("[Detection] ✗ Failed to initialize UAssetToolkit: {}", e);
+            info!("[Detection] ✗ Failed to get global UAssetToolkit: {}", e);
             info!("[Detection] UAssetAPI unavailable - cannot detect SkeletalMesh");
         }
     }
@@ -91,11 +94,10 @@ pub async fn detect_texture_files_async(mod_contents: &[String]) -> bool {
         return false;
     }
     
-    // Use UAssetAPI batch detection - checks if texture needs MipGen fix
-    // (is Texture2D AND MipGenSettings != NoMipmaps)
-    match UAssetToolkit::new(None) {
+    // Use global UAssetToolkit singleton for batch detection
+    match get_global_toolkit() {
         Ok(toolkit) => {
-            info!("[Detection] UAssetToolkit initialized successfully");
+            info!("[Detection] Using global UAssetToolkit singleton");
             info!("[Detection] Using UAssetAPI batch detection for Texture2D");
             match toolkit.batch_detect_texture(&uasset_files).await {
                 Ok(true) => {
@@ -113,7 +115,7 @@ pub async fn detect_texture_files_async(mod_contents: &[String]) -> bool {
             }
         }
         Err(e) => {
-            info!("[Detection] Failed to initialize UAssetToolkit: {}", e);
+            info!("[Detection] Failed to get global UAssetToolkit: {}", e);
             info!("[Detection] UAssetAPI unavailable - cannot detect Texture2D");
         }
     }
@@ -134,10 +136,10 @@ pub async fn detect_static_mesh_files_async(mod_contents: &[String]) -> bool {
         return false;
     }
     
-    // Use UAssetAPI batch detection
-    match UAssetToolkit::new(None) {
+    // Use global UAssetToolkit singleton for batch detection
+    match get_global_toolkit() {
         Ok(toolkit) => {
-            info!("[Detection] UAssetToolkit initialized successfully");
+            info!("[Detection] Using global UAssetToolkit singleton");
             info!("[Detection] Using UAssetAPI batch detection for StaticMesh");
             match toolkit.batch_detect_static_mesh(&uasset_files).await {
                 Ok(true) => {
@@ -155,7 +157,7 @@ pub async fn detect_static_mesh_files_async(mod_contents: &[String]) -> bool {
             }
         }
         Err(e) => {
-            info!("[Detection] Failed to initialize UAssetToolkit: {}", e);
+            info!("[Detection] Failed to get global UAssetToolkit: {}", e);
             info!("[Detection] UAssetAPI unavailable - cannot detect StaticMesh");
         }
     }
@@ -177,9 +179,9 @@ pub async fn detect_blueprint_files_async(mod_contents: &[String]) -> bool {
         return false;
     }
     
-    // Use UAssetAPI batch detection
-    if let Ok(toolkit) = UAssetToolkit::new(None) {
-        info!("[Detection] Using UAssetAPI batch detection for Blueprint");
+    // Use global UAssetToolkit singleton for batch detection
+    if let Ok(toolkit) = get_global_toolkit() {
+        info!("[Detection] Using global UAssetToolkit singleton for Blueprint");
         match toolkit.batch_detect_blueprint(&uasset_files).await {
             Ok(true) => {
                 info!("[Detection] FOUND Blueprint (UAssetAPI)");
@@ -211,12 +213,10 @@ pub fn detect_mesh_files(mod_contents: &[String]) -> bool {
         return false;
     }
     
-    // Use UAssetAPI for detection
-    if let Ok(toolkit) = UAssetToolkitSync::new(None) {
-        for file in uasset_files {
-            if let Ok(true) = toolkit.is_skeletal_mesh_uasset(file) {
-                return true;
-            }
+    // Use global singleton for detection
+    for file in uasset_files {
+        if let Ok(true) = uasset_toolkit::is_skeletal_mesh_uasset(file) {
+            return true;
         }
     }
 
@@ -245,13 +245,11 @@ pub fn detect_texture_files(mod_contents: &[String]) -> bool {
         return false;
     }
     
-    // Use UAssetAPI to detect Texture2D assets needing MipGen fix
-    if let Ok(toolkit) = UAssetToolkitSync::new(None) {
-        for file in uasset_files {
-            if let Ok(true) = toolkit.is_texture_uasset(file) {
-                // UAssetAPI found a texture needing fix, and we already confirmed .ubulk exists
-                return true;
-            }
+    // Use global singleton for detection
+    for file in uasset_files {
+        if let Ok(true) = uasset_toolkit::is_texture_uasset(file) {
+            // UAssetAPI found a texture needing fix, and we already confirmed .ubulk exists
+            return true;
         }
     }
 
@@ -270,12 +268,10 @@ pub fn detect_static_mesh_files(mod_contents: &[String]) -> bool {
         return false;
     }
     
-    // Use UAssetAPI for detection
-    if let Ok(toolkit) = UAssetToolkitSync::new(None) {
-        for file in uasset_files {
-            if let Ok(true) = toolkit.is_static_mesh_uasset(file) {
-                return true;
-            }
+    // Use global singleton for detection
+    for file in uasset_files {
+        if let Ok(true) = uasset_toolkit::is_static_mesh_uasset(file) {
+            return true;
         }
     }
 

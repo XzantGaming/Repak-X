@@ -2,7 +2,7 @@
 use crate::install_mod::install_mod_logic::pak_files::repak_dir;
 use crate::install_mod::install_mod_logic::patch_meshes;
 use crate::install_mod::{InstallableMod, AES_KEY};
-use crate::uasset_api_integration::convert_texture_to_inline;
+use crate::uasset_api_integration::batch_convert_textures_to_inline;
 use crate::utils::collect_files;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
@@ -99,46 +99,40 @@ pub fn convert_to_iostore_directory(
 
     // Process textures using UAssetAPI to convert them to inline format
     // This modifies the .uasset to clear DataResources and embeds mip data in export.Extras
+    // Uses batch processing for much better performance (single UAssetTool process call)
     let processed_textures: std::collections::HashSet<String> = if pak.fix_textures {
         info!("Texture fix enabled for mod: {}", pak.mod_name);
-        info!("Processing {} files for texture conversion using UAssetAPI", paths.len());
         
-        let mut processed = std::collections::HashSet::new();
+        // Collect all .uasset files that have corresponding .ubulk files (textures needing conversion)
+        let texture_paths: Vec<PathBuf> = paths.iter()
+            .filter(|path| {
+                path.extension() == Some(std::ffi::OsStr::new("uasset")) 
+                    && path.with_extension("ubulk").exists()
+            })
+            .cloned()
+            .collect();
         
-        // Find all .uasset files that might be textures with .ubulk
-        for path in paths.iter() {
-            if path.extension() == Some(std::ffi::OsStr::new("uasset")) {
-                let file_name = path.file_stem()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("");
-                
-                // Check if there's a corresponding .ubulk file (indicates FromTextureGroup texture)
-                let ubulk_path = path.with_extension("ubulk");
-                if ubulk_path.exists() {
-                    info!("Found texture with .ubulk: {}", file_name);
+        if texture_paths.is_empty() {
+            info!("No textures with .ubulk files found - skipping texture conversion");
+            std::collections::HashSet::new()
+        } else {
+            info!("Found {} textures with .ubulk files - batch processing", texture_paths.len());
+            
+            // Use batch processing for all textures at once
+            match batch_convert_textures_to_inline(&texture_paths) {
+                Ok((success_count, skip_count, error_count, processed_names)) => {
+                    info!("Batch texture conversion complete: {} stripped, {} skipped, {} errors", 
+                          success_count, skip_count, error_count);
                     
-                    // Use UAssetAPI to convert the texture to inline format
-                    // This will read the .ubulk and embed the first mip in the export's Extras
-                    match convert_texture_to_inline(path) {
-                        Ok(true) => {
-                            info!("Successfully converted texture to inline: {}", file_name);
-                            processed.insert(file_name.to_string());
-                            // Note: UAssetBridge now handles the .ubulk data embedding
-                            // We still need to exclude the .ubulk from IoStore since data is now inline
-                        }
-                        Ok(false) => {
-                            info!("Texture conversion returned false for: {}", file_name);
-                        }
-                        Err(e) => {
-                            error!("Failed to convert texture {}: {}", file_name, e);
-                        }
-                    }
+                    // Convert processed names to HashSet
+                    processed_names.into_iter().collect()
+                }
+                Err(e) => {
+                    error!("Batch texture conversion failed: {}", e);
+                    std::collections::HashSet::new()
                 }
             }
         }
-        
-        info!("Successfully processed {} textures", processed.len());
-        processed
     } else {
         std::collections::HashSet::new()
     };

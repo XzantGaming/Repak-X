@@ -24,6 +24,9 @@ tauri = { version = "2.0", features = [] }
 tauri-plugin-dialog = "2.0"
 tauri-plugin-fs = "2.0"
 tauri-plugin-shell = "2.0"
+tauri-plugin-deep-link = "2"
+url = "2"
+urlencoding = "2"
 
 # Logging
 log = "0.4.26"
