@@ -17,12 +17,17 @@ const buildInitialSettings = (mods = []) => {
   return mods.reduce((acc, mod, idx) => {
     const locked = isRepakLocked(mod)
     const defaultToRepak = mod.is_dir ? !locked : Boolean(mod.auto_to_repak)
+    const canApplyPatches = mod.contains_uassets !== false // Default to true if undefined
+
+    // For mods with no uassets, we skip repak (IoStore logic) and likely enforce legacy
+    const effectiveToRepak = !canApplyPatches ? false : (locked ? false : defaultToRepak)
 
     acc[idx] = {
-      fixMesh: mod.auto_fix_mesh || false,
-      fixTexture: mod.auto_fix_texture || false,
-      fixSerializeSize: mod.auto_fix_serialize_size || false,
-      toRepak: locked ? false : defaultToRepak,
+      fixMesh: canApplyPatches ? (mod.auto_fix_mesh || false) : false,
+      fixTexture: canApplyPatches ? (mod.auto_fix_texture || false) : false,
+      fixSerializeSize: canApplyPatches ? (mod.auto_fix_serialize_size || false) : false,
+      toRepak: effectiveToRepak,
+      forceLegacy: mod.auto_force_legacy || false,
       compression: 'Oodle',
       usmapPath: '',
       customName: '',
@@ -75,6 +80,29 @@ export default function InstallModPanel({ mods, allTags, onCreateTag, onInstall,
     if (key === 'toRepak' && isRepakLocked(mods[idx])) {
       return
     }
+
+    // When enabling forceLegacy, clear all patch toggles
+    if (key === 'forceLegacy' && value === true) {
+      setModSettings(prev => ({
+        ...prev,
+        [idx]: {
+          ...prev[idx],
+          [key]: value,
+          fixMesh: false,
+          fixTexture: false,
+          fixSerializeSize: false
+        }
+      }))
+      return
+    }
+
+    // Prevent enabling patch toggles when in legacy mode or no uassets
+    if (['fixMesh', 'fixTexture', 'fixSerializeSize'].includes(key)) {
+      if (modSettings[idx]?.forceLegacy || mods[idx]?.contains_uassets === false) {
+        return
+      }
+    }
+
     setModSettings(prev => ({
       ...prev,
       [idx]: { ...prev[idx], [key]: value }
@@ -99,7 +127,8 @@ export default function InstallModPanel({ mods, allTags, onCreateTag, onInstall,
     const modsToInstall = mods.map((mod, idx) => ({
       ...mod,
       ...modSettings[idx],
-      toRepak: isRepakLocked(mod) ? false : (modSettings[idx]?.toRepak || false)
+      toRepak: isRepakLocked(mod) ? false : (modSettings[idx]?.toRepak || false),
+      forceLegacy: modSettings[idx]?.forceLegacy || false
     }))
     onInstall(modsToInstall)
   }
@@ -183,24 +212,45 @@ export default function InstallModPanel({ mods, allTags, onCreateTag, onInstall,
                           {tag}
                         </span>
                       ))}
+                      {mod.contains_uassets === false && (
+                        <span className="no-uassets-badge" title="This mod contains no UAsset files - patch options disabled">
+                          No UAssets
+                        </span>
+                      )}
                     </div>
 
                     <div className="install-mod-card__toggles">
-                      {toggleDefinitions.map(({ key, label, hint }) => (
-                        <Switch
-                          key={key}
-                          size="sm"
-                          color="primary"
-                          checked={modSettings[idx]?.[key] || false}
-                          onChange={(value) => updateModSetting(idx, key, value)}
-                          className="install-toggle"
-                        >
-                          <div className="install-toggle__text">
-                            <span className="install-toggle__label">{label}</span>
-                            <span className="install-toggle__hint">{hint}</span>
-                          </div>
-                        </Switch>
-                      ))}
+                      {toggleDefinitions.map(({ key, label, hint }) => {
+                        const isLegacyMode = modSettings[idx]?.forceLegacy || false
+                        const canApplyPatches = mod.contains_uassets !== false
+                        const isLocked = isLegacyMode || !canApplyPatches
+
+                        let hintText = hint
+                        if (isLegacyMode) {
+                          hintText = 'Disabled in Legacy PAK mode'
+                        } else if (!canApplyPatches) {
+                          hintText = 'No UAsset files detected'
+                        }
+
+                        return (
+                          <Switch
+                            key={key}
+                            size="sm"
+                            color="primary"
+                            checked={isLocked ? false : (modSettings[idx]?.[key] || false)}
+                            onChange={(value) => updateModSetting(idx, key, value)}
+                            isDisabled={isLocked}
+                            className={`install-toggle ${isLocked ? 'locked' : ''}`}
+                          >
+                            <div className="install-toggle__text">
+                              <span className="install-toggle__label">{label}</span>
+                              <span className="install-toggle__hint">
+                                {hintText}
+                              </span>
+                            </div>
+                          </Switch>
+                        )
+                      })}
                     </div>
 
                     <div className="install-mod-card__tags">
@@ -270,19 +320,45 @@ export default function InstallModPanel({ mods, allTags, onCreateTag, onInstall,
                     </div>
 
                     <div className="install-mod-card__footer">
+                      {mod.contains_uassets !== false && (
+                        <Switch
+                          size="md"
+                          color="secondary"
+                          checked={modSettings[idx]?.toRepak || false}
+                          onChange={(value) => updateModSetting(idx, 'toRepak', value)}
+                          isDisabled={repakLocked}
+                          className={`install-toggle repak-toggle ${repakLocked ? 'locked' : ''}`}
+                          title={repakTitle}
+                        >
+                          <div className="install-toggle__text">
+                            <span className="install-toggle__label">Send to Repak</span>
+                            <span className="install-toggle__hint">
+                              {repakLocked ? 'Loose assets detected' : 'Repaks the pak into IOStore format'}
+                            </span>
+                          </div>
+                        </Switch>
+                      )}
+
                       <Switch
                         size="md"
-                        color="secondary"
-                        checked={modSettings[idx]?.toRepak || false}
-                        onChange={(value) => updateModSetting(idx, 'toRepak', value)}
-                        isDisabled={repakLocked}
-                        className={`install-toggle repak-toggle ${repakLocked ? 'locked' : ''}`}
-                        title={repakTitle}
+                        color="warning"
+                        checked={mod.contains_uassets === false ? true : (modSettings[idx]?.forceLegacy || false)}
+                        onChange={(value) => {
+                          if (mod.contains_uassets === false) return
+                          updateModSetting(idx, 'forceLegacy', value)
+                        }}
+                        isDisabled={mod.contains_uassets === false}
+                        className={`install-toggle legacy-toggle ${mod.contains_uassets === false ? 'active locked' : (modSettings[idx]?.forceLegacy ? 'active' : '')}`}
+                        title="Use when making Audio/Config mods (mods that don't contain uassets)"
                       >
                         <div className="install-toggle__text">
-                          <span className="install-toggle__label">Send to Repak</span>
+                          <span className="install-toggle__label">Legacy PAK Format</span>
                           <span className="install-toggle__hint">
-                            {repakLocked ? 'Loose assets detected' : 'Repaks the pak into IOStore format'}
+                            {mod.contains_uassets === false
+                              ? 'Forced for non-UAsset mods'
+                              : (modSettings[idx]?.forceLegacy
+                                ? 'Skipping IoStore conversion'
+                                : 'Use for Audio/Config mods (no uassets)')}
                           </span>
                         </div>
                       </Switch>
@@ -296,11 +372,11 @@ export default function InstallModPanel({ mods, allTags, onCreateTag, onInstall,
 
         {/* Action Buttons */}
         <div className="install-actions">
-          <button onClick={handleInstall} className="btn-install">
-            Install {mods.length} Mod(s)
-          </button>
           <button onClick={onCancel} className="btn-cancel">
             Cancel
+          </button>
+          <button onClick={handleInstall} className="btn-install">
+            Install {mods.length} Mod(s)
           </button>
         </div>
       </div>

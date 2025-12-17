@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { IoMdRefresh, IoIosSkipForward } from "react-icons/io";
 import { FaFileZipper } from "react-icons/fa6";
 import Switch from './ui/Switch';
@@ -11,6 +12,9 @@ export default function ToolsPanel({ onClose }) {
     const [isSkippingLauncher, setIsSkippingLauncher] = useState(false);
     const [skipLauncherStatus, setSkipLauncherStatus] = useState('');
     const [isLauncherPatchEnabled, setIsLauncherPatchEnabled] = useState(false);
+    const [isRecompressing, setIsRecompressing] = useState(false);
+    const [recompressStatus, setRecompressStatus] = useState('');
+    const [recompressResult, setRecompressResult] = useState(null);
 
     // Check skip launcher status on mount
     useEffect(() => {
@@ -45,6 +49,28 @@ export default function ToolsPanel({ onClose }) {
         }
     }, [charUpdateStatus]);
 
+    // Clear recompress status after 5 seconds
+    useEffect(() => {
+        if (recompressStatus && !isRecompressing) {
+            const timer = setTimeout(() => {
+                setRecompressStatus('');
+            }, 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [recompressStatus, isRecompressing]);
+
+    // Listen for recompress progress events
+    useEffect(() => {
+        const unlisten = listen('recompress_progress', (event) => {
+            const { current, total, status } = event.payload;
+            setRecompressStatus(`${status} (${current}/${total})`);
+        });
+
+        return () => {
+            unlisten.then(f => f());
+        };
+    }, []);
+
     const handleUpdateCharacterData = async () => {
         setIsUpdatingChars(true);
         setCharUpdateStatus('Updating...');
@@ -77,9 +103,27 @@ export default function ToolsPanel({ onClose }) {
         }
     };
 
-    const handleReCompress = () => {
-        // Placeholder - to be implemented
-        console.log('ReCompress clicked - placeholder');
+    const handleReCompress = async () => {
+        setIsRecompressing(true);
+        setRecompressStatus('Scanning mods...');
+        setRecompressResult(null);
+        try {
+            const result = await invoke('recompress_mods');
+            setRecompressResult(result);
+            if (result.recompressed > 0) {
+                setRecompressStatus(`✓ Recompressed ${result.recompressed} mod(s)! (${result.already_oodle} already compressed)`);
+            } else if (result.already_oodle === result.total_scanned) {
+                setRecompressStatus('✓ All mods already use Oodle compression');
+            } else if (result.total_scanned === 0) {
+                setRecompressStatus('No mods found to scan');
+            } else {
+                setRecompressStatus(`Scanned ${result.total_scanned} mods - ${result.already_oodle} already compressed`);
+            }
+        } catch (error) {
+            setRecompressStatus(`Error: ${error}`);
+        } finally {
+            setIsRecompressing(false);
+        }
     };
 
     return (
@@ -172,12 +216,22 @@ export default function ToolsPanel({ onClose }) {
                             <div style={{ display: 'flex', gap: '0.5rem' }}>
                                 <button
                                     onClick={handleReCompress}
+                                    disabled={isRecompressing}
                                     style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
                                 >
-                                    <FaFileZipper size={16} />
-                                    ReCompress
+                                    <FaFileZipper size={16} className={isRecompressing ? 'spin-animation' : ''} />
+                                    {isRecompressing ? 'Scanning...' : 'ReCompress'}
                                 </button>
                             </div>
+                            {recompressStatus && (
+                                <p style={{
+                                    fontSize: '0.85rem',
+                                    marginTop: '0.5rem',
+                                    color: recompressStatus.includes('Error') ? '#ff5252' : '#4CAF50'
+                                }}>
+                                    {recompressStatus}
+                                </p>
+                            )}
                         </div>
                     </div>
 

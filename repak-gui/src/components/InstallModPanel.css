@@ -35,7 +35,7 @@
   color: var(--text-primary);
 }
 
-.close-btn {
+.install-mod-panel .close-btn {
   background: none;
   border: none;
   color: var(--text-primary);
@@ -51,7 +51,7 @@
   transition: background 0.2s;
 }
 
-.close-btn:hover {
+.install-mod-panel .close-btn:hover {
   background: var(--bg-lighter);
 }
 
@@ -318,6 +318,55 @@
 .repak-toggle.locked {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* Legacy PAK Toggle Styling */
+.legacy-toggle {
+  background: rgba(255, 160, 0, 0.08);
+  border: 1px solid rgba(255, 160, 0, 0.2);
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+/* When Legacy Toggle is the only one (Send to Repak hidden), push it to the right */
+.legacy-toggle:first-child {
+  margin-left: auto;
+}
+
+.legacy-toggle:hover {
+  background: rgba(255, 160, 0, 0.12);
+  border-color: rgba(255, 160, 0, 0.3);
+}
+
+.legacy-toggle.active {
+  background: rgba(255, 160, 0, 0.15);
+  border-color: rgba(255, 160, 0, 0.4);
+}
+
+.legacy-toggle .install-toggle__label {
+  color: #ffa000;
+}
+
+/* Locked toggles in Legacy mode */
+.install-toggle.locked {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.install-toggle.locked .install-toggle__hint {
+  color: #ffa000;
+  font-style: italic;
+}
+
+/* No UAssets Badge */
+.no-uassets-badge {
+  background: rgba(100, 100, 100, 0.5);
+  color: #ddd;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .install-mod-card__meta {
