@@ -42,6 +42,9 @@ pub struct InstallableMod {
     pub is_archived: bool,
     pub enabled: bool,
     // pub audio_mod: bool,
+    /// Whether the mod contains any .uasset/.uexp/.ubulk/.umap files
+    /// Used by frontend to lock/unlock certain toggles (e.g., fix mesh/texture only applies to uasset mods)
+    pub contains_uassets: bool,
 }
 
 impl Default for InstallableMod {
@@ -67,8 +70,21 @@ impl Default for InstallableMod {
             iostore: false,
             is_archived: false,
             enabled: true,
+            contains_uassets: true, // Default to true for safety
         }
     }
+}
+
+/// Returns true if the file list contains any UAsset-related files
+/// (.uasset, .uexp, .ubulk, .umap)
+pub fn contains_uasset_files(files: &[String]) -> bool {
+    files.iter().any(|f| {
+        let lower = f.to_lowercase();
+        lower.ends_with(".uasset") 
+            || lower.ends_with(".uexp") 
+            || lower.ends_with(".ubulk")
+            || lower.ends_with(".umap")
+    })
 }
 
 pub static AES_KEY: LazyLock<AesKey> = LazyLock::new(|| {
@@ -114,7 +130,8 @@ fn find_mods_from_archive(path: &str) -> Vec<InstallableMod> {
                         .map(|x| x.file_path.clone())
                         .collect::<Vec<_>>();
                     let len = files.len();
-                    let modtype = get_current_pak_characteristics(files);
+                    let modtype = get_current_pak_characteristics(files.clone());
+                    let has_uassets = contains_uasset_files(&files);
 
                     let installable_mod = InstallableMod {
                         mod_name: mod_base_name,
@@ -131,6 +148,7 @@ fn find_mods_from_archive(path: &str) -> Vec<InstallableMod> {
                         is_archived: false,
                         editing: false,
                         compression: Oodle,
+                        contains_uassets: has_uassets,
                         ..Default::default()
                     };
 
@@ -147,6 +165,7 @@ fn find_mods_from_archive(path: &str) -> Vec<InstallableMod> {
                     let files = builder.files();
                     let len = files.len();
                     let modtype = get_current_pak_characteristics(files.clone());
+                    let has_uassets = contains_uasset_files(&files);
                     
                     // Check if this is an Audio or Movies mod (these should skip repak workflow)
                     let is_audio_or_movie = modtype.contains("Audio") || modtype.contains("Movies");
@@ -173,6 +192,7 @@ fn find_mods_from_archive(path: &str) -> Vec<InstallableMod> {
                         is_archived: false,
                         editing: false,
                         compression: Oodle,
+                        contains_uassets: has_uassets,
                         ..Default::default()
                     };
 
@@ -227,6 +247,7 @@ fn find_mods_from_archive(path: &str) -> Vec<InstallableMod> {
                             .collect();
                         
                         let modtype = get_current_pak_characteristics(file_strings.clone());
+                        let has_uassets = contains_uasset_files(&file_strings);
                         let is_audio_or_movies = modtype.contains("Audio") || modtype.contains("Movies");
                         
                         // Auto-detect mesh and texture files
@@ -251,6 +272,7 @@ fn find_mods_from_archive(path: &str) -> Vec<InstallableMod> {
                             is_archived: false,
                             editing: false,
                             compression: Oodle,
+                            contains_uassets: has_uassets,
                             ..Default::default()
                         };
                         
@@ -286,6 +308,7 @@ fn find_mods_from_archive(path: &str) -> Vec<InstallableMod> {
                         .collect();
                     
                     let modtype = get_current_pak_characteristics(file_strings.clone());
+                    let has_uassets = contains_uasset_files(&file_strings);
                     let is_audio_or_movies = modtype.contains("Audio") || modtype.contains("Movies");
                     let auto_fix_mesh = detect_mesh_files(&file_strings);
                     let auto_fix_textures = detect_texture_files(&file_strings);
@@ -308,6 +331,7 @@ fn find_mods_from_archive(path: &str) -> Vec<InstallableMod> {
                         is_archived: false,
                         editing: false,
                         compression: Oodle,
+                        contains_uassets: has_uassets,
                         ..Default::default()
                     };
                     
@@ -344,6 +368,7 @@ fn map_to_mods_internal(paths: &[PathBuf]) -> Vec<InstallableMod> {
             let mut auto_fix_mesh = false;
             let mut auto_fix_textures = false;
             let mut auto_fix_static_mesh = false;
+            let mut has_uassets = true; // Default to true for safety
 
             if !is_dir && !is_archive {
                 let builder = repak::PakBuilder::new()
@@ -366,6 +391,7 @@ fn map_to_mods_internal(paths: &[PathBuf]) -> Vec<InstallableMod> {
                         };
                         
                         modtype = get_current_pak_characteristics(files.clone());
+                        has_uassets = contains_uasset_files(&files);
                         
                         // IoStore packages should not have auto-fixes enabled
                         if !is_iostore {
@@ -391,6 +417,7 @@ fn map_to_mods_internal(paths: &[PathBuf]) -> Vec<InstallableMod> {
                     .collect::<Vec<_>>();
                 len = files.len();
                 modtype = get_current_pak_characteristics(files.clone());
+                has_uassets = contains_uasset_files(&files);
                 
                 // Auto-detect mesh and texture files
                 auto_fix_mesh = detect_mesh_files(&files);
@@ -441,6 +468,7 @@ fn map_to_mods_internal(paths: &[PathBuf]) -> Vec<InstallableMod> {
                 total_files: len,
                 iostore: is_iostore,  // Mark as IoStore package
                 is_archived: is_archive,
+                contains_uassets: has_uassets,
                 ..Default::default()
             })
         })

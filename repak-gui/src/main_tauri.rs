@@ -428,6 +428,9 @@ struct InstallableModInfo {
     auto_fix_texture: bool,
     auto_fix_serialize_size: bool,
     auto_to_repak: bool,
+    /// Whether the mod contains any .uasset/.uexp/.ubulk/.umap files
+    /// Used by frontend to lock/unlock certain toggles (e.g., fix mesh/texture only applies to uasset mods)
+    contains_uassets: bool,
 }
 
 #[tauri::command]
@@ -736,6 +739,10 @@ async fn parse_dropped_files(
                                         // Clean up temp dir
                                         drop(temp_dir);
                                         
+                                        // Check if files contain uassets
+                                        use crate::install_mod::contains_uasset_files;
+                                        let has_uassets = contains_uasset_files(&files);
+                                        
                                         return Ok(vec![InstallableModInfo {
                                             mod_name,
                                             mod_type,
@@ -745,6 +752,7 @@ async fn parse_dropped_files(
                                             auto_fix_texture: has_texture,
                                             auto_fix_serialize_size: has_static_mesh,
                                             auto_to_repak: !is_iostore,  // Don't repak IoStore packages
+                                            contains_uassets: has_uassets,
                                         }]);
                                     }
                                 }
@@ -800,6 +808,10 @@ async fn parse_dropped_files(
                                     // Clean up temp dir
                                     drop(temp_dir);
                                     
+                                    // Check if content files contain uassets
+                                    use crate::install_mod::contains_uasset_files;
+                                    let has_uassets = contains_uasset_files(&content_files);
+                                    
                                     // Return as a directory mod (will be converted to IoStore)
                                     return Ok(vec![InstallableModInfo {
                                         mod_name,
@@ -810,6 +822,7 @@ async fn parse_dropped_files(
                                         auto_fix_texture: has_texture,
                                         auto_fix_serialize_size: has_static_mesh,
                                         auto_to_repak: false,
+                                        contains_uassets: has_uassets,
                                     }]);
                                 }
                             }
@@ -934,6 +947,10 @@ async fn parse_dropped_files(
                             info!("{}", summary);
                             let _ = window.emit("install_log", &summary);
                             
+                            // Check if files contain uassets
+                            use crate::install_mod::contains_uasset_files;
+                            let has_uassets = contains_uasset_files(&files);
+                            
                             return Ok(vec![InstallableModInfo {
                                 mod_name,
                                 mod_type,
@@ -943,6 +960,7 @@ async fn parse_dropped_files(
                                 auto_fix_texture: has_texture,
                                 auto_fix_serialize_size: has_static_mesh,
                                 auto_to_repak: !is_iostore,  // Don't repak IoStore packages
+                                contains_uassets: has_uassets,
                             }]);
                         }
                     }
@@ -963,6 +981,8 @@ async fn parse_dropped_files(
         let is_iostore_pkg = is_pak && path.with_extension("utoc").exists() && path.with_extension("ucas").exists();
         let auto_to_repak = is_pak && !is_iostore_pkg;
 
+        // Default contains_uassets to true for fallback cases (safer default)
+        // The early returns above handle the proper detection
         mods.push(InstallableModInfo {
             mod_name,
             mod_type,
@@ -972,6 +992,7 @@ async fn parse_dropped_files(
             auto_fix_texture,
             auto_fix_serialize_size,
             auto_to_repak,
+            contains_uassets: true, // Default to true for safety in fallback cases
         });
     }
 

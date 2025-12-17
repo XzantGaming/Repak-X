@@ -447,3 +447,129 @@ interface RecompressProgress {
     status: string;   // Current operation description
 }
 ```
+
+---
+
+## Contains UAssets Detection - Frontend Integration
+
+### Backend Changes (Already Implemented)
+
+The backend now returns a `contains_uassets` field in the `InstallableModInfo` struct returned by `parse_dropped_files`. This field indicates whether the mod contains any `.uasset`, `.uexp`, `.ubulk`, or `.umap` files.
+
+**InstallableModInfo struct now includes:**
+```typescript
+interface InstallableModInfo {
+    mod_name: string;
+    mod_type: string;
+    is_dir: boolean;
+    path: string;
+    auto_fix_mesh: boolean;
+    auto_fix_texture: boolean;
+    auto_fix_serialize_size: boolean;
+    auto_to_repak: boolean;
+    contains_uassets: boolean;  // NEW - true if mod has .uasset/.uexp/.ubulk/.umap files
+}
+```
+
+### Frontend Changes Required (InstallModPanel.jsx)
+
+**1. Use `contains_uassets` for Toggle Locking**
+
+When `contains_uassets` is `false`, the following toggles should be **disabled/locked** since they only apply to UAsset-based mods:
+- Fix Mesh (fixMesh)
+- Fix Texture (fixTexture)  
+- Fix SerializeSize (fixSerializeSize)
+
+**2. Update Toggle Rendering**
+
+```javascript
+// In the toggle rendering section, check contains_uassets
+const canApplyPatches = mod.contains_uassets !== false; // Default to true if undefined
+
+// Each patch toggle should be disabled when no uassets
+<Switch
+  key={key}
+  size="sm"
+  color="primary"
+  checked={canApplyPatches ? (modSettings[idx]?.[key] || false) : false}
+  onChange={(value) => updateModSetting(idx, key, value)}
+  isDisabled={!canApplyPatches}
+  className={`install-toggle ${!canApplyPatches ? 'locked' : ''}`}
+>
+  <div className="install-toggle__text">
+    <span className="install-toggle__label">{label}</span>
+    <span className="install-toggle__hint">
+      {!canApplyPatches ? 'No UAsset files detected' : hint}
+    </span>
+  </div>
+</Switch>
+```
+
+**3. Update `buildInitialSettings` Function**
+
+```javascript
+// In buildInitialSettings, respect contains_uassets
+acc[idx] = {
+  fixMesh: mod.contains_uassets !== false ? (mod.auto_fix_mesh || false) : false,
+  fixTexture: mod.contains_uassets !== false ? (mod.auto_fix_texture || false) : false,
+  fixSerializeSize: mod.contains_uassets !== false ? (mod.auto_fix_serialize_size || false) : false,
+  toRepak: mod.auto_to_repak || false,
+  // ... other settings
+}
+```
+
+**4. Update `updateModSetting` to Prevent Enabling Patches on Non-UAsset Mods**
+
+```javascript
+const updateModSetting = (idx, key, value) => {
+  // Prevent enabling patch toggles when no uassets
+  if (['fixMesh', 'fixTexture', 'fixSerializeSize'].includes(key) && !mods[idx]?.contains_uassets) {
+    return;
+  }
+  
+  setModSettings(prev => ({
+    ...prev,
+    [idx]: { ...prev[idx], [key]: value }
+  }));
+}
+```
+
+**5. Visual Indicator for Non-UAsset Mods**
+
+Consider adding a visual indicator (badge or icon) to show when a mod doesn't contain UAsset files:
+
+```javascript
+{!mod.contains_uassets && (
+  <span className="no-uassets-badge" title="This mod contains no UAsset files - patch options disabled">
+    No UAssets
+  </span>
+)}
+```
+
+### Behavior Matrix
+
+| Mod Contents | `contains_uassets` | Patch Toggles | Notes |
+|--------------|-------------------|---------------|-------|
+| `.uasset`, `.uexp` files | `true` | Enabled | Normal UE asset mod |
+| Only `.bnk`, `.wem` files | `false` | Disabled | Audio mod |
+| Only `.ini`, `.cfg` files | `false` | Disabled | Config mod |
+| Mixed (`.uasset` + `.bnk`) | `true` | Enabled | Has UE assets |
+| Unknown/fallback | `true` | Enabled | Safe default |
+
+### CSS Styling (Optional)
+
+```css
+.install-toggle.locked {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.no-uassets-badge {
+  background: #666;
+  color: #fff;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  margin-left: 8px;
+}
+```
