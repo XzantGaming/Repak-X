@@ -18,8 +18,7 @@ license = false
 eula = false
 
 [dependencies]
-# GUI Framework - Tauri (converted from egui)
-# egui version backed up in src/egui_backup_original/
+# GUI Framework - Tauri
 tauri = { version = "2.0", features = [] }
 tauri-plugin-dialog = "2.0"
 tauri-plugin-fs = "2.0"

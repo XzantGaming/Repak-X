@@ -2238,24 +2238,42 @@ async fn extract_pak_to_destination(mod_path: String, dest_path: String) -> Resu
 
 #[tauri::command]
 async fn check_game_running() -> Result<bool, String> {
-    use sysinfo::{ProcessRefreshKind, RefreshKind, System};
+    Ok(is_game_process_running())
+}
+
+/// Reliable game process detection using multiple methods
+/// Uses exe() path as primary method, falls back to name() matching
+fn is_game_process_running() -> bool {
+    use sysinfo::{ProcessRefreshKind, RefreshKind, System, UpdateKind};
     
+    // Create system with full process info including exe path
     let s = System::new_with_specifics(
-        RefreshKind::new().with_processes(ProcessRefreshKind::new())
+        RefreshKind::new().with_processes(
+            ProcessRefreshKind::new()
+                .with_exe(UpdateKind::Always)
+        )
     );
     
-    let game_process_names = ["Marvel-Win64-Shipping.exe"];
+    let game_exe_name = "marvel-win64-shipping.exe";
     
     for (_pid, process) in s.processes() {
-        let process_name = process.name().to_string_lossy().to_lowercase();
-        for game_name in &game_process_names {
-            if process_name == game_name.to_lowercase() {
-                return Ok(true);
+        // Primary method: Check exe() path (most reliable on Windows)
+        if let Some(exe_path) = process.exe() {
+            if let Some(file_name) = exe_path.file_name() {
+                if file_name.to_string_lossy().to_lowercase() == game_exe_name {
+                    return true;
+                }
             }
+        }
+        
+        // Fallback: Check process name() directly
+        let process_name = process.name().to_string_lossy().to_lowercase();
+        if process_name == game_exe_name {
+            return true;
         }
     }
     
-    Ok(false)
+    false
 }
 
 /// Launch Marvel Rivals via Steam, temporarily skipping the launcher
@@ -2507,6 +2525,344 @@ async fn get_skip_launcher_status(state: State<'_, Arc<Mutex<AppState>>>) -> Res
     Ok(current_value == "0")
 }
 
+/// Result of recompression operation
+#[derive(Clone, Serialize, Deserialize)]
+struct RecompressResult {
+    total_scanned: usize,
+    already_oodle: usize,
+    recompressed: usize,
+    failed: usize,
+    skipped_iostore: usize,
+    details: Vec<RecompressDetail>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+struct RecompressDetail {
+    mod_name: String,
+    status: String, // "already_oodle", "recompressed", "failed", "skipped_iostore"
+    original_size: u64,
+    new_size: Option<u64>,
+    error: Option<String>,
+}
+
+/// Scan all mods and recompress any that aren't using Oodle compression
+#[tauri::command]
+async fn recompress_mods(
+    state: State<'_, Arc<Mutex<AppState>>>,
+    window: Window,
+) -> Result<RecompressResult, String> {
+    use repak::Compression;
+    use std::io::BufReader;
+    
+    let game_path = {
+        let state = state.lock().unwrap();
+        state.game_path.clone()
+    };
+    
+    if !game_path.exists() {
+        return Err("Game path does not exist".to_string());
+    }
+    
+    info!("Starting recompression scan in: {}", game_path.display());
+    
+    let mut result = RecompressResult {
+        total_scanned: 0,
+        already_oodle: 0,
+        recompressed: 0,
+        failed: 0,
+        skipped_iostore: 0,
+        details: Vec::new(),
+    };
+    
+    // Collect all .pak files
+    let mut pak_files: Vec<PathBuf> = Vec::new();
+    for entry in WalkDir::new(&game_path)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        let path = entry.path();
+        if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("pak") {
+            pak_files.push(path.to_path_buf());
+        }
+    }
+    
+    result.total_scanned = pak_files.len();
+    info!("Found {} PAK files to scan", pak_files.len());
+    
+    // Emit initial progress
+    let _ = window.emit("recompress_progress", serde_json::json!({
+        "current": 0,
+        "total": pak_files.len(),
+        "status": "Scanning..."
+    }));
+    
+    for (idx, pak_path) in pak_files.iter().enumerate() {
+        let mod_name = pak_path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("Unknown")
+            .to_string();
+        
+        // Emit progress
+        let _ = window.emit("recompress_progress", serde_json::json!({
+            "current": idx + 1,
+            "total": pak_files.len(),
+            "status": format!("Checking: {}", mod_name)
+        }));
+        
+        // Check if this is an IoStore mod (has .utoc/.ucas files)
+        let utoc_path = pak_path.with_extension("utoc");
+        let ucas_path = pak_path.with_extension("ucas");
+        
+        if utoc_path.exists() && ucas_path.exists() {
+            // IoStore mod - check if it needs recompression
+            let ucas_size = std::fs::metadata(&ucas_path).map(|m| m.len()).unwrap_or(0);
+            
+            // Check if IoStore is already compressed
+            let is_compressed = match retoc::is_iostore_compressed(&utoc_path) {
+                Ok(compressed) => compressed,
+                Err(e) => {
+                    warn!("Failed to check IoStore compression for {}: {}", mod_name, e);
+                    result.failed += 1;
+                    result.details.push(RecompressDetail {
+                        mod_name,
+                        status: "failed".to_string(),
+                        original_size: ucas_size,
+                        new_size: None,
+                        error: Some(format!("Failed to check compression: {}", e)),
+                    });
+                    continue;
+                }
+            };
+            
+            if is_compressed {
+                // Already compressed
+                info!("IoStore already compressed: {}", mod_name);
+                result.already_oodle += 1;
+                result.details.push(RecompressDetail {
+                    mod_name,
+                    status: "already_oodle".to_string(),
+                    original_size: ucas_size,
+                    new_size: None,
+                    error: None,
+                });
+            } else {
+                // Need to recompress IoStore
+                info!("Recompressing IoStore: {}", mod_name);
+                
+                let _ = window.emit("recompress_progress", serde_json::json!({
+                    "current": idx + 1,
+                    "total": pak_files.len(),
+                    "status": format!("Recompressing IoStore: {}", mod_name)
+                }));
+                
+                let config = std::sync::Arc::new(retoc::Config::default());
+                match retoc::recompress_iostore(&utoc_path, config) {
+                    Ok(_) => {
+                        let new_ucas_size = std::fs::metadata(&ucas_path).map(|m| m.len()).unwrap_or(0);
+                        info!("Successfully recompressed IoStore: {} ({} -> {} bytes)", mod_name, ucas_size, new_ucas_size);
+                        result.recompressed += 1;
+                        result.details.push(RecompressDetail {
+                            mod_name,
+                            status: "recompressed".to_string(),
+                            original_size: ucas_size,
+                            new_size: Some(new_ucas_size),
+                            error: None,
+                        });
+                    }
+                    Err(e) => {
+                        error!("Failed to recompress IoStore {}: {}", mod_name, e);
+                        result.failed += 1;
+                        result.details.push(RecompressDetail {
+                            mod_name,
+                            status: "failed".to_string(),
+                            original_size: ucas_size,
+                            new_size: None,
+                            error: Some(format!("Recompression failed: {}", e)),
+                        });
+                    }
+                }
+            }
+            continue;
+        }
+        
+        // Try to read the PAK file
+        let file = match File::open(pak_path) {
+            Ok(f) => f,
+            Err(e) => {
+                error!("Failed to open PAK file {}: {}", pak_path.display(), e);
+                result.failed += 1;
+                result.details.push(RecompressDetail {
+                    mod_name,
+                    status: "failed".to_string(),
+                    original_size: 0,
+                    new_size: None,
+                    error: Some(format!("Failed to open: {}", e)),
+                });
+                continue;
+            }
+        };
+        
+        let original_size = std::fs::metadata(pak_path).map(|m| m.len()).unwrap_or(0);
+        
+        let pak_reader = match repak::PakBuilder::new()
+            .key(install_mod::AES_KEY.clone().0)
+            .reader(&mut BufReader::new(&file))
+        {
+            Ok(reader) => reader,
+            Err(e) => {
+                error!("Failed to read PAK file {}: {}", pak_path.display(), e);
+                result.failed += 1;
+                result.details.push(RecompressDetail {
+                    mod_name,
+                    status: "failed".to_string(),
+                    original_size,
+                    new_size: None,
+                    error: Some(format!("Failed to parse PAK: {}", e)),
+                });
+                continue;
+            }
+        };
+        
+        // Check compression type
+        let compressions = pak_reader.compression();
+        let has_oodle = compressions.iter().any(|c| matches!(c, Compression::Oodle));
+        let is_uncompressed = compressions.is_empty();
+        
+        if has_oodle && !is_uncompressed {
+            // Already using Oodle compression
+            info!("Already Oodle compressed: {}", mod_name);
+            result.already_oodle += 1;
+            result.details.push(RecompressDetail {
+                mod_name,
+                status: "already_oodle".to_string(),
+                original_size,
+                new_size: None,
+                error: None,
+            });
+            continue;
+        }
+        
+        // Need to recompress this PAK
+        info!("Recompressing: {} (compression: {:?})", mod_name, compressions);
+        
+        // Emit progress for recompression
+        let _ = window.emit("recompress_progress", serde_json::json!({
+            "current": idx + 1,
+            "total": pak_files.len(),
+            "status": format!("Recompressing: {}", mod_name)
+        }));
+        
+        // Recompress the PAK file
+        match recompress_pak_file(pak_path, &pak_reader) {
+            Ok(new_size) => {
+                info!("Successfully recompressed: {} ({} -> {} bytes)", mod_name, original_size, new_size);
+                result.recompressed += 1;
+                result.details.push(RecompressDetail {
+                    mod_name,
+                    status: "recompressed".to_string(),
+                    original_size,
+                    new_size: Some(new_size),
+                    error: None,
+                });
+            }
+            Err(e) => {
+                error!("Failed to recompress {}: {}", mod_name, e);
+                result.failed += 1;
+                result.details.push(RecompressDetail {
+                    mod_name,
+                    status: "failed".to_string(),
+                    original_size,
+                    new_size: None,
+                    error: Some(e),
+                });
+            }
+        }
+    }
+    
+    // Emit completion
+    let _ = window.emit("recompress_progress", serde_json::json!({
+        "current": pak_files.len(),
+        "total": pak_files.len(),
+        "status": "Complete"
+    }));
+    
+    info!("Recompression complete: {} scanned, {} already Oodle, {} recompressed, {} failed",
+        result.total_scanned, result.already_oodle, result.recompressed, result.failed);
+    
+    Ok(result)
+}
+
+/// Recompress a single PAK file to use Oodle compression
+fn recompress_pak_file(pak_path: &Path, pak_reader: &repak::PakReader) -> Result<u64, String> {
+    use repak::{Compression, Version};
+    use std::io::{BufReader, BufWriter};
+    use tempfile::NamedTempFile;
+    
+    // Create a temporary file for the new PAK
+    let temp_file = NamedTempFile::new()
+        .map_err(|e| format!("Failed to create temp file: {}", e))?;
+    
+    let temp_path = temp_file.path().to_path_buf();
+    
+    // Get PAK metadata
+    let mount_point = pak_reader.mount_point().to_string();
+    let path_hash_seed = pak_reader.path_hash_seed();
+    let files = pak_reader.files();
+    
+    // Create new PAK with Oodle compression
+    let output_file = File::create(&temp_path)
+        .map_err(|e| format!("Failed to create output file: {}", e))?;
+    
+    let builder = repak::PakBuilder::new()
+        .compression(vec![Compression::Oodle])
+        .key(install_mod::AES_KEY.clone().0);
+    
+    let mut pak_writer = builder.writer(
+        BufWriter::new(output_file),
+        Version::V11,
+        mount_point,
+        path_hash_seed,
+    );
+    
+    let entry_builder = pak_writer.entry_builder();
+    
+    // Read source file
+    let source_file = File::open(pak_path)
+        .map_err(|e| format!("Failed to open source PAK: {}", e))?;
+    let mut source_reader = BufReader::new(source_file);
+    
+    // Copy all entries with Oodle compression
+    for file_path in &files {
+        let data = pak_reader.get(file_path, &mut source_reader)
+            .map_err(|e| format!("Failed to read entry {}: {}", file_path, e))?;
+        
+        // Build entry with compression enabled
+        let entry = entry_builder
+            .build_entry(true, data, file_path)
+            .map_err(|e| format!("Failed to build entry {}: {}", file_path, e))?;
+        
+        pak_writer.write_entry(file_path.to_string(), entry)
+            .map_err(|e| format!("Failed to write entry {}: {}", file_path, e))?;
+    }
+    
+    // Finalize the PAK (write_index consumes pak_writer)
+    let _writer = pak_writer.write_index()
+        .map_err(|e| format!("Failed to write index: {}", e))?;
+    
+    // Get new file size
+    let new_size = std::fs::metadata(&temp_path)
+        .map(|m| m.len())
+        .unwrap_or(0);
+    
+    // Replace original file with recompressed version
+    std::fs::copy(&temp_path, pak_path)
+        .map_err(|e| format!("Failed to replace original PAK: {}", e))?;
+    
+    // Clean up temp file (it will be deleted when temp_file is dropped)
+    
+    Ok(new_size)
+}
+
 #[tauri::command]
 async fn get_app_version() -> Result<String, String> {
     Ok(env!("CARGO_PKG_VERSION").to_string())
@@ -2581,24 +2937,8 @@ struct UpdateInfo {
 async fn monitor_game_for_crashes(
     crash_state: State<'_, CrashMonitorState>,
 ) -> Result<Option<crash_monitor::CrashInfo>, String> {
-    use sysinfo::{ProcessRefreshKind, RefreshKind, System};
-    
-    let s = System::new_with_specifics(
-        RefreshKind::new().with_processes(ProcessRefreshKind::new())
-    );
-    
-    let game_process_names = ["Marvel-Win64-Shipping.exe"];
-    let mut game_running = false;
-    
-    for (_pid, process) in s.processes() {
-        let process_name = process.name().to_string_lossy().to_lowercase();
-        for game_name in &game_process_names {
-            if process_name == game_name.to_lowercase() {
-                game_running = true;
-                break;
-            }
-        }
-    }
+    // Use the shared reliable game detection function
+    let game_running = is_game_process_running();
     
     let mut game_start_time = crash_state.game_start_time.lock().unwrap();
     let mut last_checked = crash_state.last_checked_crash.lock().unwrap();
@@ -3630,6 +3970,7 @@ fn main() {
             launch_game,
             skip_launcher_patch,
             get_skip_launcher_status,
+            recompress_mods,
             get_app_version,
             check_for_updates,
             monitor_game_for_crashes,

@@ -93,8 +93,10 @@ pub fn convert_to_iostore_directory(
     }
 
     // Skeletal Mesh patching (separate workflow, not interfered with)
+    // Pass source mod path to check for existing patched_files marker (prevents double-patching)
     if pak.fix_mesh {
-        patch_meshes::mesh_patch(&mut paths, &to_pak_dir.to_path_buf())?;
+        let source_mod_path = if pak.is_dir { Some(&pak.mod_path) } else { None };
+        patch_meshes::mesh_patch_with_source(&mut paths, &to_pak_dir.to_path_buf(), source_mod_path)?;
     }
 
     // Process textures using UAssetAPI to convert them to inline format

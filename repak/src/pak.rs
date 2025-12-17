@@ -227,6 +227,11 @@ impl PakReader {
             None => Err(super::Error::MissingEntry(path.to_owned())),
         }
     }
+
+    /// Returns the compression methods used in this PAK file
+    pub fn compression(&self) -> Vec<Compression> {
+        self.pak.compression.iter().filter_map(|c| *c).collect()
+    }
     pub fn into_pakwriter<W: Write + Seek>(
         self,
         mut writer: W,

@@ -17,7 +17,14 @@ impl Logger for PrintLogger {
     }
 }
 
+/// Simple mesh patch wrapper - calls mesh_patch_with_source with no source directory
 pub fn mesh_patch(paths: &mut Vec<PathBuf>, mod_dir: &PathBuf) -> Result<(), repak::Error> {
+    mesh_patch_with_source(paths, mod_dir, None)
+}
+
+/// Mesh patch with optional source directory to check for existing patched_files marker.
+/// This prevents double-patching skeletal meshes from cooked directory mods that were already patched.
+pub fn mesh_patch_with_source(paths: &mut Vec<PathBuf>, mod_dir: &PathBuf, source_mod_dir: Option<&PathBuf>) -> Result<(), repak::Error> {
     let uasset_files = paths
         .iter()
         .filter(|p| {
@@ -33,13 +40,31 @@ pub fn mesh_patch(paths: &mut Vec<PathBuf>, mod_dir: &PathBuf) -> Result<(), rep
         .read(true) // Allow reading
         .write(true) // Allow writing
         .create(true)
-        .truncate(false) // Create the file if it doesn’t exist
+        .truncate(false) // Create the file if it doesn't exist
         .open(&patched_cache_file)?;
 
-    let patched_files = BufReader::new(&file)
+    // Read patched files from the working directory cache
+    let mut patched_files = BufReader::new(&file)
         .lines()
         .filter_map(|l| l.ok())
         .collect::<Vec<_>>();
+    
+    // Also check for patched_files in the source mod directory (for cooked directory mods)
+    // This prevents double-patching meshes that were already patched before
+    if let Some(source_dir) = source_mod_dir {
+        let source_patched_file = source_dir.join("patched_files");
+        if source_patched_file.exists() {
+            info!("Found existing patched_files marker in source mod directory: {:?}", source_patched_file);
+            if let Ok(source_file) = File::open(&source_patched_file) {
+                let source_patched: Vec<String> = BufReader::new(source_file)
+                    .lines()
+                    .filter_map(|l| l.ok())
+                    .collect();
+                info!("Loaded {} previously patched file entries from source mod", source_patched.len());
+                patched_files.extend(source_patched);
+            }
+        }
+    }
 
     let mut cache_writer = BufWriter::new(&file);
 
