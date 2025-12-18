@@ -81,47 +81,70 @@ fn is_game_process_running() -> bool {
 }
 ```
 
-## Frontend Recommendations (Optional)
+## Frontend Changes Required (App.jsx)
 
-The current frontend implementation in `App.jsx` is adequate, but consider these optional improvements:
+**Issue**: `checkGame()` is only called once during app initialization. There is no periodic polling, so the game status never updates until the app is reloaded.
 
-### 1. Increase Polling Frequency During Critical Operations
-Currently `checkGame` is called periodically. Consider calling it more frequently (every 1-2 seconds) when the install panel is open.
+### Required Fix: Add Periodic Polling
+
+Add a `useEffect` hook to poll the game status every 3 seconds:
 
 ```javascript
-// In useEffect or when install panel opens
+// Add this useEffect after the initialization useEffect (around line 440)
+// Periodic game status polling
 useEffect(() => {
-  if (showInstallPanel) {
-    const interval = setInterval(checkGame, 1000); // 1 second during install
-    return () => clearInterval(interval);
-  }
+  // Initial check
+  checkGame();
+  
+  // Poll every 3 seconds
+  const interval = setInterval(() => {
+    checkGame();
+  }, 3000);
+  
+  return () => clearInterval(interval);
+}, []);
+```
+
+### Alternative: More Aggressive Polling When Install Panel is Open
+
+If you want faster updates when the install panel is visible:
+
+```javascript
+// Poll game status - faster when install panel is open
+useEffect(() => {
+  const pollInterval = showInstallPanel ? 1000 : 5000; // 1s when installing, 5s otherwise
+  
+  const interval = setInterval(() => {
+    checkGame();
+  }, pollInterval);
+  
+  return () => clearInterval(interval);
 }, [showInstallPanel]);
 ```
 
-### 2. Add Visual Indicator for Game Status
-Consider adding a small indicator in the UI showing the current game status (running/not running) so users know the detection is working.
+### Location in App.jsx
 
-### 3. Debounce Game State Changes
-To avoid flickering if the game process briefly disappears during loading screens:
+Add the polling `useEffect` after line ~440 (after the initialization effect that calls `checkGame()` once).
 
+The `checkGame` function already exists at line 571:
 ```javascript
-const [gameRunningDebounced, setGameRunningDebounced] = useState(false);
-
-useEffect(() => {
-  const timeout = setTimeout(() => {
-    setGameRunningDebounced(gameRunning);
-  }, 500); // 500ms debounce
-  return () => clearTimeout(timeout);
-}, [gameRunning]);
+const checkGame = async () => {
+  try {
+    const running = await invoke('check_game_running')
+    setGameRunning(running)
+  } catch (error) {
+    console.error('Failed to check game status:', error)
+  }
+}
 ```
 
 ## Testing
 
 To verify the fix works:
-1. Start Marvel Rivals
-2. Open Repak GUI
-3. The game running warning should appear when trying to install mods
+1. Start Repak GUI
+2. Start Marvel Rivals
+3. The "Game Running" indicator should appear within 3-5 seconds
 4. Close Marvel Rivals
-5. The warning should no longer appear
+5. The indicator should disappear within 3-5 seconds
 
 The detection should now be consistent regardless of how the game was launched (Steam, direct exe, etc.).

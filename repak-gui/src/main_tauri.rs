@@ -2277,14 +2277,12 @@ async fn check_game_running() -> Result<bool, String> {
 /// Reliable game process detection using multiple methods
 /// Uses exe() path as primary method, falls back to name() matching
 fn is_game_process_running() -> bool {
-    use sysinfo::{ProcessRefreshKind, RefreshKind, System, UpdateKind};
+    use sysinfo::{ProcessRefreshKind, RefreshKind, System};
     
     // Create system with full process info including exe path
+    // Use everything() to ensure exe path is fetched
     let s = System::new_with_specifics(
-        RefreshKind::new().with_processes(
-            ProcessRefreshKind::new()
-                .with_exe(UpdateKind::Always)
-        )
+        RefreshKind::new().with_processes(ProcessRefreshKind::everything())
     );
     
     let game_exe_name = "marvel-win64-shipping.exe";
