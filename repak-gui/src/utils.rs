@@ -221,10 +221,10 @@ pub fn get_pak_characteristics_detailed(mod_contents: Vec<String>) -> ModCharact
             }
         }
         
-        // Fallback: For audio/UI mods without character folders, check filenames
+        // Fallback: For audio/UI/texture mods without character folders, check filenames
         // BUT exclude material instances (MI_) to avoid false positives from shared assets
-        // This handles patterns like bnk_vo_1044001.bnk or UI_1048_icon.uasset
-        if !filename_lower.starts_with("mi_") && !filename_lower.starts_with("t_") {
+        // This handles patterns like bnk_vo_1044001.bnk, UI_1048_icon.uasset, or T_1016001_Body_D.uasset
+        if !filename_lower.starts_with("mi_") {
             if let Some(caps) = FILENAME_CHAR_ID_REGEX.captures(filename) {
                 if let Some(char_id) = caps.get(1) {
                     let id = char_id.as_str();

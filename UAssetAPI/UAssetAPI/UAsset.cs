@@ -1018,6 +1018,8 @@ namespace UAssetAPI
             }
             catch (Exception ex)
             {
+                // Always log export parsing failures to stderr for debugging
+                Console.Error.WriteLine($"[UAssetAPI] Failed to parse export {i + 1}: {ex.Message}");
 #if DEBUGVERBOSE
                 Console.WriteLine("\nFailed to parse export " + (i + 1) + ": " + ex.ToString());
 #endif

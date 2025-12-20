@@ -82,18 +82,24 @@ namespace UAssetAPI.ExportTypes.Texture
 
         public void Write(AssetBinaryWriter writer)
         {
-            // Write bulk data
+            // Write bulk data header (for UE5.3+ with DataResources, this writes only the data_resource_id)
             BulkData.Write(writer);
 
-            // Write dimensions
-            writer.Write(SizeX);
-            writer.Write(SizeY);
-            
-            // SizeZ for UE4.20+
-            if (writer.Asset.ObjectVersionUE5 >= ObjectVersionUE5.INITIAL_VERSION ||
-                writer.Asset.GetCustomVersion<FRenderingObjectVersion>() >= FRenderingObjectVersion.TextureSourceArtRefactor)
+            // For UE5.3+ with DataResources, dimensions are NOT written after the bulk data header
+            // The pixel data comes after all mip headers, pointed to by the DataResource's SerialOffset
+            // Only write dimensions for legacy format (no DataResourceIndex)
+            if (BulkData?.Header?.DataResourceIndex < 0)
             {
-                writer.Write(SizeZ);
+                // Write dimensions
+                writer.Write(SizeX);
+                writer.Write(SizeY);
+                
+                // SizeZ for UE4.20+
+                if (writer.Asset.ObjectVersionUE5 >= ObjectVersionUE5.INITIAL_VERSION ||
+                    writer.Asset.GetCustomVersion<FRenderingObjectVersion>() >= FRenderingObjectVersion.TextureSourceArtRefactor)
+                {
+                    writer.Write(SizeZ);
+                }
             }
         }
 

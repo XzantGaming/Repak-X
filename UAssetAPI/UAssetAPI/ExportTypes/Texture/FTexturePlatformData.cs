@@ -28,6 +28,11 @@ namespace UAssetAPI.ExportTypes.Texture
         /// </summary>
         public string BulkFilePath;
 
+        /// <summary>
+        /// Placeholder bytes for UE5.0+ cooked assets (16 bytes).
+        /// </summary>
+        public byte[] PlaceholderBytes;
+
         public FTexturePlatformData()
         {
             SizeX = 0;
@@ -48,10 +53,42 @@ namespace UAssetAPI.ExportTypes.Texture
         public void Read(AssetBinaryReader reader, bool bSerializeMipData = true, bool isUE5Cooked = false)
         {
             // FTexturePlatformData::SerializeCooked (CUE4Parse approach)
-            // For UE5.0+ cooked assets with IsFilterEditorOnly, skip 16 bytes placeholder
+            // For UE5.0+ cooked assets with IsFilterEditorOnly, skip PlaceholderDerivedDataSize
+            // Standard UE5: 16 bytes, but Marvel Rivals uses 20 bytes of zeros before actual data
+            PlaceholderByteCount = 0;
             if (isUE5Cooked)
             {
-                reader.BaseStream.Position += 16; // PlaceholderDerivedDataSize
+                // Dynamically detect placeholder bytes by looking for valid SizeX value
+                // Marvel Rivals has 20 bytes of zeros, standard UE5 has 16
+                // We scan ahead to find where SizeX (a power of 2, 1-8192) starts
+                long checkPos = reader.BaseStream.Position;
+                PlaceholderByteCount = 0;
+                
+                // Try different placeholder sizes: 16, 20, 24 (common values)
+                int[] tryPlaceholderSizes = { 16, 20, 24, 0 };
+                foreach (int trySize in tryPlaceholderSizes)
+                {
+                    reader.BaseStream.Position = checkPos + trySize;
+                    if (reader.BaseStream.Position + 12 > reader.BaseStream.Length) continue;
+                    
+                    int potentialSizeX = reader.ReadInt32();
+                    int potentialSizeY = reader.ReadInt32();
+                    uint potentialPackedData = reader.ReadUInt32();
+                    
+                    // Valid texture dimensions: power of 2, 1-8192
+                    bool validX = potentialSizeX >= 1 && potentialSizeX <= 8192 && (potentialSizeX & (potentialSizeX - 1)) == 0;
+                    bool validY = potentialSizeY >= 1 && potentialSizeY <= 8192 && (potentialSizeY & (potentialSizeY - 1)) == 0;
+                    bool validPacked = potentialPackedData <= 0x80000000; // Reasonable packed data
+                    
+                    if (validX && validY && validPacked)
+                    {
+                        PlaceholderByteCount = trySize;
+                        break;
+                    }
+                }
+                
+                reader.BaseStream.Position = checkPos;
+                PlaceholderBytes = reader.ReadBytes(PlaceholderByteCount);
             }
             
             // Read dimensions and packed data
@@ -59,7 +96,7 @@ namespace UAssetAPI.ExportTypes.Texture
             SizeY = reader.ReadInt32();
             PackedData = reader.ReadUInt32();
 
-            // Read pixel format as FString (CUE4Parse: Ar.ReadFString())
+            // Read pixel format as FString
             PixelFormat = reader.ReadFString()?.Value ?? string.Empty;
 
             // Optional texture platform data (if HasOptData flag is set in PackedData)
@@ -89,6 +126,10 @@ namespace UAssetAPI.ExportTypes.Texture
                 Mips.Add(mip);
             }
 
+            // Read bIsVirtual (int32 as bool) - CUE4Parse reads this if VirtualTextures version is set
+            // For Marvel Rivals, this is always 0 (non-virtual)
+            bIsVirtual = reader.ReadInt32() != 0;
+
             // Update dimensions from first mip if available (CUE4Parse does this)
             if (Mips.Count > 0)
             {
@@ -96,11 +137,31 @@ namespace UAssetAPI.ExportTypes.Texture
                 SizeY = Mips[0].SizeY;
             }
         }
+        
+        /// <summary>
+        /// Whether this is a virtual texture (UE4.23+).
+        /// </summary>
+        public bool bIsVirtual;
+
+        /// <summary>
+        /// Number of placeholder bytes to write before the actual data (for UE5 cooked assets).
+        /// CUE4Parse uses 16 bytes for UE5.0+.
+        /// </summary>
+        public int PlaceholderByteCount = 16;
 
         public void Write(AssetBinaryWriter writer)
         {
+            // Write placeholder bytes for UE5.0+ cooked assets (16 bytes)
+            if (PlaceholderBytes != null && PlaceholderBytes.Length > 0)
+            {
+                writer.Write(PlaceholderBytes);
+            }
+            else if (PlaceholderByteCount > 0)
+            {
+                writer.Write(new byte[PlaceholderByteCount]);
+            }
+            
             // Write dimensions and packed data
-            // Use mip dimensions if available (they're more reliable after stripping)
             int writeX = Mips.Count > 0 ? Mips[0].SizeX : SizeX;
             int writeY = Mips.Count > 0 ? Mips[0].SizeY : SizeY;
             writer.Write(writeX);
@@ -120,22 +181,51 @@ namespace UAssetAPI.ExportTypes.Texture
             // First mip to serialize
             writer.Write(FirstMipToSerialize);
 
-            // Write mipmap count and mipmaps
+            // Write mipmap count and mipmaps (headers only for UE5.3+ with DataResources)
             writer.Write(Mips.Count);
             foreach (var mip in Mips)
             {
                 mip.Write(writer);
             }
 
-            // bIsVirtual (UE4.23+) - always 0 for non-virtual textures
-            writer.Write((int)0);
+            // Check if using UE5.3+ DataResource format
+            bool hasDataResources = Mips.Count > 0 && Mips[0].BulkData?.Header?.DataResourceIndex >= 0;
 
-            // none_name_id (UE5+) - FName "None" as uint64
-            // This is written after bIsVirtual in UE5 textures
-            // FName is typically index (4 bytes) + number (4 bytes)
-            // "None" is usually index 0 with number 0, but some assets use index 4
-            writer.Write((int)4); // FName index (4 = "None" in some name tables)
-            writer.Write((int)0); // FName number
+            if (!hasDataResources)
+            {
+                // Legacy format: bIsVirtual comes after mip headers, before pixel data
+                writer.Write(bIsVirtual ? 1 : 0);
+            }
+
+            // Write mip pixel data after all headers
+            // For UE5.3+ with DataResources, the DataResource's SerialOffset points to this location
+            // For legacy format, inline data is written by FByteBulkData.Write()
+            foreach (var mip in Mips)
+            {
+                // Write pixel data if it's inline (either via DataResourceIndex or IsInline flag)
+                if (mip.BulkData?.Data != null && mip.BulkData.Data.Length > 0)
+                {
+                    bool shouldWriteHere = mip.BulkData.Header?.DataResourceIndex >= 0 || 
+                                           mip.BulkData.Header?.IsInline == true;
+                    if (shouldWriteHere)
+                    {
+                        mip.BulkData.WriteData(writer);
+                    }
+                }
+            }
+
+            // For UE5.3+ DataResource format: write mip dimensions AFTER pixel data
+            if (hasDataResources)
+            {
+                foreach (var mip in Mips)
+                {
+                    writer.Write(mip.SizeX);
+                    writer.Write(mip.SizeY);
+                    writer.Write(mip.SizeZ);
+                }
+                // bIsVirtual comes after dimensions
+                writer.Write(bIsVirtual ? 1 : 0);
+            }
         }
 
         public bool HasCpuCopy() => (PackedData & BitMask_HasCpuCopy) == BitMask_HasCpuCopy;
@@ -166,7 +256,7 @@ namespace UAssetAPI.ExportTypes.Texture
             Mips.Add(firstMip);
 
             // Update FirstMipToSerialize - should be 0 for single mip textures
-            // (matches UE-cooked NoMipMaps textures)
+            // This tells the engine that mip 0 is the first one to serialize (the only one we have)
             FirstMipToSerialize = 0;
 
             return true;

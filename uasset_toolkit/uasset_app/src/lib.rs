@@ -154,10 +154,10 @@ pub enum UAssetRequest {
     StripMipmaps { file_path: String },
     // Native C# mipmap stripping using UAssetAPI TextureExport
     #[serde(rename = "strip_mipmaps_native")]
-    StripMipmapsNative { file_path: String },
+    StripMipmapsNative { file_path: String, usmap_path: Option<String> },
     // Batch native C# mipmap stripping - processes multiple files in one call
     #[serde(rename = "batch_strip_mipmaps_native")]
-    BatchStripMipmapsNative { file_paths: Vec<String> },
+    BatchStripMipmapsNative { file_paths: Vec<String>, usmap_path: Option<String> },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -512,9 +512,10 @@ impl UAssetToolkit {
     }
 
     /// Strip mipmaps using native UAssetAPI TextureExport (no Python required)
-    pub async fn strip_mipmaps_native(&self, file_path: &str) -> Result<bool> {
+    pub async fn strip_mipmaps_native(&self, file_path: &str, usmap_path: Option<&str>) -> Result<bool> {
         let request = UAssetRequest::StripMipmapsNative {
             file_path: file_path.to_string(),
+            usmap_path: usmap_path.map(|s| s.to_string()),
         };
         
         let response = self.send_request(request).await?;
@@ -528,9 +529,10 @@ impl UAssetToolkit {
 
     /// Batch strip mipmaps from multiple textures using native UAssetAPI TextureExport
     /// Returns (success_count, skip_count, error_count) and list of successfully processed file names
-    pub async fn batch_strip_mipmaps_native(&self, file_paths: &[String]) -> Result<(usize, usize, usize, Vec<String>)> {
+    pub async fn batch_strip_mipmaps_native(&self, file_paths: &[String], usmap_path: Option<&str>) -> Result<(usize, usize, usize, Vec<String>)> {
         let request = UAssetRequest::BatchStripMipmapsNative {
             file_paths: file_paths.to_vec(),
+            usmap_path: usmap_path.map(|s| s.to_string()),
         };
         
         let response = self.send_request(request).await?;
@@ -738,14 +740,14 @@ impl UAssetToolkitSync {
     }
 
     /// Strip mipmaps using native UAssetAPI TextureExport (no Python required)
-    pub fn strip_mipmaps_native(&self, file_path: &str) -> Result<bool> {
-        self.block_on(self.toolkit.strip_mipmaps_native(file_path))
+    pub fn strip_mipmaps_native(&self, file_path: &str, usmap_path: Option<&str>) -> Result<bool> {
+        self.block_on(self.toolkit.strip_mipmaps_native(file_path, usmap_path))
     }
 
     /// Batch strip mipmaps from multiple textures using native UAssetAPI TextureExport
     /// Returns (success_count, skip_count, error_count) and list of successfully processed file names
-    pub fn batch_strip_mipmaps_native(&self, file_paths: &[String]) -> Result<(usize, usize, usize, Vec<String>)> {
-        self.block_on(self.toolkit.batch_strip_mipmaps_native(file_paths))
+    pub fn batch_strip_mipmaps_native(&self, file_paths: &[String], usmap_path: Option<&str>) -> Result<(usize, usize, usize, Vec<String>)> {
+        self.block_on(self.toolkit.batch_strip_mipmaps_native(file_paths, usmap_path))
     }
 }
 
@@ -806,14 +808,14 @@ pub fn batch_detect_blueprint(file_paths: &[String]) -> Result<bool> {
 }
 
 /// Strip mipmaps using native UAssetAPI (using global singleton)
-pub fn strip_mipmaps_native(file_path: &str) -> Result<bool> {
+pub fn strip_mipmaps_native(file_path: &str, usmap_path: Option<&str>) -> Result<bool> {
     let toolkit = get_global_toolkit()?;
-    run_on_global(toolkit.strip_mipmaps_native(file_path))
+    run_on_global(toolkit.strip_mipmaps_native(file_path, usmap_path))
 }
 
 /// Batch strip mipmaps from multiple textures (using global singleton)
 /// Returns (success_count, skip_count, error_count, processed_file_names)
-pub fn batch_strip_mipmaps_native(file_paths: &[String]) -> Result<(usize, usize, usize, Vec<String>)> {
+pub fn batch_strip_mipmaps_native(file_paths: &[String], usmap_path: Option<&str>) -> Result<(usize, usize, usize, Vec<String>)> {
     let toolkit = get_global_toolkit()?;
-    run_on_global(toolkit.batch_strip_mipmaps_native(file_paths))
+    run_on_global(toolkit.batch_strip_mipmaps_native(file_paths, usmap_path))
 }

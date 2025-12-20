@@ -279,8 +279,8 @@ public class Program
                 "get_texture_info" => GetTextureInfo(request.FilePath),
                 "convert_texture" => ConvertTexture(request.FilePath),
                 "strip_mipmaps" => StripMipmaps(request.FilePath),
-                "strip_mipmaps_native" => StripMipmapsNative(request.FilePath),
-                "batch_strip_mipmaps_native" => BatchStripMipmapsNative(request.FilePaths),
+                "strip_mipmaps_native" => StripMipmapsNative(request.FilePath, request.UsmapPath),
+                "batch_strip_mipmaps_native" => BatchStripMipmapsNative(request.FilePaths, request.UsmapPath),
                 
                 // Mesh operations
                 "patch_mesh" => PatchMesh(request.FilePath, request.UexpPath),
@@ -746,9 +746,9 @@ public class Program
     
     /// <summary>
     /// Strip mipmaps using native UAssetAPI TextureExport.
-    /// This is a pure C# implementation that doesn't require Python.
+    /// This is a pure C# implementation based on CUE4Parse's texture parsing.
     /// </summary>
-    private static UAssetResponse StripMipmapsNative(string? filePath)
+    private static UAssetResponse StripMipmapsNative(string? filePath, string? usmapPath)
     {
         if (string.IsNullOrEmpty(filePath))
             return new UAssetResponse { Success = false, Message = "File path required" };
@@ -759,8 +759,18 @@ public class Program
         {
             Console.Error.WriteLine($"[UAssetTool] Native mipmap stripping: {filePath}");
             
-            string? usmapPath = Environment.GetEnvironmentVariable("USMAP_PATH");
-            var asset = LoadAsset(filePath, usmapPath);
+            // Use provided usmap_path, fall back to environment variable
+            string? effectiveUsmapPath = usmapPath ?? Environment.GetEnvironmentVariable("USMAP_PATH");
+            Console.Error.WriteLine($"[UAssetTool] Using USMAP: {effectiveUsmapPath ?? "null"}");
+            var asset = LoadAsset(filePath, effectiveUsmapPath);
+            
+            // Debug: Log export types
+            Console.Error.WriteLine($"[UAssetTool] Asset has {asset.Exports.Count} exports");
+            foreach (var exp in asset.Exports)
+            {
+                var className = GetExportClassName(asset, exp);
+                Console.Error.WriteLine($"[UAssetTool] Export type: {exp.GetType().Name}, Class: {className}");
+            }
             
             // Find TextureExport
             TextureExport? textureExport = null;
@@ -791,11 +801,7 @@ public class Program
                 return new UAssetResponse { Success = true, Message = "Texture already has 1 or fewer mipmaps" };
             }
             
-            // The target data_resource_id should always be 5 for Marvel Rivals textures
-            // All reference NoMipMaps textures use data_resource_id = 5 regardless of original structure
-            int targetDataResourceId = 5;
-            
-            // Strip mipmaps
+            // Strip mipmaps using UAssetAPI
             bool stripped = textureExport.StripMipmaps();
             if (!stripped)
             {
@@ -804,22 +810,65 @@ public class Program
             
             Console.Error.WriteLine($"[UAssetTool] Stripped to {textureExport.MipCount} mipmap(s)");
             
-            // Update DataResources - Match Python tool behavior:
-            // Python outputs data_resource_id = max(original DataResourceIndex values)
-            // with only 1 DataResource entry in .uasset
-            // The game uses data_resource_id as a key that must match between .uexp and .uasset
-            
+            // Update DataResources for inline mip data
             if (asset.DataResources != null && textureExport.PlatformData?.Mips?.Count > 0)
             {
                 var mip = textureExport.PlatformData.Mips[0];
                 int dataSize = mip.BulkData?.Data?.Length ?? 0;
                 
-                // Use targetDataResourceId calculated earlier (validMipCount or maxDataResourceIndex+1)
+                // Calculate the SerialOffset where pixel data will be in the .uexp
+                // Structure: Properties + LightingGuid(16) + StripFlags(4) + bCooked(4) + bSerializeMipData(4)
+                //          + PixelFormatFName(8) + ExtraBytes(0-4) + SkipOffset(8)
+                //          + Placeholder(16) + SizeX(4) + SizeY(4) + PackedData(4) + PixelFormat FString(4+len)
+                //          + FirstMipToSerialize(4) + MipCount(4) + MipHeader(4+12) + bIsVirtual(4)
+                // 
+                // For Marvel Rivals textures with 1 mip:
+                // Properties header: 10 bytes (unversioned header)
+                // LightingGuid: 16 bytes
+                // StripFlags: 4 bytes  
+                // bCooked: 4 bytes
+                // bSerializeMipData: 4 bytes
+                // PixelFormatFName: 8 bytes
+                // ExtraBytes: 4 bytes (Marvel Rivals specific)
+                // SkipOffset: 8 bytes
+                // Placeholder: 16 bytes
+                // SizeX: 4 bytes
+                // SizeY: 4 bytes
+                // PackedData: 4 bytes
+                // PixelFormat FString: 4 + 8 = 12 bytes (for "PF_DXT1\0")
+                // FirstMipToSerialize: 4 bytes
+                // MipCount: 4 bytes
+                // Mip0 header: 4 (data_resource_id) + 4 (SizeX) + 4 (SizeY) + 4 (SizeZ) = 16 bytes
+                // bIsVirtual: 4 bytes
+                // Total: 10 + 16 + 4 + 4 + 4 + 8 + 4 + 8 + 16 + 4 + 4 + 4 + 12 + 4 + 4 + 16 + 4 = 126 bytes
+                
+                // Calculate based on pixel format string length
+                string pixelFormat = textureExport.PlatformData.PixelFormat ?? "PF_DXT1";
+                int pixelFormatLen = pixelFormat.Length + 1; // +1 for null terminator
+                
+                // Base offset calculation
+                int serialOffset = 10  // Properties header (unversioned)
+                    + 16  // LightingGuid
+                    + 4   // StripFlags
+                    + 4   // bCooked
+                    + 4   // bSerializeMipData
+                    + 8   // PixelFormatFName
+                    + (textureExport.ExtraBytes?.Length ?? 0)  // ExtraBytes (Marvel Rivals specific)
+                    + 8   // SkipOffset
+                    + 16  // Placeholder
+                    + 4   // SizeX
+                    + 4   // SizeY
+                    + 4   // PackedData
+                    + 4 + pixelFormatLen  // PixelFormat FString (length + chars)
+                    + 4   // FirstMipToSerialize
+                    + 4   // MipCount
+                    + 16  // Mip0 header (data_resource_id + SizeX + SizeY + SizeZ)
+                    + 4;  // bIsVirtual
                 
                 // Create a new DataResource entry for the inline mip
                 var inlineResource = new UAssetAPI.UnrealTypes.FObjectDataResource(
                     (UAssetAPI.UnrealTypes.EObjectDataResourceFlags)0,
-                    0,  // SerialOffset - placeholder, will be updated
+                    serialOffset,  // SerialOffset - where pixel data starts in .uexp
                     -1, // DuplicateSerialOffset
                     dataSize, // SerialSize
                     dataSize, // RawSize
@@ -827,136 +876,16 @@ public class Program
                     0x48 // LegacyBulkDataFlags - ForceInlinePayload | SingleUse
                 );
                 
-                // Clear and add only 1 entry (matching Python's output structure)
-                // But set the mip's DataResourceIndex to the original last index
+                // Clear and add only 1 entry
                 asset.DataResources.Clear();
                 asset.DataResources.Add(inlineResource);
                 
-                // CRITICAL: Set the mip's DataResourceIndex to match Python's output
-                // Python writes data_resource_id = original count - 1 (e.g., 5 for 6 entries)
-                mip.BulkData.Header.DataResourceIndex = targetDataResourceId;
-                
+                // Set the mip's DataResourceIndex to 0 (first entry)
+                mip.BulkData.Header.DataResourceIndex = 0;
             }
             
-            // Save the modified asset (first pass)
+            // Save the modified asset
             asset.Write(filePath);
-            
-            // Second pass: Find the inline data offset in .uexp and update DataResource
-            string uexpPath = Path.ChangeExtension(filePath, ".uexp");
-            if (File.Exists(uexpPath) && asset.DataResources != null && asset.DataResources.Count > 0)
-            {
-                var mip = textureExport.PlatformData?.Mips?[0];
-                if (mip?.BulkData?.Data != null && mip.BulkData.Data.Length >= 4)
-                {
-                    // Get the DataResource index we're using
-                    int drIndex = mip.BulkData.Header.DataResourceIndex;
-                    if (drIndex < 0 || drIndex >= asset.DataResources.Count)
-                    {
-                        drIndex = asset.DataResources.Count - 1;
-                    }
-                    
-                    // Find the inline data by searching for the first 4 bytes of texture data
-                    byte[] uexpData = File.ReadAllBytes(uexpPath);
-                    byte[] searchPattern = new byte[4];
-                    Array.Copy(mip.BulkData.Data, 0, searchPattern, 0, 4);
-                    
-                    long inlineOffset = -1;
-                    for (int i = 0; i < uexpData.Length - 4; i++)
-                    {
-                        if (uexpData[i] == searchPattern[0] && 
-                            uexpData[i+1] == searchPattern[1] &&
-                            uexpData[i+2] == searchPattern[2] &&
-                            uexpData[i+3] == searchPattern[3])
-                        {
-                            inlineOffset = i;
-                            break;
-                        }
-                    }
-                    
-                    if (inlineOffset >= 0)
-                    {
-                        Console.Error.WriteLine($"[UAssetTool] Found inline data at offset {inlineOffset} (0x{inlineOffset:X})");
-                        
-                        // Update the DataResource SerialOffset at the correct index
-                        var dr = asset.DataResources[drIndex];
-                        asset.DataResources[drIndex] = new UAssetAPI.UnrealTypes.FObjectDataResource(
-                            dr.Flags,
-                            inlineOffset,  // Updated SerialOffset
-                            dr.DuplicateSerialOffset,
-                            dr.SerialSize,
-                            dr.RawSize,
-                            dr.OuterIndex,
-                            dr.LegacyBulkDataFlags,
-                            dr.CookedIndex
-                        );
-                        
-                        // Write again with correct offset
-                        asset.Write(filePath);
-                        Console.Error.WriteLine($"[UAssetTool] Updated DataResource[{drIndex}] SerialOffset to {inlineOffset}");
-                    }
-                    else
-                    {
-                        Console.Error.WriteLine($"[UAssetTool] Warning: Could not find inline data offset");
-                    }
-                }
-            }
-            
-            // CRITICAL FIX: Patch the data_resource_id in .uexp
-            // The UAssetAPI write puts our value at the wrong position (64 bytes later than expected)
-            // We need to find the inline data start and work backwards to find the data_resource_id
-            if (File.Exists(uexpPath))
-            {
-                byte[] uexpBytes = File.ReadAllBytes(uexpPath);
-                
-                // The inline data starts at a known offset (found earlier as inlineOffset)
-                // The data_resource_id is 4 bytes before the inline data
-                // But we need to find where the FIRST data_resource_id is (the one that should have our target value)
-                
-                // For UE5.3+ textures, the structure before inline data is:
-                // [mip_count=1][data_resource_id][inline_offset][data_size][width][height][depth]...[inline_data]
-                // The data_resource_id we need to fix is right after mip_count
-                
-                // Find the position of mip_count=1 followed by data_resource_id=0
-                // This is the position that should have our target value
-                int targetValue = targetDataResourceId;
-                
-                // Only apply patch if targetValue is reasonable (< 100)
-                if (targetValue > 0 && targetValue < 100)
-                {
-                    // Search for the specific pattern: [01 00 00 00][00 00 00 00] (mip_count=1, data_resource_id=0)
-                    // followed later by [01 00 00 00][targetValue as int32] (mip_count=1, data_resource_id=targetValue)
-                    int firstPos = -1;
-                    int secondPos = -1;
-                    
-                    for (int i = 100; i < Math.Min(uexpBytes.Length - 8, 300); i++)
-                    {
-                        int val1 = BitConverter.ToInt32(uexpBytes, i);
-                        int val2 = BitConverter.ToInt32(uexpBytes, i + 4);
-                        
-                        if (val1 == 1 && val2 == 0 && firstPos == -1)
-                        {
-                            firstPos = i + 4; // Position of data_resource_id (currently 0)
-                        }
-                        else if (val1 == 1 && val2 == targetValue && secondPos == -1 && firstPos >= 0)
-                        {
-                            secondPos = i + 4; // Position of data_resource_id (currently targetValue)
-                        }
-                    }
-                    
-                    // Swap values if both positions found and they're 64 bytes apart (expected offset)
-                    if (firstPos >= 0 && secondPos >= 0 && (secondPos - firstPos) == 64)
-                    {
-                        byte[] targetBytes = BitConverter.GetBytes(targetValue);
-                        byte[] zeroBytes = BitConverter.GetBytes(0);
-                        
-                        Array.Copy(targetBytes, 0, uexpBytes, firstPos, 4);
-                        Array.Copy(zeroBytes, 0, uexpBytes, secondPos, 4);
-                        
-                        File.WriteAllBytes(uexpPath, uexpBytes);
-                        Console.Error.WriteLine($"[UAssetTool] Patched data_resource_id: pos {firstPos}=0->{targetValue}, pos {secondPos}={targetValue}->0");
-                    }
-                }
-            }
             
             // Delete .ubulk file if it exists (data is now inline)
             string ubulkPath = Path.ChangeExtension(filePath, ".ubulk");
@@ -970,7 +899,7 @@ public class Program
             { 
                 Success = true, 
                 Message = $"Stripped mipmaps: {originalMipCount} -> {textureExport.MipCount}",
-                Data = new { original_mips = originalMipCount, new_mips = textureExport.MipCount }
+                Data = JsonSerializer.SerializeToElement(new { original_mips = originalMipCount, new_mips = textureExport.MipCount })
             };
         }
         catch (Exception ex)
@@ -985,7 +914,7 @@ public class Program
     /// Batch strip mipmaps from multiple textures using native UAssetAPI TextureExport.
     /// This processes all files in a single call for better performance.
     /// </summary>
-    private static UAssetResponse BatchStripMipmapsNative(List<string>? filePaths)
+    private static UAssetResponse BatchStripMipmapsNative(List<string>? filePaths, string? usmapPath)
     {
         if (filePaths == null || filePaths.Count == 0)
             return new UAssetResponse { Success = false, Message = "file_paths required" };
@@ -994,8 +923,10 @@ public class Program
         {
             Console.Error.WriteLine($"[UAssetTool] Batch stripping mipmaps for {filePaths.Count} files");
             
-            string? usmapPath = Environment.GetEnvironmentVariable("USMAP_PATH");
-            Usmap? mappings = LoadMappings(usmapPath);
+            // Use provided usmap_path, fall back to environment variable
+            string? effectiveUsmapPath = usmapPath ?? Environment.GetEnvironmentVariable("USMAP_PATH");
+            Console.Error.WriteLine($"[UAssetTool] Using USMAP: {effectiveUsmapPath ?? "null"}");
+            Usmap? mappings = LoadMappings(effectiveUsmapPath);
             
             var results = new List<object>();
             int successCount = 0;
@@ -1618,7 +1549,14 @@ public class Program
     
     private static UAsset LoadAsset(string filePath, string? usmapPath)
     {
+        Console.Error.WriteLine($"[UAssetTool] Loading asset: {filePath}");
+        Console.Error.WriteLine($"[UAssetTool] USMAP path: {usmapPath ?? "null"}");
         Usmap? mappings = LoadMappings(usmapPath);
+        Console.Error.WriteLine($"[UAssetTool] Mappings loaded: {mappings != null}");
+        if (mappings != null)
+        {
+            Console.Error.WriteLine($"[UAssetTool] Mappings has {mappings.Schemas?.Count ?? 0} schemas");
+        }
         return LoadAssetWithMappings(filePath, mappings);
     }
     
@@ -1626,6 +1564,7 @@ public class Program
     {
         var asset = new UAsset(filePath, EngineVersion.VER_UE5_3, mappings);
         asset.UseSeparateBulkDataFiles = true;
+        Console.Error.WriteLine($"[UAssetTool] Asset loaded: HasUnversionedProperties={asset.HasUnversionedProperties}, Exports={asset.Exports?.Count ?? 0}");
         return asset;
     }
     
@@ -1633,7 +1572,21 @@ public class Program
     {
         if (!string.IsNullOrEmpty(usmapPath) && File.Exists(usmapPath))
         {
-            return new Usmap(usmapPath);
+            Console.Error.WriteLine($"[UAssetTool] Loading USMAP from: {usmapPath}");
+            try
+            {
+                var usmap = new Usmap(usmapPath);
+                Console.Error.WriteLine($"[UAssetTool] USMAP loaded successfully");
+                return usmap;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[UAssetTool] Failed to load USMAP: {ex.Message}");
+            }
+        }
+        else
+        {
+            Console.Error.WriteLine($"[UAssetTool] USMAP file not found or path is null");
         }
         return null;
     }

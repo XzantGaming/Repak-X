@@ -722,19 +722,90 @@ async fn parse_dropped_files(
                                         
                                         let _ = window.emit("install_log", format!("[Detection] Detected mod type: {}", mod_type));
                                         
-                                        // Get uasset files for extraction (also extract matching .uexp files)
-                                        let uasset_files: Vec<String> = files.iter()
-                                            .filter(|f| f.ends_with(".uasset"))
-                                            .cloned()
+                                        // Get files to extract (both .uasset and .uexp needed by UAssetAPI)
+                                        // Prioritize SK_, SM_, T_ files for detection
+                                        let files_to_extract: Vec<&String> = files.iter()
+                                            .filter(|f| {
+                                                let lower = f.to_lowercase();
+                                                (lower.ends_with(".uasset") || lower.ends_with(".uexp")) &&
+                                                if let Some(filename) = std::path::Path::new(f).file_name().and_then(|n| n.to_str()) {
+                                                    let fname_lower = filename.to_lowercase();
+                                                    fname_lower.starts_with("sk_") || fname_lower.starts_with("sm_") || fname_lower.starts_with("t_")
+                                                } else {
+                                                    false
+                                                }
+                                            })
+                                            .take(40)  // Limit to 40 files (20 uasset + 20 uexp pairs)
                                             .collect();
                                         
-                                        let has_skeletal_mesh = detect_mesh_files_async(&uasset_files).await;
+                                        let _ = window.emit("install_log", format!("[Detection] Extracting {} files from archive PAK for analysis...", files_to_extract.len()));
+                                        
+                                        // Extract to temp directory for UAssetAPI analysis
+                                        let mut extracted_paths: Vec<String> = Vec::new();
+                                        let uasset_temp_dir = tempfile::tempdir().ok();
+                                        let aes_key_for_extraction = AesKey::from_str("0C263D8C22DCB085894899C3A3796383E9BF9DE0CBFB08C9BF2DEF2E84F29D74").unwrap();
+                                        
+                                        if let Some(ref uasset_temp) = uasset_temp_dir {
+                                            use rayon::prelude::*;
+                                            use std::sync::Mutex;
+                                            
+                                            let extracted = Mutex::new(Vec::new());
+                                            let pak_path = entry_path.clone();
+                                            
+                                            // Parallel extraction
+                                            files_to_extract.par_iter().for_each(|internal_path| {
+                                                if let Ok(file) = File::open(&pak_path) {
+                                                    let mut reader = BufReader::new(file);
+                                                    if let Ok(pak) = PakBuilder::new().key(aes_key_for_extraction.0.clone()).reader(&mut reader) {
+                                                        // Use just the filename to preserve .uasset/.uexp pairing
+                                                        let filename = std::path::Path::new(internal_path.as_str())
+                                                            .file_name()
+                                                            .and_then(|n| n.to_str())
+                                                            .unwrap_or(internal_path);
+                                                        let dest_path = uasset_temp.path().join(filename);
+                                                        
+                                                        if let Ok(extract_file) = File::open(&pak_path) {
+                                                            let mut extract_reader = BufReader::new(extract_file);
+                                                            if let Ok(data) = pak.get(internal_path, &mut extract_reader) {
+                                                                if let Ok(_) = std::fs::write(&dest_path, data) {
+                                                                    if internal_path.to_lowercase().ends_with(".uasset") {
+                                                                        extracted.lock().unwrap().push(dest_path.to_string_lossy().to_string());
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            });
+                                            
+                                            extracted_paths = extracted.into_inner().unwrap();
+                                            let _ = window.emit("install_log", format!("[Detection] Extracted {} uasset files for UAssetAPI", extracted_paths.len()));
+                                        }
+                                        
+                                        // Use extracted paths for detection (UAssetAPI needs actual files)
+                                        let detection_files = if !extracted_paths.is_empty() {
+                                            extracted_paths.clone()
+                                        } else {
+                                            // Fallback to internal paths (won't work for UAssetAPI but keeps flow)
+                                            files.iter().filter(|f| f.ends_with(".uasset")).cloned().collect()
+                                        };
+                                        
+                                        let has_skeletal_mesh = detect_mesh_files_async(&detection_files).await;
                                         let _ = window.emit("install_log", format!("[Detection] SkeletalMesh result: {}", has_skeletal_mesh));
                                         
-                                        let has_static_mesh = detect_static_mesh_files_async(&uasset_files).await;
+                                        let has_static_mesh = detect_static_mesh_files_async(&detection_files).await;
                                         let _ = window.emit("install_log", format!("[Detection] StaticMesh result: {}", has_static_mesh));
                                         
-                                        let has_texture = detect_texture_files_async(&uasset_files).await;
+                                        // Texture detection - use extracted files but also check for .ubulk in original file list
+                                        let has_ubulk = files.iter().any(|f| f.to_lowercase().ends_with(".ubulk"));
+                                        let has_texture = if has_ubulk && !extracted_paths.is_empty() {
+                                            // Add .ubulk indicator to detection files so detect_texture_files_async knows there's bulk data
+                                            let mut texture_detection_files = extracted_paths.clone();
+                                            texture_detection_files.push("dummy.ubulk".to_string()); // Signal that .ubulk exists
+                                            detect_texture_files_async(&texture_detection_files).await
+                                        } else {
+                                            false
+                                        };
                                         let _ = window.emit("install_log", format!("[Detection] Texture result: {}", has_texture));
                                         
                                         let summary = format!("[Detection] Archive PAK results: skeletal={}, static={}, texture={}", 
@@ -945,7 +1016,16 @@ async fn parse_dropped_files(
                             let has_static_mesh = detect_static_mesh_files_async(&detection_files).await;
                             let _ = window.emit("install_log", format!("[Detection] StaticMesh result: {}", has_static_mesh));
                             
-                            let has_texture = detect_texture_files_async(&detection_files).await;
+                            // Texture detection - use extracted files but also check for .ubulk in original file list
+                            let has_ubulk = files.iter().any(|f| f.to_lowercase().ends_with(".ubulk"));
+                            let has_texture = if has_ubulk && !extracted_paths.is_empty() {
+                                // Add .ubulk indicator to detection files so detect_texture_files_async knows there's bulk data
+                                let mut texture_detection_files = extracted_paths.clone();
+                                texture_detection_files.push("dummy.ubulk".to_string()); // Signal that .ubulk exists
+                                detect_texture_files_async(&texture_detection_files).await
+                            } else {
+                                false
+                            };
                             let _ = window.emit("install_log", format!("[Detection] Texture result: {}", has_texture));
                             
                             let summary = format!("[Detection] PAK file results: skeletal={}, static={}, texture={}", 
@@ -1023,7 +1103,7 @@ struct ModToInstall {
     install_subfolder: String,
 }
 
-/// Helper function to copy an IoStore bundle (.utoc/.ucas) and recompress if needed
+/// Helper function to copy an IoStore bundle (.utoc/.ucas and .pak or .bak_repak) and recompress if needed
 fn copy_iostore_with_compression_check(
     utoc_src: &Path,
     output_dir: &Path,
@@ -1035,6 +1115,36 @@ fn copy_iostore_with_compression_check(
     let ucas_src = utoc_src.with_extension("ucas");
     let utoc_dest = output_dir.join(utoc_name);
     let ucas_dest = output_dir.join(ucas_src.file_name().unwrap());
+    
+    let mut file_count = 0u32;
+    
+    // Also check for .pak or .bak_repak file (part of IoStore bundle)
+    let pak_src = utoc_src.with_extension("pak");
+    let bak_repak_src = utoc_src.with_extension("bak_repak");
+    
+    // Copy .pak if it exists
+    if pak_src.exists() {
+        let pak_dest = output_dir.join(pak_src.file_name().unwrap());
+        if let Err(e) = std::fs::copy(&pak_src, &pak_dest) {
+            warn!("[QuickOrganize] Failed to copy {}: {}", pak_src.file_name().unwrap().to_string_lossy(), e);
+        } else {
+            info!("[QuickOrganize] Copied: {}", pak_src.file_name().unwrap().to_string_lossy());
+            let _ = window.emit("install_log", format!("[QuickOrganize] Copied: {}", pak_src.file_name().unwrap().to_string_lossy()));
+            file_count += 1;
+        }
+    }
+    
+    // Copy .bak_repak if it exists (disabled pak file)
+    if bak_repak_src.exists() {
+        let bak_repak_dest = output_dir.join(bak_repak_src.file_name().unwrap());
+        if let Err(e) = std::fs::copy(&bak_repak_src, &bak_repak_dest) {
+            warn!("[QuickOrganize] Failed to copy {}: {}", bak_repak_src.file_name().unwrap().to_string_lossy(), e);
+        } else {
+            info!("[QuickOrganize] Copied: {}", bak_repak_src.file_name().unwrap().to_string_lossy());
+            let _ = window.emit("install_log", format!("[QuickOrganize] Copied: {}", bak_repak_src.file_name().unwrap().to_string_lossy()));
+            file_count += 1;
+        }
+    }
     
     // Check if the IoStore is compressed
     let is_compressed = match retoc::is_iostore_compressed(utoc_src) {
@@ -1056,7 +1166,7 @@ fn copy_iostore_with_compression_check(
         std::fs::copy(&ucas_src, &ucas_dest)
             .map_err(|e| format!("Failed to copy {}: {}", ucas_src.file_name().unwrap().to_string_lossy(), e))?;
         
-        Ok(2) // Copied 2 files
+        file_count += 2; // Copied utoc + ucas
     } else {
         // Not compressed, need to recompress with Oodle
         info!("[QuickOrganize] IoStore {} is NOT compressed, recompressing with Oodle...", utoc_name.to_string_lossy());
@@ -1067,6 +1177,8 @@ fn copy_iostore_with_compression_check(
             .map_err(|e| format!("Failed to copy {}: {}", utoc_name.to_string_lossy(), e))?;
         std::fs::copy(&ucas_src, &ucas_dest)
             .map_err(|e| format!("Failed to copy {}: {}", ucas_src.file_name().unwrap().to_string_lossy(), e))?;
+        
+        file_count += 2; // Copied utoc + ucas
         
         // Now recompress in place
         let config = Arc::new(retoc::Config::default());
@@ -1081,14 +1193,15 @@ fn copy_iostore_with_compression_check(
                 // Files are still copied, just not recompressed
             }
         }
-        
-        Ok(2) // Copied/processed 2 files
     }
+    
+    Ok(file_count)
 }
 
 /// Quick Organize: Simply copy/move files to a target folder without any repak processing
 /// This is for organizing existing mod files into subfolders
 /// Now also detects uncompressed IoStore bundles and recompresses them with Oodle
+/// Preserves subfolder structure from archives and directories
 #[tauri::command]
 async fn quick_organize(
     paths: Vec<String>,
@@ -1110,15 +1223,69 @@ async fn quick_organize(
         mod_directory.join(&target_folder)
     };
     
-    // Ensure output directory exists
-    if let Err(e) = std::fs::create_dir_all(&output_dir) {
-        return Err(format!("Failed to create target folder '{}': {}", target_folder, e));
+    // Create output directory if it doesn't exist (for "New Folder" drops and subfolder preservation)
+    if !output_dir.exists() {
+        std::fs::create_dir_all(&output_dir)
+            .map_err(|e| format!("Failed to create target folder '{}': {}", target_folder, e))?;
+        info!("[QuickOrganize] Created target folder: {}", output_dir.display());
     }
     
     info!("[QuickOrganize] Copying {} file(s) to '{}'", paths.len(), output_dir.display());
-    let _ = window.emit("install_log", format!("[QuickOrganize] Copying to folder: {}", target_folder));
+    let _ = window.emit("install_log", format!("[QuickOrganize] Copying to folder: {}", if target_folder.is_empty() { "~mods (root)".to_string() } else { target_folder.clone() }));
     
     let mut copied_count = 0;
+    
+    /// Helper to compute relative path from a base directory to preserve subfolder structure
+    fn get_relative_subpath(entry_path: &Path, base_path: &Path) -> Option<PathBuf> {
+        entry_path.parent()
+            .and_then(|parent| parent.strip_prefix(base_path).ok())
+            .map(|rel| rel.to_path_buf())
+            .filter(|rel| !rel.as_os_str().is_empty())
+    }
+    
+    /// Helper to ensure destination directory exists and return the full destination path
+    fn prepare_dest_with_subfolders(
+        entry_path: &Path,
+        base_path: &Path,
+        output_dir: &Path,
+        window: &Window,
+    ) -> Result<PathBuf, String> {
+        let file_name = entry_path.file_name().unwrap();
+        
+        if let Some(rel_subpath) = get_relative_subpath(entry_path, base_path) {
+            let dest_subdir = output_dir.join(&rel_subpath);
+            if !dest_subdir.exists() {
+                std::fs::create_dir_all(&dest_subdir)
+                    .map_err(|e| format!("Failed to create subfolder '{}': {}", rel_subpath.display(), e))?;
+                info!("[QuickOrganize] Created subfolder: {}", rel_subpath.display());
+                let _ = window.emit("install_log", format!("[QuickOrganize] Created subfolder: {}", rel_subpath.display()));
+            }
+            Ok(dest_subdir.join(file_name))
+        } else {
+            Ok(output_dir.join(file_name))
+        }
+    }
+    
+    /// Helper to get the destination directory for IoStore bundles with subfolder preservation
+    fn get_iostore_dest_dir(
+        entry_path: &Path,
+        base_path: &Path,
+        output_dir: &Path,
+        window: &Window,
+    ) -> Result<PathBuf, String> {
+        if let Some(rel_subpath) = get_relative_subpath(entry_path, base_path) {
+            let dest_subdir = output_dir.join(&rel_subpath);
+            if !dest_subdir.exists() {
+                std::fs::create_dir_all(&dest_subdir)
+                    .map_err(|e| format!("Failed to create subfolder '{}': {}", rel_subpath.display(), e))?;
+                info!("[QuickOrganize] Created subfolder: {}", rel_subpath.display());
+                let _ = window.emit("install_log", format!("[QuickOrganize] Created subfolder: {}", rel_subpath.display()));
+            }
+            Ok(dest_subdir)
+        } else {
+            Ok(output_dir.to_path_buf())
+        }
+    }
     
     for path_str in paths {
         let path = PathBuf::from(&path_str);
@@ -1130,20 +1297,21 @@ async fn quick_organize(
         
         let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
         
-        // Handle archives - extract and copy contents
+        // Handle archives - extract and copy contents preserving subfolder structure
         if ext == "zip" || ext == "rar" || ext == "7z" {
             let _ = window.emit("install_log", format!("[QuickOrganize] Extracting archive: {}", path.file_name().unwrap_or_default().to_string_lossy()));
             
             let temp_dir = tempfile::tempdir().map_err(|e| format!("Failed to create temp dir: {}", e))?;
-            let temp_path = temp_dir.path().to_str().unwrap();
+            let temp_path = temp_dir.path();
+            let temp_path_str = temp_path.to_str().unwrap();
             
             // Extract archive
             let extract_result = if ext == "zip" {
-                extract_zip(path.to_str().unwrap(), temp_path)
+                extract_zip(path.to_str().unwrap(), temp_path_str)
             } else if ext == "rar" {
-                extract_rar(path.to_str().unwrap(), temp_path).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+                extract_rar(path.to_str().unwrap(), temp_path_str).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
             } else {
-                extract_7z(path.to_str().unwrap(), temp_path)
+                extract_7z(path.to_str().unwrap(), temp_path_str)
             };
             
             if let Err(e) = extract_result {
@@ -1152,30 +1320,48 @@ async fn quick_organize(
                 continue;
             }
             
-            // Find and copy all pak/utoc/ucas files from extracted content with IoStore compression check
+            // Find and copy all pak/utoc/ucas files from extracted content with subfolder preservation
             let mut processed_utocs: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
             
             for entry in WalkDir::new(temp_path).into_iter().filter_map(|e| e.ok()) {
                 let entry_path = entry.path();
                 if let Some(entry_ext) = entry_path.extension().and_then(|s| s.to_str()) {
                     if entry_ext == "pak" {
-                        // Copy pak file
-                        let file_name = entry_path.file_name().unwrap();
-                        let dest = output_dir.join(file_name);
+                        // Prepare destination with subfolder structure
+                        let dest = match prepare_dest_with_subfolders(entry_path, temp_path, &output_dir, &window) {
+                            Ok(d) => d,
+                            Err(e) => {
+                                error!("[QuickOrganize] {}", e);
+                                let _ = window.emit("install_log", format!("[QuickOrganize] ERROR: {}", e));
+                                continue;
+                            }
+                        };
                         
                         if let Err(e) = std::fs::copy(entry_path, &dest) {
-                            error!("[QuickOrganize] Failed to copy {}: {}", file_name.to_string_lossy(), e);
+                            error!("[QuickOrganize] Failed to copy {}: {}", entry_path.file_name().unwrap().to_string_lossy(), e);
                         } else {
-                            info!("[QuickOrganize] Copied: {}", file_name.to_string_lossy());
-                            let _ = window.emit("install_log", format!("[QuickOrganize] Copied: {}", file_name.to_string_lossy()));
+                            let rel_dest = dest.strip_prefix(&output_dir).unwrap_or(&dest);
+                            info!("[QuickOrganize] Copied: {}", rel_dest.display());
+                            let _ = window.emit("install_log", format!("[QuickOrganize] Copied: {}", rel_dest.display()));
                             copied_count += 1;
                         }
                     } else if entry_ext == "utoc" {
-                        // Process IoStore with compression check
+                        // Process IoStore with compression check, preserving subfolder structure
                         let ucas_path = entry_path.with_extension("ucas");
                         if ucas_path.exists() && !processed_utocs.contains(entry_path) {
                             processed_utocs.insert(entry_path.to_path_buf());
-                            match copy_iostore_with_compression_check(entry_path, &output_dir, &window) {
+                            
+                            // Determine destination directory with subfolder preservation
+                            let dest_dir = match get_iostore_dest_dir(entry_path, temp_path, &output_dir, &window) {
+                                Ok(d) => d,
+                                Err(e) => {
+                                    error!("[QuickOrganize] {}", e);
+                                    let _ = window.emit("install_log", format!("[QuickOrganize] ERROR: {}", e));
+                                    continue;
+                                }
+                            };
+                            
+                            match copy_iostore_with_compression_check(entry_path, &dest_dir, &window) {
                                 Ok(count) => copied_count += count as i32,
                                 Err(e) => {
                                     error!("[QuickOrganize] Failed to process IoStore: {}", e);
@@ -1188,7 +1374,7 @@ async fn quick_organize(
                 }
             }
         }
-        // Handle pak files (and their iostore companions)
+        // Handle pak files (and their iostore companions) - no subfolder structure for single files
         else if ext == "pak" {
             let file_name = path.file_name().unwrap();
             let dest = output_dir.join(file_name);
@@ -1204,12 +1390,10 @@ async fn quick_organize(
             copied_count += 1;
             
             // Also handle utoc and ucas if they exist (IoStore package)
-            // Use compression check helper to detect and recompress uncompressed IoStore bundles
             let utoc_path = path.with_extension("utoc");
             let ucas_path = path.with_extension("ucas");
             
             if utoc_path.exists() && ucas_path.exists() {
-                // Use the helper to copy and potentially recompress
                 match copy_iostore_with_compression_check(&utoc_path, &output_dir, &window) {
                     Ok(count) => copied_count += count as i32,
                     Err(e) => {
@@ -1218,7 +1402,6 @@ async fn quick_organize(
                     }
                 }
             } else if utoc_path.exists() {
-                // Only utoc exists (unusual), just copy it
                 let utoc_name = utoc_path.file_name().unwrap();
                 if let Err(e) = std::fs::copy(&utoc_path, output_dir.join(utoc_name)) {
                     error!("[QuickOrganize] Failed to copy {}: {}", utoc_name.to_string_lossy(), e);
@@ -1227,32 +1410,62 @@ async fn quick_organize(
                 }
             }
         }
-        // Handle directories - copy all pak/utoc/ucas files with IoStore compression check
+        // Handle utoc files directly (IoStore bundle without .pak or with .bak_repak)
+        else if ext == "utoc" {
+            let ucas_path = path.with_extension("ucas");
+            if ucas_path.exists() {
+                match copy_iostore_with_compression_check(&path, &output_dir, &window) {
+                    Ok(count) => copied_count += count as i32,
+                    Err(e) => {
+                        error!("[QuickOrganize] Failed to process IoStore: {}", e);
+                        let _ = window.emit("install_log", format!("[QuickOrganize] ERROR: {}", e));
+                    }
+                }
+            }
+        }
+        // Handle directories - copy all pak/utoc/ucas files preserving subfolder structure
         else if path.is_dir() {
-            // Collect utoc files to process with compression check
             let mut processed_utocs: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
             
             for entry in WalkDir::new(&path).into_iter().filter_map(|e| e.ok()) {
                 let entry_path = entry.path();
                 if let Some(entry_ext) = entry_path.extension().and_then(|s| s.to_str()) {
                     if entry_ext == "pak" {
-                        // Copy pak file
-                        let file_name = entry_path.file_name().unwrap();
-                        let dest = output_dir.join(file_name);
+                        // Prepare destination with subfolder structure
+                        let dest = match prepare_dest_with_subfolders(entry_path, &path, &output_dir, &window) {
+                            Ok(d) => d,
+                            Err(e) => {
+                                error!("[QuickOrganize] {}", e);
+                                let _ = window.emit("install_log", format!("[QuickOrganize] ERROR: {}", e));
+                                continue;
+                            }
+                        };
                         
                         if let Err(e) = std::fs::copy(entry_path, &dest) {
-                            error!("[QuickOrganize] Failed to copy {}: {}", file_name.to_string_lossy(), e);
+                            error!("[QuickOrganize] Failed to copy {}: {}", entry_path.file_name().unwrap().to_string_lossy(), e);
                         } else {
-                            info!("[QuickOrganize] Copied: {}", file_name.to_string_lossy());
-                            let _ = window.emit("install_log", format!("[QuickOrganize] Copied: {}", file_name.to_string_lossy()));
+                            let rel_dest = dest.strip_prefix(&output_dir).unwrap_or(&dest);
+                            info!("[QuickOrganize] Copied: {}", rel_dest.display());
+                            let _ = window.emit("install_log", format!("[QuickOrganize] Copied: {}", rel_dest.display()));
                             copied_count += 1;
                         }
                     } else if entry_ext == "utoc" {
-                        // Process IoStore with compression check
+                        // Process IoStore with compression check, preserving subfolder structure
                         let ucas_path = entry_path.with_extension("ucas");
                         if ucas_path.exists() && !processed_utocs.contains(entry_path) {
                             processed_utocs.insert(entry_path.to_path_buf());
-                            match copy_iostore_with_compression_check(entry_path, &output_dir, &window) {
+                            
+                            // Determine destination directory with subfolder preservation
+                            let dest_dir = match get_iostore_dest_dir(entry_path, &path, &output_dir, &window) {
+                                Ok(d) => d,
+                                Err(e) => {
+                                    error!("[QuickOrganize] {}", e);
+                                    let _ = window.emit("install_log", format!("[QuickOrganize] ERROR: {}", e));
+                                    continue;
+                                }
+                            };
+                            
+                            match copy_iostore_with_compression_check(entry_path, &dest_dir, &window) {
                                 Ok(count) => copied_count += count as i32,
                                 Err(e) => {
                                     error!("[QuickOrganize] Failed to process IoStore: {}", e);
@@ -2267,6 +2480,103 @@ async fn extract_pak_to_destination(mod_path: String, dest_path: String) -> Resu
     extract_pak_to_dir(&installable_mod, to_create).map_err(|e| e.to_string())?;
     
     Ok(())
+}
+
+/// Extract assets from a mod file (PAK or IoStore) to a destination directory.
+/// Automatically detects the mod type and uses the appropriate extraction method.
+/// 
+/// # Arguments
+/// * `mod_path` - Path to the mod file (.pak, .utoc)
+/// * `dest_path` - Destination directory for extracted files
+/// 
+/// # Returns
+/// Number of files extracted
+#[tauri::command]
+async fn extract_mod_assets(mod_path: String, dest_path: String) -> Result<usize, String> {
+    use std::sync::Arc;
+    use std::str::FromStr;
+    
+    let path = PathBuf::from(&mod_path);
+    if !path.exists() {
+        return Err(format!("File not found: {}", mod_path));
+    }
+    
+    let dest_dir = PathBuf::from(&dest_path);
+    let mod_name = path.file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| "extracted".to_string());
+    let output_dir = dest_dir.join(&mod_name);
+    
+    // Create output directory
+    std::fs::create_dir_all(&output_dir).map_err(|e| e.to_string())?;
+    
+    let extension = path.extension()
+        .map(|e| e.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    
+    match extension.as_str() {
+        "utoc" => {
+            // IoStore extraction
+            let mut config = retoc::Config::default();
+            let aes_key = retoc::AesKey::from_str("0C263D8C22DCB085894899C3A3796383E9BF9DE0CBFB08C9BF2DEF2E84F29D74")
+                .map_err(|e| format!("Invalid AES key: {:?}", e))?;
+            config.aes_keys.insert(retoc::FGuid::default(), aes_key);
+            
+            let file_count = retoc::extract_iostore(&path, &output_dir, Arc::new(config))
+                .map_err(|e| format!("Failed to extract IoStore: {}", e))?;
+            
+            log::info!("Extracted {} files from IoStore to {:?}", file_count, output_dir);
+            Ok(file_count)
+        }
+        "pak" => {
+            // PAK extraction
+            use crate::install_mod::install_mod_logic::pak_files::extract_pak_to_dir;
+            use crate::install_mod::InstallableMod;
+            use repak::PakBuilder;
+            use repak::utils::AesKey;
+            use std::str::FromStr;
+            use std::io::BufReader;
+            
+            let file = File::open(&path).map_err(|e| e.to_string())?;
+            let aes_key = AesKey::from_str("0C263D8C22DCB085894899C3A3796383E9BF9DE0CBFB08C9BF2DEF2E84F29D74")
+                .map_err(|e| e.to_string())?;
+            
+            let mut reader = BufReader::new(file);
+            let pak_reader = PakBuilder::new()
+                .key(aes_key.0)
+                .reader(&mut reader)
+                .map_err(|e| e.to_string())?;
+            
+            let file_count = pak_reader.files().len();
+            
+            let installable_mod = InstallableMod {
+                mod_name: mod_name.clone(),
+                mod_type: "".to_string(),
+                reader: Some(pak_reader),
+                mod_path: path.clone(),
+                ..Default::default()
+            };
+            
+            extract_pak_to_dir(&installable_mod, output_dir.clone()).map_err(|e| e.to_string())?;
+            
+            log::info!("Extracted {} files from PAK to {:?}", file_count, output_dir);
+            Ok(file_count)
+        }
+        "ucas" => {
+            // User selected .ucas, find the corresponding .utoc
+            let utoc_path = path.with_extension("utoc");
+            if !utoc_path.exists() {
+                return Err(format!("Cannot find .utoc file for: {}", mod_path));
+            }
+            
+            // Recursively call with the .utoc path
+            let utoc_str = utoc_path.to_string_lossy().to_string();
+            Box::pin(extract_mod_assets(utoc_str, dest_path)).await
+        }
+        _ => {
+            Err(format!("Unsupported file type: .{}. Supported: .pak, .utoc, .ucas", extension))
+        }
+    }
 }
 
 #[tauri::command]
@@ -4014,6 +4324,7 @@ fn main() {
             set_mod_priority,
             check_mod_clashes,
             extract_pak_to_destination,
+            extract_mod_assets,
             // Character data commands
             get_character_data,
             get_character_by_skin_id,

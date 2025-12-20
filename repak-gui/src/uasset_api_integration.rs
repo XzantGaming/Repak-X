@@ -38,12 +38,49 @@ fn convert_texture_to_inline_csharp(uasset_path: &Path) -> Result<bool, Box<dyn 
     
     info!("[C#] Stripping mipmaps using UAssetAPI TextureExport: {:?}", uasset_path);
     
+    // Get USMAP path from environment variable
+    let usmap_path = std::env::var("USMAP_PATH").ok();
+    
     match UAssetToolkitSync::new(None) {
         Ok(toolkit) => {
             let path_str = uasset_path.to_string_lossy();
             
-            // Use the new strip_mipmaps_native action
-            match toolkit.strip_mipmaps_native(&path_str) {
+            // Use the new strip_mipmaps_native action with usmap_path
+            match toolkit.strip_mipmaps_native(&path_str, usmap_path.as_deref()) {
+                Ok(true) => {
+                    info!("[C#] Successfully stripped mipmaps: {:?}", uasset_path);
+                    Ok(true)
+                }
+                Ok(false) => {
+                    info!("[C#] Texture already has 1 mipmap or not a texture: {:?}", uasset_path);
+                    Ok(false)
+                }
+                Err(e) => {
+                    error!("[C#] Failed to strip mipmaps from {:?}: {}", uasset_path, e);
+                    Err(e.into())
+                }
+            }
+        }
+        Err(e) => {
+            error!("[C#] Failed to initialize UAssetToolkit: {}", e);
+            Err(e.into())
+        }
+    }
+}
+
+/// Native C# implementation with explicit usmap_path parameter
+#[allow(dead_code)]
+fn convert_texture_to_inline_csharp_with_usmap(uasset_path: &Path, usmap_path: Option<&str>) -> Result<bool, Box<dyn std::error::Error>> {
+    use uasset_toolkit::UAssetToolkitSync;
+    
+    info!("[C#] Stripping mipmaps using UAssetAPI TextureExport: {:?}", uasset_path);
+    
+    match UAssetToolkitSync::new(None) {
+        Ok(toolkit) => {
+            let path_str = uasset_path.to_string_lossy();
+            
+            // Use the strip_mipmaps_native action with usmap_path
+            match toolkit.strip_mipmaps_native(&path_str, usmap_path) {
                 Ok(true) => {
                     info!("[C#] Successfully stripped mipmaps: {:?}", uasset_path);
                     Ok(true)
@@ -107,10 +144,7 @@ fn convert_texture_to_inline_python(uasset_path: &Path) -> Result<bool, Box<dyn 
 }
 
 /// Batch convert multiple textures to inline format by stripping mipmaps.
-/// This is much faster than calling convert_texture_to_inline for each file individually
-/// because it processes all files in a single UAssetTool process call.
-/// 
-/// Uses the global UAssetToolkit singleton for optimal performance.
+/// This processes each file individually using native C# UAssetTool.
 /// 
 /// Returns (success_count, skip_count, error_count, processed_file_names)
 pub fn batch_convert_textures_to_inline(uasset_paths: &[std::path::PathBuf]) -> Result<(usize, usize, usize, Vec<String>), Box<dyn std::error::Error>> {
@@ -118,25 +152,35 @@ pub fn batch_convert_textures_to_inline(uasset_paths: &[std::path::PathBuf]) -> 
         return Ok((0, 0, 0, Vec::new()));
     }
     
-    info!("[C#] Batch stripping mipmaps for {} textures using global UAssetToolkit singleton", uasset_paths.len());
+    // Get USMAP path from environment variable
+    let usmap_path = std::env::var("USMAP_PATH").ok();
+    info!("[C#] Batch stripping mipmaps for {} textures using UAssetTool (USMAP: {:?})", uasset_paths.len(), usmap_path);
     
-    // Convert paths to strings
-    let path_strings: Vec<String> = uasset_paths
-        .iter()
-        .map(|p| p.to_string_lossy().to_string())
-        .collect();
+    let mut success_count = 0;
+    let mut skip_count = 0;
+    let mut error_count = 0;
+    let mut processed_files = Vec::new();
     
-    // Use the global singleton function
-    match uasset_toolkit::batch_strip_mipmaps_native(&path_strings) {
-        Ok((success, skip, errors, processed)) => {
-            info!("[C#] Batch complete: {} stripped, {} skipped, {} errors", success, skip, errors);
-            Ok((success, skip, errors, processed))
-        }
-        Err(e) => {
-            error!("[C#] Batch strip mipmaps failed: {}", e);
-            Err(e.into())
+    for path in uasset_paths {
+        match convert_texture_to_inline_csharp_with_usmap(path, usmap_path.as_deref()) {
+            Ok(true) => {
+                success_count += 1;
+                if let Some(name) = path.file_name() {
+                    processed_files.push(name.to_string_lossy().to_string());
+                }
+            }
+            Ok(false) => {
+                skip_count += 1;
+            }
+            Err(e) => {
+                error!("[C#] Failed to process {:?}: {}", path, e);
+                error_count += 1;
+            }
         }
     }
+    
+    info!("[C#] Batch complete: {} stripped, {} skipped, {} errors", success_count, skip_count, error_count);
+    Ok((success_count, skip_count, error_count, processed_files))
 }
 
 /// Processes texture files using UAssetAPI toolkit for MipGenSettings modification

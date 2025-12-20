@@ -433,6 +433,50 @@ pub fn is_iostore_compressed<P: AsRef<Path>>(utoc_path: P) -> Result<bool> {
     Ok(false) // No compressed blocks found
 }
 
+/// Extract assets from an IoStore container to a directory.
+/// This extracts raw chunk data using the directory index.
+/// 
+/// # Arguments
+/// * `utoc_path` - Path to the .utoc file
+/// * `output_dir` - Directory to extract files to
+/// * `config` - Configuration with AES keys if needed
+/// 
+/// # Returns
+/// Number of files extracted
+pub fn extract_iostore<P: AsRef<Path>, Q: AsRef<Path>>(
+    utoc_path: P,
+    output_dir: Q,
+    config: Arc<Config>,
+) -> Result<usize> {
+    let utoc_path = utoc_path.as_ref();
+    let output = output_dir.as_ref();
+    
+    let mut stream = BufReader::new(fs::File::open(utoc_path)?);
+    let ucas = utoc_path.with_extension("ucas");
+    
+    let toc: Toc = stream.de_ctx(config)?;
+    
+    // Create output directory
+    fs::create_dir_all(output)?;
+    
+    let file_count = toc.file_map.len();
+    
+    toc.file_map.keys().par_bridge().try_for_each_init(
+        || BufReader::new(fs::File::open(&ucas).unwrap()),
+        |ucas_reader, file_name| -> Result<()> {
+            let data = toc.read(ucas_reader, toc.file_map[file_name])?;
+            
+            let path = output.join(file_name);
+            let dir = path.parent().unwrap();
+            fs::create_dir_all(dir)?;
+            fs::write(path, &data)?;
+            Ok(())
+        },
+    )?;
+    
+    Ok(file_count)
+}
+
 /// Recompress an IoStore container by reading all chunks and writing them back with Oodle compression.
 /// This is useful for mods that have uncompressed .ucas files.
 pub fn recompress_iostore<P: AsRef<Path>>(utoc_path: P, config: Arc<Config>) -> Result<PathBuf> {

@@ -98,10 +98,22 @@ namespace UAssetAPI.ExportTypes.Texture
 
             Header.Write(writer);
 
-            // Write inline data if applicable
-            // For UE5.3+ with DataResourceIndex, always write inline data after the index
-            bool shouldWriteInline = Header.DataResourceIndex >= 0 || Header.IsInline;
-            if (shouldWriteInline && Data != null && Data.Length > 0)
+            // For UE5.3+ with DataResourceIndex, the pixel data is written separately
+            // at the end of the mip array, not inline with each mip's header.
+            // The DataResource's SerialOffset points to where the data is.
+            // Only write inline data here for legacy format (no DataResourceIndex)
+            if (Header.DataResourceIndex < 0 && Header.IsInline && Data != null && Data.Length > 0)
+            {
+                writer.Write(Data);
+            }
+        }
+
+        /// <summary>
+        /// Write just the pixel data (for UE5.3+ format where data comes after all mip headers)
+        /// </summary>
+        public void WriteData(AssetBinaryWriter writer)
+        {
+            if (Data != null && Data.Length > 0)
             {
                 writer.Write(Data);
             }
@@ -124,6 +136,9 @@ namespace UAssetAPI.ExportTypes.Texture
             // Clear offset since data is now inline
             Header.OffsetInFile = 0;
             Header.CookedIndex = -1;
+            
+            // Keep DataResourceIndex for UE5.3+ - the DataResource will be updated with correct offset
+            // Don't clear it here as it's needed for the Write to work correctly
         }
 
         /// <summary>
