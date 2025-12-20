@@ -177,7 +177,7 @@ const wasDeployed = await invoke('deploy_lod_disabler');
 
 ## How It Works
 
-1. When the user sets a valid mods folder (via auto-detect or manual selection), the Rust backend automatically deploys the bundled LOD Disabler mod to `~mods/_LOD-Disabler (Built-in)/LODs_Disabler_P.pak`
+1. When the user sets a valid mods folder (via auto-detect or manual selection), the Rust backend automatically deploys the bundled LOD Disabler mod to `~mods/_LOD-Disabler (Built-in)/SK_LODs_Disabler_9999999_P.pak`
 
 2. The mod is placed in a special folder with underscore prefix (`_LOD-Disabler`) so it sorts to the top and is clearly marked as built-in
 
@@ -190,7 +190,7 @@ const wasDeployed = await invoke('deploy_lod_disabler');
 To include the LOD Disabler mod in the build:
 
 1. Download from https://www.nexusmods.com/marvelrivals/mods/5303
-2. Place at `repak-gui/src/bundled_mods/LODs_Disabler_P.pak`
+2. Place at `repak-gui/src/bundled_mods/SK_LODs_Disabler_9999999_P.pak`
 3. Build with feature flag:
    ```bash
    cargo build --release --features bundled_lod_mod

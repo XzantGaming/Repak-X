@@ -104,6 +104,12 @@ chrono = "0.4"
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"
 
+[features]
+default = []
+# Enable to bundle the LOD Disabler mod into the application
+# Requires: repak-gui/src/bundled_mods/SK_LODs_Disabler_9999999_P.pak
+bundled_lod_mod = []
+
 [build-dependencies]
 winres = "0.1.12"
 tauri-build = { version = "2.0", features = [] }
