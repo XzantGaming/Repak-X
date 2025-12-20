@@ -1,130 +1,389 @@
-/* Alert Component Styles */
-.heroui-alert {
+/* Alert/Toast Component Styles */
+
+/* Toast item - shared by both Alert and Toast */
+.toast-item {
   display: flex;
   align-items: flex-start;
   gap: 0.75rem;
-  padding: 0.75rem 1rem;
-  border-radius: 12px;
+  padding: 0.875rem 1rem;
+  border-radius: 8px;
   font-size: 0.875rem;
+  min-width: 300px;
+  max-width: 400px;
   position: relative;
-  transition: all 0.2s ease;
-  border: 1px solid transparent;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 /* Variants */
-.heroui-alert.flat {
-  background-color: var(--alert-bg);
-  color: var(--alert-text);
+.toast-item.flat {
+  background-color: var(--toast-bg);
+  color: var(--toast-text);
 }
 
-.heroui-alert.solid {
-  background-color: var(--alert-color);
+.toast-item.solid {
+  background-color: var(--toast-color);
   color: #fff;
 }
 
-.heroui-alert.bordered {
-  background-color: transparent;
-  border-color: var(--alert-color);
-  color: var(--alert-text);
+.toast-item.bordered {
+  background-color: var(--toast-bg);
+  border: 1px solid var(--toast-color);
+  color: var(--toast-text);
 }
 
-/* Colors */
-.heroui-alert.default {
-  --alert-bg: #f4f4f5;
-  --alert-color: #3f3f46;
-  --alert-text: #3f3f46;
-}
-[data-theme="dark"] .heroui-alert.default {
-  --alert-bg: #27272a;
-  --alert-color: #a1a1aa;
-  --alert-text: #e4e4e7;
+.toast-item.faded {
+  background-color: var(--toast-bg);
+  border: 1px solid var(--toast-color);
+  color: var(--toast-text);
 }
 
-.heroui-alert.primary {
-  --alert-bg: #dbeafe;
-  --alert-color: #006fee;
-  --alert-text: #004493;
-}
-[data-theme="dark"] .heroui-alert.primary {
-  --alert-bg: #002e62;
-  --alert-color: #006fee;
-  --alert-text: #93c5fd;
+/* Colors - Dark theme (default) */
+.toast-item.default {
+  --toast-bg: rgba(39, 39, 42, 0.95);
+  --toast-color: #71717a;
+  --toast-text: #fafafa;
+  --toast-progress: #71717a;
 }
 
-.heroui-alert.success {
-  --alert-bg: #dcfce7;
-  --alert-color: #17c964;
-  --alert-text: #14532d;
-}
-[data-theme="dark"] .heroui-alert.success {
-  --alert-bg: #052e16;
-  --alert-color: #17c964;
-  --alert-text: #86efac;
+.toast-item.primary {
+  --toast-bg: rgba(0, 46, 98, 0.95);
+  --toast-color: #006fee;
+  --toast-text: #e0f2fe;
+  --toast-progress: #006fee;
 }
 
-.heroui-alert.warning {
-  --alert-bg: #fef9c3;
-  --alert-color: #f5a524;
-  --alert-text: #713f12;
-}
-[data-theme="dark"] .heroui-alert.warning {
-  --alert-bg: #422006;
-  --alert-color: #f5a524;
-  --alert-text: #fde047;
+.toast-item.secondary {
+  --toast-bg: rgba(46, 16, 101, 0.95);
+  --toast-color: #9333ea;
+  --toast-text: #f3e8ff;
+  --toast-progress: #a855f7;
 }
 
-.heroui-alert.danger {
-  --alert-bg: #fee2e2;
-  --alert-color: #f31260;
-  --alert-text: #7f1d1d;
-}
-[data-theme="dark"] .heroui-alert.danger {
-  --alert-bg: #310413;
-  --alert-color: #f31260;
-  --alert-text: #fca5a5;
+.toast-item.success {
+  --toast-bg: rgba(5, 46, 22, 0.95);
+  --toast-color: #17c964;
+  --toast-text: #dcfce7;
+  --toast-progress: #17c964;
 }
 
-/* Elements */
-.heroui-alert-icon {
+.toast-item.warning {
+  --toast-bg: rgba(66, 32, 6, 0.95);
+  --toast-color: #f5a524;
+  --toast-text: #fef3c7;
+  --toast-progress: #f5a524;
+}
+
+.toast-item.danger {
+  --toast-bg: rgba(49, 4, 19, 0.95);
+  --toast-color: #f31260;
+  --toast-text: #fee2e2;
+  --toast-progress: #f31260;
+}
+
+/* Light theme overrides */
+[data-theme="light"] .toast-item.default {
+  --toast-bg: rgba(255, 255, 255, 0.95);
+  --toast-color: #71717a;
+  --toast-text: #18181b;
+}
+
+[data-theme="light"] .toast-item.primary {
+  --toast-bg: rgba(219, 234, 254, 0.95);
+  --toast-text: #1e3a5f;
+}
+
+[data-theme="light"] .toast-item.secondary {
+  --toast-bg: rgba(243, 232, 255, 0.95);
+  --toast-text: #581c87;
+}
+
+[data-theme="light"] .toast-item.success {
+  --toast-bg: rgba(220, 252, 231, 0.95);
+  --toast-text: #14532d;
+}
+
+[data-theme="light"] .toast-item.warning {
+  --toast-bg: rgba(254, 249, 195, 0.95);
+  --toast-text: #713f12;
+}
+
+[data-theme="light"] .toast-item.danger {
+  --toast-bg: rgba(254, 226, 226, 0.95);
+  --toast-text: #7f1d1d;
+}
+
+/* Toast icon */
+.toast-icon {
   flex-shrink: 0;
-  margin-top: 2px;
-  color: var(--alert-color);
-}
-.heroui-alert.solid .heroui-alert-icon {
-  color: #fff;
+  width: 20px;
+  height: 20px;
+  color: var(--toast-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.heroui-alert-content {
+.toast-item.solid .toast-icon {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* Toast content */
+.toast-content {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
 }
 
-.heroui-alert-title {
+.toast-title {
   font-weight: 600;
-  line-height: 1.25;
+  line-height: 1.3;
+  color: inherit;
 }
 
-.heroui-alert-description {
-  font-weight: 400;
-  opacity: 0.9;
+.toast-description {
+  font-size: 0.8125rem;
+  opacity: 0.85;
   line-height: 1.4;
 }
 
-.heroui-alert-close {
+/* Start/End content */
+.toast-start-content,
+.toast-end-content {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.toast-end-content {
+  margin-left: 0.5rem;
+}
+
+/* Action button for endContent */
+.toast-action-btn {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-radius: 6px;
+  border: none;
+  background: rgba(255, 255, 255, 0.15);
+  color: inherit;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.toast-action-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.05);
+}
+
+.toast-action-btn:active {
+  transform: scale(0.98);
+}
+
+[data-theme="light"] .toast-action-btn {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .toast-action-btn:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* Loading spinner */
+.toast-spinner {
+  animation: toast-spin 1s linear infinite;
+}
+
+@keyframes toast-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Close button */
+.toast-close {
+  flex-shrink: 0;
   background: transparent;
   border: none;
   cursor: pointer;
   padding: 4px;
-  margin: -4px -4px 0 0;
-  border-radius: 50%;
+  margin: -4px -4px -4px 0;
+  border-radius: 6px;
   color: currentColor;
-  opacity: 0.6;
-  transition: opacity 0.2s;
+  opacity: 0.5;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.heroui-alert-close:hover {
+.toast-close:hover {
   opacity: 1;
-  background: rgba(0,0,0,0.05);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="light"] .toast-close:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+/* Progress bar */
+.toast-progress-track {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+[data-theme="light"] .toast-progress-track {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.toast-progress-bar {
+  height: 100%;
+  background: var(--toast-progress);
+  transform-origin: left;
+  transition: transform 0.1s linear;
+}
+
+.toast-item.solid .toast-progress-track {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.toast-item.solid .toast-progress-bar {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+/* Toast Container for AlertHandler - Card Stacking */
+.toast-container {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1rem;
+  width: 400px;
+  min-height: 80px;
+}
+
+/* Placement positions */
+.toast-container.bottom-right {
+  bottom: 0;
+  right: 0;
+  align-items: flex-end;
+}
+
+.toast-container.bottom-left {
+  bottom: 0;
+  left: 0;
+  align-items: flex-start;
+}
+
+.toast-container.bottom-center {
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  align-items: center;
+}
+
+.toast-container.top-right {
+  top: 0;
+  right: 0;
+  align-items: flex-end;
+}
+
+.toast-container.top-left {
+  top: 0;
+  left: 0;
+  align-items: flex-start;
+}
+
+.toast-container.top-center {
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  align-items: center;
+}
+
+/* Make toast items in container interactive */
+.toast-container .toast-item {
+  pointer-events: auto;
+  width: 100%;
+}
+
+/* Toast footer overlay - positioned at bottom-right of deck */
+.toast-footer-overlay {
+  pointer-events: auto;
+  position: absolute;
+  bottom: -8px;
+  right: -8px;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  z-index: 200;
+}
+
+.toast-count-badge {
+  padding: 0.2rem 0.5rem;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 8px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+}
+
+.toast-clear-all {
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  max-width: 24px;
+  max-height: 24px;
+  flex-shrink: 0;
+  background: rgba(0, 0, 0, 0.6);
+  border: none;
+  border-radius: 50%;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.toast-clear-all:hover {
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+}
+
+[data-theme="light"] .toast-count-badge {
+  background: rgba(0, 0, 0, 0.5);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+[data-theme="light"] .toast-clear-all {
+  background: rgba(0, 0, 0, 0.5);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+[data-theme="light"] .toast-clear-all:hover {
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
 }

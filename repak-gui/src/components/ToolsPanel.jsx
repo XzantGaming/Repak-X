@@ -22,8 +22,16 @@ export default function ToolsPanel({ onClose, mods = [], onToggleMod }) {
     const [showThanosSnap, setShowThanosSnap] = useState(null); // null or timestamp for cache-busting
     const [thanosIsFading, setThanosIsFading] = useState(false);
 
-    // Find LOD Disabler mod
+    // Find LOD Disabler mod - prioritize bundled mod in _LOD-Disabler folder
     const lodDisablerMod = useMemo(() => {
+        // First look for the bundled mod in the special folder
+        const bundledMod = mods.find(mod => {
+            const modPath = mod.path?.toLowerCase() || '';
+            return modPath.includes('_lod-disabler') && modPath.includes('lods_disabler');
+        });
+        if (bundledMod) return bundledMod;
+
+        // Fallback to any LOD disabler mod
         return mods.find(mod => {
             const modName = mod.custom_name || mod.path?.split('\\').pop() || '';
             return modName.toLowerCase().includes('lods_disabler') ||
@@ -31,11 +39,19 @@ export default function ToolsPanel({ onClose, mods = [], onToggleMod }) {
         });
     }, [mods]);
 
+    // Check if this is the bundled mod
+    const isBundledMod = useMemo(() => {
+        if (!lodDisablerMod) return false;
+        const modPath = lodDisablerMod.path?.toLowerCase() || '';
+        return modPath.includes('_lod-disabler');
+    }, [lodDisablerMod]);
+
     // Get display name for LOD Disabler mod
     const lodModDisplayName = useMemo(() => {
         if (!lodDisablerMod) return '';
+        if (isBundledMod) return 'LOD Disabler (Built-in)';
         return lodDisablerMod.custom_name || lodDisablerMod.path?.split('\\').pop() || 'Unknown';
-    }, [lodDisablerMod]);
+    }, [lodDisablerMod, isBundledMod]);
 
     // Check skip launcher status on mount
     useEffect(() => {
@@ -304,16 +320,14 @@ export default function ToolsPanel({ onClose, mods = [], onToggleMod }) {
                                             </span>
                                         </div>
                                         <p style={{ fontSize: '0.75rem', opacity: 0.5, marginTop: '0.5rem' }}>
-                                            Mod: {lodModDisplayName}
+                                            {isBundledMod ? '✓ Built-in mod (auto-deployed)' : `Mod: ${lodModDisplayName}`}
                                         </p>
                                     </>
                                 ) : (
                                     <>
                                         <p style={{ fontSize: '0.9rem', opacity: 0.7, marginBottom: '0.5rem' }}>
-                                            No LOD Disabler mod found. Install the <span
-                                                onClick={() => open('https://www.nexusmods.com/marvelrivals/mods/5303')}
-                                                style={{ color: 'var(--accent-primary)', textDecoration: 'underline', cursor: 'pointer' }}
-                                            >Character LODs Disabler</span> mod to use this feature.
+                                            LOD Disabler not found. This mod is bundled with the app and should be auto-deployed when you set a valid mods folder.
+                                            If missing, try re-selecting your mods folder.
                                         </p>
                                         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', opacity: 0.5 }}>
                                             <Switch

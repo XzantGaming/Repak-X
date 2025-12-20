@@ -195,7 +195,41 @@ const ContextMenu = ({ x, y, mod, folder, onClose, onAssignTag, onMoveTo, onCrea
 
       <div className="context-menu-separator" />
 
-      <div className="context-menu-item disabled">
+      <div className="context-menu-item" onClick={async () => {
+        try {
+          // Open folder picker dialog
+          const { open } = await import('@tauri-apps/plugin-dialog');
+          const destFolder = await open({
+            directory: true,
+            multiple: false,
+            title: 'Select destination folder for extracted assets'
+          });
+
+          if (destFolder) {
+            // Get the mod path - handle both PAK and IoStore
+            let modPath = mod.path;
+
+            // If this is an IoStore mod (folder with .utoc), find the .utoc file
+            if (mod.is_iostore && mod.utoc_path) {
+              modPath = mod.utoc_path;
+            }
+
+            const fileCount = await invoke('extract_mod_assets', {
+              modPath: modPath,
+              destPath: destFolder
+            });
+
+            console.log(`Extracted ${fileCount} files to ${destFolder}`);
+
+            // Open the extracted folder in explorer
+            const modName = modPath.split(/[/\\]/).pop().replace(/\.[^.]+$/, '');
+            await invoke('open_in_explorer', { path: `${destFolder}\\${modName}` });
+          }
+        } catch (e) {
+          console.error('Failed to extract assets:', e);
+        }
+        onClose();
+      }}>
         Extract Assets
       </div>
       <div className="context-menu-item" onClick={async () => {

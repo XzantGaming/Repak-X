@@ -29,6 +29,7 @@ import ModDetailsPanel from './components/ModDetailsPanel'
 import ModsList from './components/ModsList'
 import InstallModPanel from './components/InstallModPanel'
 import SettingsPanel from './components/SettingsPanel'
+import CreditsPanel from './components/CreditsPanel'
 import ToolsPanel from './components/ToolsPanel'
 import SharingPanel from './components/SharingPanel'
 import FileTree from './components/FileTree'
@@ -40,6 +41,7 @@ import ExtensionModOverlay from './components/ExtensionModOverlay'
 import QuickOrganizeOverlay from './components/QuickOrganizeOverlay'
 import InputPromptModal from './components/InputPromptModal'
 import { AuroraText } from './components/ui/AuroraText'
+import { AlertProvider, useAlert } from './components/AlertHandler'
 import Switch from './components/ui/Switch'
 import NumberInput from './components/ui/NumberInput'
 import characterDataStatic from './data/character_data.json'
@@ -113,6 +115,7 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showToolsPanel, setShowToolsPanel] = useState(false);
   const [showSharingPanel, setShowSharingPanel] = useState(false);
+  const [showCredits, setShowCredits] = useState(false);
 
   const [gamePath, setGamePath] = useState('')
   const [mods, setMods] = useState([])
@@ -160,6 +163,69 @@ function App() {
   const [quickOrganizePaths, setQuickOrganizePaths] = useState(null) // Paths of PAKs to quick-organize (no uassets)
   const [newFolderPrompt, setNewFolderPrompt] = useState(null) // {paths: []} when prompting for new folder name
   const dropTargetFolderRef = useRef(null)
+
+  // Alert system hook
+  const alert = useAlert();
+
+  // DEV: Sample alerts for testing the Alert component
+  const sampleAlerts = [
+    { color: 'success', title: 'Mod Installed Successfully', description: 'Luna Snow - Ice Empress skin has been added to your mods folder.' },
+    { color: 'success', variant: 'solid', title: 'All Mods Enabled', description: '12 mods have been activated and are ready to use.' },
+    { color: 'danger', title: 'Installation Failed', description: 'Could not extract the mod archive. The file may be corrupted or password-protected.' },
+    { color: 'danger', variant: 'bordered', title: 'Conflict Detected', description: '3 mods are modifying the same game files. Check the Clashes panel for details.' },
+    { color: 'warning', title: 'Game Running', description: 'Cannot modify mods while Marvel Rivals is running. Please close the game first.' },
+    { color: 'warning', variant: 'faded', title: 'Outdated Mod', description: 'Spider-Man - Symbiote skin may not be compatible with the latest game patch.' },
+    { color: 'primary', title: 'Update Available', description: 'Repak X v2.1.0 is now available with new features and bug fixes.' },
+    { color: 'primary', variant: 'solid', title: 'Sync Complete', description: 'Your mod library has been synchronized with the cloud backup.' },
+    { color: 'secondary', title: 'Backup Created', description: 'All 47 mods have been archived to your backup location.' },
+    { color: 'secondary', variant: 'faded', title: 'New Mod Source', description: 'Nexus Mods integration is now available. Connect your account in Settings.' },
+    { color: 'default', title: 'Quick Tip', description: 'Drag and drop PAK files directly onto the app to install them instantly.' },
+    { color: 'success', title: 'Priority Set', description: 'Iron Man - Mark 85 is now set as priority 1 for armor slot.' },
+  ]
+
+  // Sample endContent alerts
+  const endContentAlerts = [
+    {
+      color: 'warning',
+      title: 'Storage Almost Full',
+      description: 'You have used 90% of your mods folder space.',
+      endContent: <button className="toast-action-btn">Clean Up</button>
+    },
+    {
+      color: 'primary',
+      title: 'New Version Available',
+      description: 'Repak X v2.2.0 has been released.',
+      endContent: <button className="toast-action-btn">Update</button>
+    },
+  ]
+
+  const handleTestAlert = () => {
+    const testType = Math.random()
+
+    if (testType < 0.2) {
+      // 20% chance: Promise toast demo
+      alert.promise(
+        new Promise((resolve, reject) => {
+          setTimeout(() => {
+            Math.random() > 0.3 ? resolve() : reject(new Error('Random failure'))
+          }, 2000)
+        }),
+        {
+          loading: { title: 'Processing...', description: 'Installing mod files' },
+          success: { title: 'Installation Complete', description: 'All files have been installed successfully' },
+          error: { title: 'Installation Failed', description: 'An error occurred during installation' }
+        }
+      )
+    } else if (testType < 0.35) {
+      // 15% chance: endContent alert
+      const randomEndContent = endContentAlerts[Math.floor(Math.random() * endContentAlerts.length)]
+      alert.showAlert(randomEndContent)
+    } else {
+      // 65% chance: Regular alert
+      const randomAlert = sampleAlerts[Math.floor(Math.random() * sampleAlerts.length)]
+      alert.showAlert(randomAlert)
+    }
+  }
 
   const handleCheckClashes = async () => {
     try {
@@ -415,6 +481,15 @@ function App() {
   useEffect(() => {
     dropTargetFolderRef.current = dropTargetFolder
   }, [dropTargetFolder])
+
+  // Periodically check game running state every 5 seconds
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      checkGame()
+    }, 5000)
+
+    return () => clearInterval(intervalId)
+  }, [])
 
   const loadInitialData = async () => {
     try {
@@ -1293,6 +1368,17 @@ function App() {
           onAutoDetectGamePath={handleAutoDetect}
           onBrowseGamePath={handleBrowseGamePath}
           isGamePathLoading={loading}
+          onOpenCredits={() => {
+            setShowSettings(false);
+            setShowCredits(true);
+          }}
+        />
+      )}
+
+      {showCredits && (
+        <CreditsPanel
+          onClose={() => setShowCredits(false)}
+          version={version}
         />
       )}
 
@@ -1370,10 +1456,23 @@ function App() {
       <header className="header" style={{ display: 'flex', alignItems: 'center' }}>
         <img src={logo} alt="Repak Icon" className="repak-icon" style={{ width: '50px', height: '50px', marginRight: '10px' }} />
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem' }}>
-          <h1 style={{ margin: 0 }}>Repak <AuroraText className="font-bbh-bartle">X</AuroraText> [DEV]</h1>
+          <h1 className="font-bbh-bartle" style={{ margin: 0 }}>Repak <AuroraText className="font-bbh-bartle">X</AuroraText> </h1> <h4 style={{ margin: 0 }}>[DEV]</h4>
           <span className="version" style={{ fontSize: '0.9rem', opacity: 0.7 }}>v{version}</span>
         </div>
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginLeft: 'auto' }}>
+          <button
+            onClick={handleTestAlert}
+            className="btn-settings"
+            title="DEV: Test Alert"
+            style={{
+              background: 'rgba(255, 165, 0, 0.1)',
+              color: 'orange',
+              border: '1px solid rgba(255, 165, 0, 0.3)',
+              minHeight: '42px'
+            }}
+          >
+            DEV: Test Alert
+          </button>
           <button
             className="btn-settings"
             title="Launch Rivals"
@@ -1818,4 +1917,13 @@ function App() {
   )
 }
 
-export default App
+// Wrap App with AlertProvider
+function AppWithAlerts() {
+  return (
+    <AlertProvider>
+      <App />
+    </AlertProvider>
+  );
+}
+
+export default AppWithAlerts
