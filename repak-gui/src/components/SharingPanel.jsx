@@ -316,7 +316,7 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
                           type="text"
                           value={packName}
                           onChange={(e) => setPackName(e.target.value)}
-                          placeholder="e.g. My Repak modpack"
+                          placeholder="e.g. My Repak X modpack"
                           className="p2p-input"
                         />
                       </div>

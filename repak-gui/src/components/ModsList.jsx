@@ -184,13 +184,8 @@ function ModItem({
     const isCardView = viewMode === 'grid' || viewMode === 'compact'
 
     return (
-        <motion.div
-            layout
+        <div
             className={`mod-card ${selectedMods.has(mod.path) ? 'selected' : ''} ${selectedMod?.path === mod.path ? 'viewing' : ''} ${heroImage && showHeroBg ? 'has-hero-bg' : ''}`}
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ duration: 0.2, layout: { duration: 0.3, ease: "circOut" } }}
             onContextMenu={(e) => onContextMenu(e, mod)}
         >
             {/* Blurred hero background for all views */}
@@ -232,7 +227,7 @@ function ModItem({
                         {shouldShowSuffix && <span className="mod-rename-suffix">{suffix}</span>}
                     </div>
                 ) : (
-                    <motion.button
+                    <button
                         type="button"
                         className="mod-name-button"
                         onClick={(e) => {
@@ -243,15 +238,13 @@ function ModItem({
                             }
                         }}
                         onDoubleClick={startRename}
-                        whileHover={{ color: 'var(--accent-primary)' }}
-                        transition={{ duration: 0 }}
                         title={`${rawName} (double-click to rename)`}
                     >
                         <span className="mod-name-text">
                             {cleanName}
                             {shouldShowSuffix && <span className="mod-name-suffix">{suffix}</span>}
                         </span>
-                    </motion.button>
+                    </button>
                 )}
             </div>
 
@@ -359,7 +352,7 @@ function ModItem({
                     </Tooltip>
                 </div>
             </div>
-        </motion.div >
+        </div>
     )
 }
 
@@ -394,7 +387,7 @@ export default function ModsList({
         <div
             key={viewMode}
             className={`mod-list-grid view-${viewMode}`}
-            style={{ flex: 1, overflowY: 'auto', padding: '1rem' }}
+            style={{ overflowY: 'auto', padding: '1rem' }}
         >
             {mods.length === 0 ? (
                 <div className="empty-state">

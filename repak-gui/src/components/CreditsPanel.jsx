@@ -1,9 +1,19 @@
 import React from 'react';
 import { FiExternalLink, FiHeart } from 'react-icons/fi';
 import { SiDiscord } from 'react-icons/si';
+import { IoLogoGithub } from 'react-icons/io';
 import { open } from '@tauri-apps/plugin-shell';
+
+// Helper to determine link icon
+const getLinkIcon = (link) => {
+    if (!link) return null;
+    if (link.includes('github.com')) return <IoLogoGithub className="credits-link-icon" />;
+    if (link.includes('discord')) return <SiDiscord className="credits-link-icon" />;
+    return <FiExternalLink className="credits-link-icon" />;
+};
 import { AuroraText } from './ui/AuroraText';
-import logo from '../assets/app-icons/RepakIcon-x256.png';
+import ModularLogo from './ui/ModularLogo';
+import mrmLogo from '../assets/extra/mrm_logo.png';
 import './CreditsPanel.css';
 
 const CONTRIBUTORS = [
@@ -12,14 +22,14 @@ const CONTRIBUTORS = [
         role: 'Backend Developer, Project Founder',
         avatar: 'https://cdn.discordapp.com/avatars/771103606010806283/e666c4287efbcc05d3d851626c5f9e56.webp',
         link: 'https://github.com/XzantGaming',
-        badge: null
+        badge: 'developer'
     },
     {
         name: 'Saturn',
         role: 'Frontend Developer, Vibe-Coder',
         avatar: 'https://i.imgur.com/mPEy8WX.jpeg',
         link: 'https://github.com/0xSaturno',
-        badge: null
+        badge: 'developer'
     }
 ];
 
@@ -27,34 +37,31 @@ const SPECIAL_THANKS = [
     {
         name: 'Marvel Rivals Modding Server',
         role: 'Where it all started',
-        avatar: null,
+        avatar: mrmLogo,
         icon: '🎮',
         link: 'https://discord.gg/marvelrivalsmodding',
         badge: 'community'
     },
     {
-        name: 'Placeholder',
-        role: 'Role Description',
-        avatar: null,
-        icon: '👤',
-        link: null,
-        badge: null
+        name: 'Truman Kilen',
+        role: 'Developer of original Repak and Retoc libraries',
+        avatar: 'https://avatars.githubusercontent.com/u/1144160?v=4',
+        link: 'https://github.com/trumank',
+        badge: 'developer'
     },
     {
-        name: 'Placeholder',
-        role: 'Role Description',
-        avatar: null,
-        icon: '👤',
-        link: null,
-        badge: null
+        name: 'Krisan Thyme',
+        role: 'For reverse engineering the Rivals skeletal mesh format',
+        avatar: 'https://avatars.githubusercontent.com/u/13863112?v=4',
+        link: 'https://github.com/KrisanThyme',
+        badge: 'developer'
     },
     {
-        name: 'Placeholder',
-        role: 'Role Description',
-        avatar: null,
-        icon: '👤',
-        link: null,
-        badge: null
+        name: 'amMatt',
+        role: 'MR Modding Discord Server Founder',
+        avatar: 'https://cdn.discordapp.com/avatars/131187261428465664/c1e8dc637639cfe0d486b1c8ea5c1121.webp',
+        link: 'https://github.com/amMattGIT',
+        badge: 'developer'
     }
 ];
 
@@ -79,11 +86,7 @@ export default function CreditsPanel({ onClose, version }) {
                     <div className="credits-content">
                         {/* App Branding */}
                         <div className="credits-branding">
-                            <img
-                                src={logo}
-                                alt="Repak X"
-                                className="credits-logo"
-                            />
+                            <ModularLogo size={80} className="credits-logo" />
                             <h1 className="credits-app-name">
                                 <span className="credits-app-name-repak">Repak </span>
                                 <AuroraText className="credits-app-name-x">X</AuroraText>
@@ -123,9 +126,7 @@ export default function CreditsPanel({ onClose, version }) {
                                         </p>
                                         <p className="credits-role">{contributor.role}</p>
                                     </div>
-                                    {contributor.link && (
-                                        <FiExternalLink className="credits-link-icon" />
-                                    )}
+                                    {getLinkIcon(contributor.link)}
                                 </a>
                             ))}
                         </div>
@@ -161,9 +162,7 @@ export default function CreditsPanel({ onClose, version }) {
                                         </p>
                                         <p className="credits-role">{contributor.role}</p>
                                     </div>
-                                    {contributor.link && (
-                                        <SiDiscord className="credits-link-icon" />
-                                    )}
+                                    {getLinkIcon(contributor.link)}
                                 </a>
                             ))}
                         </div>

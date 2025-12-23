@@ -5,19 +5,18 @@ import { AnimatedThemeToggler } from './ui/AnimatedThemeToggler'
 import Checkbox from './ui/Checkbox'
 import { LuFolderInput } from "react-icons/lu"
 import { RiSparkling2Fill } from "react-icons/ri"
-import { FiHeart } from "react-icons/fi"
 import './SettingsPanel.css'
-import './CreditsPanel.css'
 
 const ACCENT_COLORS = {
+  repakRed: '#be1c1c',
   blue: '#4a9eff',
   purple: '#9c27b0',
   green: '#4CAF50',
   orange: '#ff9800',
-  pink: '#e91e63'
+  pink: '#FF96BC'
 };
 
-export default function SettingsPanel({ settings, onSave, onClose, theme, setTheme, accentColor, setAccentColor, gamePath, onAutoDetectGamePath, onBrowseGamePath, isGamePathLoading, onOpenCredits }) {
+export default function SettingsPanel({ settings, onSave, onClose, theme, setTheme, accentColor, setAccentColor, gamePath, onAutoDetectGamePath, onBrowseGamePath, isGamePathLoading }) {
   const [globalUsmap, setGlobalUsmap] = useState(settings.globalUsmap || '');
   const [hideSuffix, setHideSuffix] = useState(settings.hideSuffix || false);
   const [autoOpenDetails, setAutoOpenDetails] = useState(settings.autoOpenDetails || false);
@@ -227,19 +226,6 @@ export default function SettingsPanel({ settings, onSave, onClose, theme, setThe
             </div>
           </div>
 
-          {/* Credits */}
-          <div className="setting-section">
-            <h3>About</h3>
-            <div className="setting-group">
-              <button
-                onClick={onOpenCredits}
-                className="credits-trigger-btn"
-              >
-                <FiHeart />
-                View Credits & Contributors
-              </button>
-            </div>
-          </div>
         </div>
 
         <div className="modal-footer" style={{ gap: '0.5rem' }}>

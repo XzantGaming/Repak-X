@@ -1,0 +1,50 @@
+/* Modular Logo - Theme-aware layered logo with CSS masking */
+
+.modular-logo {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 50px;
+    flex-shrink: 0;
+}
+
+/* X layer (background) */
+.modular-logo__x {
+    position: absolute;
+    inset: 0;
+    background-color: var(--logo-x-color);
+    -webkit-mask-image: var(--mask-x);
+    mask-image: var(--mask-x);
+    -webkit-mask-size: contain;
+    mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+    transition: background-color 0.3s ease;
+}
+
+/* R layer (foreground, accent colored) */
+.modular-logo__r {
+    position: absolute;
+    inset: 0;
+    background-color: var(--accent-primary);
+    -webkit-mask-image: var(--mask-r);
+    mask-image: var(--mask-r);
+    -webkit-mask-size: contain;
+    mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+    transition: background-color 0.3s ease;
+}
+
+/* Hover glow effects - integrate with header-branding hover */
+.header-branding:hover .modular-logo__r {
+    filter: drop-shadow(0 0 8px var(--accent-primary));
+}
+
+.header-branding:hover .modular-logo__x {
+    filter: drop-shadow(0 0 6px var(--logo-x-color));
+}

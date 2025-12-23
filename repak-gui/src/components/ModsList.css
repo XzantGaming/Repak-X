@@ -13,6 +13,7 @@
 }
 
 .mod-list-grid.view-grid .mod-card {
+    max-height: 160px;
     min-height: 160px;
     padding: 16px;
     gap: 12px;
@@ -103,6 +104,7 @@
     transition: all 0.2s ease;
     color: var(--text-primary);
     min-height: 120px;
+    max-height: 120px;
     position: relative;
     overflow: hidden;
 }

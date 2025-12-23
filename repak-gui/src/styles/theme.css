@@ -17,6 +17,14 @@
   --danger: #f44336;
   --success: #4CAF50;
 
+  /* Modular logo colors */
+  --logo-x-color: #ffffff;
+
+  /* Auto-generated accent gradient for buttons */
+  --accent-gradient: linear-gradient(135deg,
+      var(--accent-primary),
+      color-mix(in srgb, var(--accent-primary), white 25%));
+
   --btn-text: #ffffff;
   --overlay: rgba(0, 0, 0, 0.6);
 
@@ -47,50 +55,54 @@
 }
 
 [data-theme="light"] {
-  --bg-darkest: #ffffff;
-  --bg-darker: #f6f6f6;
-  --bg-dark: #efefef;
-  --bg-light: #e6e6e6;
-  --bg-lighter: #dddddd;
+  /* Better contrast with distinct gray shades instead of pure whites */
+  --bg-darkest: #e8e8ec;
+  --bg-darker: #eeeeef;
+  --bg-dark: #f4f4f5;
+  --bg-light: #f8f8f9;
+  --bg-lighter: #fafafa;
 
-  --panel-bg: #ffffff;
-  --panel-border: #e0e0e0;
+  --panel-bg: #f2f2f4;
+  --panel-border: #d0d0d4;
 
-  --text-primary: #111214;
-  --text-secondary: #5a5a5a;
+  --text-primary: #1a1a1c;
+  --text-secondary: #65656c;
 
-  --accent-primary: #4a9eff;
-  --accent-secondary: #3a8eef;
-  --danger: #d32f2f;
+  --accent-primary: #3385e0;
+  --accent-secondary: #2a74cc;
+  --danger: #c92a2a;
   --success: #2e7d32;
 
-  --btn-text: #111214;
-  --overlay: rgba(0, 0, 0, 0.06);
+  /* Modular logo colors */
+  --logo-x-color: #1a1a1c;
+
+  --btn-text: #1a1a1c;
+  --overlay: rgba(0, 0, 0, 0.15);
 
   /* Added for consistency */
-  --card-surface: #ffffff;
-  --card-layer: #fcfcfc;
-  --border-color: rgba(0, 0, 0, 0.1);
-  --header-bg: #ffffff;
-  --header-border: #e0e0e0;
-  --status-bar-bg: #f0f0f0;
-  --status-bar-border: #e0e0e0;
+  --card-surface: #f6f6f8;
+  --card-layer: #fafafa;
+  --border-color: rgba(0, 0, 0, 0.12);
+  --header-bg: #f0f0f2;
+  --header-border: #d4d4d8;
+  --status-bar-bg: #e8e8ec;
+  --status-bar-border: #d0d0d4;
   --input-bg: #ffffff;
-  --input-border: #e0e0e0;
-  --folder-item-bg: #f6f6f6;
-  --folder-item-hover: #eeeeee;
-  --mod-name-suffix: rgba(0, 0, 0, 0.5);
-  --mod-size-color: #666666;
-  --mod-switch-track: rgba(0, 0, 0, 0.12);
+  --input-border: #c8c8cc;
+  --folder-item-bg: #e8e8ec;
+  --folder-item-hover: #dcdce0;
+  --mod-name-suffix: rgba(0, 0, 0, 0.45);
+  --mod-size-color: #555558;
+  --mod-switch-track: rgba(0, 0, 0, 0.18);
   --mod-switch-knob: #fff;
-  --field-bg: rgba(0, 0, 0, 0.05);
+  --field-bg: rgba(0, 0, 0, 0.06);
 
   /* Mod Card Specifics for Light Mode */
-  --card-bg: #ffffff;
-  --border-light: rgba(0, 0, 0, 0.06);
-  --tag-bg: rgba(0, 0, 0, 0.05);
-  --tag-border: rgba(0, 0, 0, 0.08);
-  --tag-hover-bg: rgba(0, 0, 0, 0.08);
+  --card-bg: #f4f4f6;
+  --border-light: rgba(0, 0, 0, 0.10);
+  --tag-bg: rgba(0, 0, 0, 0.07);
+  --tag-border: rgba(0, 0, 0, 0.12);
+  --tag-hover-bg: rgba(0, 0, 0, 0.11);
 }
 
 /* Generic helpers used across components */
@@ -130,9 +142,17 @@ button {
 }
 
 .btn-primary {
-  background: var(--accent-primary);
+  background: var(--accent-gradient);
   border-color: var(--accent-primary);
-  color: var(--btn-text);
+  color: #ffffff;
+  /* Always white on colored background */
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg,
+      color-mix(in srgb, var(--accent-primary), white 15%),
+      color-mix(in srgb, var(--accent-primary), white 35%));
+  border-color: color-mix(in srgb, var(--accent-primary), white 15%);
 }
 
 .tag {

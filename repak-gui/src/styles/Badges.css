@@ -131,3 +131,98 @@
   color: #e879f9;
   border: 1px solid rgba(192, 38, 211, 0.35);
 }
+
+/* ========================================= */
+/* Light Mode Badge Overrides               */
+/* Darker, more saturated for readability   */
+/* ========================================= */
+[data-theme="light"] .category-badge {
+  background: rgba(74, 158, 255, 0.18);
+  color: #2563eb;
+  border-color: rgba(37, 99, 235, 0.4);
+}
+
+[data-theme="light"] .mesh-badge,
+[data-theme="light"] .static-mesh-badge {
+  background: rgba(6, 182, 212, 0.2);
+  color: #0891b2;
+  border-color: rgba(8, 145, 178, 0.45);
+}
+
+[data-theme="light"] .vfx-badge {
+  background: rgba(249, 115, 22, 0.18);
+  color: #c2410c;
+  border-color: rgba(194, 65, 12, 0.4);
+}
+
+[data-theme="light"] .audio-badge {
+  background: rgba(34, 197, 94, 0.18);
+  color: #15803d;
+  border-color: rgba(21, 128, 61, 0.4);
+}
+
+[data-theme="light"] .ui-badge {
+  background: rgba(236, 72, 153, 0.18);
+  color: #be185d;
+  border-color: rgba(190, 24, 93, 0.4);
+}
+
+[data-theme="light"] .texture-badge,
+[data-theme="light"] .retexture-badge {
+  background: rgba(234, 179, 8, 0.2);
+  color: #a16207;
+  border-color: rgba(161, 98, 7, 0.45);
+}
+
+[data-theme="light"] .movies-badge {
+  background: rgba(239, 68, 68, 0.18);
+  color: #b91c1c;
+  border-color: rgba(185, 28, 28, 0.4);
+}
+
+[data-theme="light"] .animation-badge {
+  background: rgba(168, 85, 247, 0.18);
+  color: #7c3aed;
+  border-color: rgba(124, 58, 237, 0.4);
+}
+
+[data-theme="light"] .logic-badge {
+  background: rgba(99, 102, 241, 0.18);
+  color: #4f46e5;
+  border-color: rgba(79, 70, 229, 0.4);
+}
+
+[data-theme="light"] .data-badge {
+  background: rgba(20, 184, 166, 0.18);
+  color: #0f766e;
+  border-color: rgba(15, 118, 110, 0.4);
+}
+
+[data-theme="light"] .blueprint-badge {
+  background: rgba(155, 89, 182, 0.18);
+  color: #7c3aed;
+  border-color: rgba(124, 58, 237, 0.4);
+}
+
+[data-theme="light"] .text-badge {
+  background: rgba(251, 191, 36, 0.2);
+  color: #a16207;
+  border-color: rgba(161, 98, 7, 0.45);
+}
+
+[data-theme="light"] .no-uassets-badge {
+  background: rgba(120, 120, 130, 0.2);
+  color: #52525b;
+  border-color: rgba(82, 82, 91, 0.4);
+}
+
+[data-theme="light"] .iostore-badge {
+  background: rgba(192, 38, 211, 0.18);
+  color: #a21caf;
+  border-color: rgba(162, 28, 175, 0.4);
+}
+
+[data-theme="light"] .character-badge {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.15);
+}

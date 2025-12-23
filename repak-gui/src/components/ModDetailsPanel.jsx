@@ -220,7 +220,29 @@ export default function ModDetailsPanel({ mod, initialDetails, onClose, characte
             )}
 
             <div className="detail-section">
-              <h3>File Contents ({details.file_count} files)</h3>
+              <div className="detail-section-header">
+                <h3>File Contents ({details.file_count} files)</h3>
+                <button
+                  className="copy-paths-btn"
+                  onClick={() => {
+                    const allPaths = details.files
+                      .map(p => p.replace(/^\/Game\//i, ''))
+                      .join('\n')
+                    navigator.clipboard.writeText(allPaths).then(() => {
+                      // Show feedback
+                      const btn = document.querySelector('.copy-paths-btn')
+                      if (btn) {
+                        const original = btn.textContent
+                        btn.textContent = 'Copied!'
+                        setTimeout(() => btn.textContent = original, 1500)
+                      }
+                    })
+                  }}
+                  title="Copy all file paths to clipboard"
+                >
+                  Copy All Paths
+                </button>
+              </div>
               <div className="file-list-container" style={{ border: '1px solid var(--panel-border)', borderRadius: '4px', background: 'var(--bg-darker)' }}>
                 <FileTree files={details.files} />
               </div>

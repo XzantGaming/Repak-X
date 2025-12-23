@@ -1,17 +1,108 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Switch from './ui/Switch'
 import { FaTag } from "react-icons/fa6"
+import { VscFolder, VscFolderOpened, VscChevronRight, VscChevronDown, VscNewFolder } from 'react-icons/vsc'
+import { MdCreateNewFolder } from 'react-icons/md'
 import './InstallModPanel.css'
 import characterData from '../data/character_data.json'
 
 const heroImages = import.meta.glob('../assets/hero/*.png', { eager: true })
+
+// Folder tree helper functions
+const buildTree = (folders) => {
+  const root = { id: 'root', name: 'root', children: {}, isVirtual: true }
+  const sortedFolders = [...folders].sort((a, b) => a.name.localeCompare(b.name))
+
+  sortedFolders.forEach(folder => {
+    const parts = folder.id.split(/[/\\]/)
+    let current = root
+
+    parts.forEach((part, index) => {
+      if (!current.children[part]) {
+        current.children[part] = {
+          name: part,
+          children: {},
+          isVirtual: true,
+          fullPath: parts.slice(0, index + 1).join('/')
+        }
+      }
+      current = current.children[part]
+
+      if (index === parts.length - 1) {
+        current.id = folder.id
+        current.isVirtual = false
+        current.originalName = folder.name
+      }
+    })
+  })
+
+  return root
+}
+
+const convertToArray = (node) => {
+  if (!node.children) return []
+  const children = Object.values(node.children).map(child => ({
+    ...child,
+    children: convertToArray(child)
+  }))
+  children.sort((a, b) => a.name.localeCompare(b.name))
+  return children
+}
+
+// Folder node component for the tree
+const FolderNode = ({ node, selectedFolderId, onSelect, depth = 0 }) => {
+  const [isOpen, setIsOpen] = useState(true)
+  const hasChildren = node.children && node.children.length > 0
+  const isSelected = selectedFolderId === node.id
+
+  const handleClick = (e) => {
+    e.stopPropagation()
+    if (!node.isVirtual) {
+      onSelect(node.id)
+    } else {
+      setIsOpen(!isOpen)
+    }
+  }
+
+  return (
+    <div className="imp-folder-node">
+      <div
+        className={`imp-folder-item ${isSelected ? 'selected' : ''} ${node.isVirtual ? 'virtual' : ''}`}
+        onClick={handleClick}
+        style={{ paddingLeft: `${depth * 16 + 8}px` }}
+      >
+        <span className="folder-toggle" onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen) }}>
+          {hasChildren ? (isOpen ? <VscChevronDown /> : <VscChevronRight />) : <span style={{ width: 16 }} />}
+        </span>
+        <span className="folder-icon">
+          {isSelected || isOpen ? <VscFolderOpened /> : <VscFolder />}
+        </span>
+        <span className="folder-name">{node.name}</span>
+      </div>
+
+      {hasChildren && isOpen && (
+        <div className="imp-folder-children">
+          {node.children.map(child => (
+            <FolderNode
+              key={child.fullPath || child.id}
+              node={child}
+              selectedFolderId={selectedFolderId}
+              onSelect={onSelect}
+              depth={depth + 1}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 const hasCookedAssets = (mod = {}) => {
   if (!mod?.is_dir) return false
   return Boolean(mod.auto_fix_mesh || mod.auto_fix_texture || mod.auto_fix_serialize_size)
 }
 
-const isRepakLocked = (mod = {}) => hasCookedAssets(mod)
+const isRepakLocked = (mod = {}) => mod.is_dir || hasCookedAssets(mod)
 
 const buildInitialSettings = (mods = []) => {
   return mods.reduce((acc, mod, idx) => {
@@ -61,12 +152,23 @@ function parseModType(modType) {
   return { character, category, additional }
 }
 
-export default function InstallModPanel({ mods, allTags, onCreateTag, onInstall, onCancel }) {
+export default function InstallModPanel({ mods, allTags, folders = [], onCreateTag, onCreateFolder, onInstall, onCancel }) {
   const [openDropdown, setOpenDropdown] = useState(null)
   const [dropdownPos, setDropdownPos] = useState({ x: 0, y: 0 })
   const [modSettings, setModSettings] = useState(() => buildInitialSettings(mods))
+  const [selectedFolderId, setSelectedFolderId] = useState(null)
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false)
+
+  // Folder tree data
+  const rootFolder = useMemo(() => folders.find(f => f.is_root), [folders])
+  const subfolders = useMemo(() => folders.filter(f => !f.is_root), [folders])
+  const treeData = useMemo(() => {
+    const root = buildTree(subfolders)
+    return convertToArray(root)
+  }, [subfolders])
 
   useEffect(() => {
+    console.log('[InstallModPanel] Received mods:', mods.length, mods)
     setModSettings(buildInitialSettings(mods))
   }, [mods])
 
@@ -128,9 +230,29 @@ export default function InstallModPanel({ mods, allTags, onCreateTag, onInstall,
       ...mod,
       ...modSettings[idx],
       toRepak: isRepakLocked(mod) ? false : (modSettings[idx]?.toRepak || false),
-      forceLegacy: modSettings[idx]?.forceLegacy || false
+      forceLegacy: modSettings[idx]?.forceLegacy || false,
+      installSubfolder: selectedFolderId || ''
     }))
     onInstall(modsToInstall)
+  }
+
+  const handleNewFolder = async () => {
+    const name = prompt('Enter new folder name:')
+    if (!name || !name.trim()) return
+
+    setIsCreatingFolder(true)
+    try {
+      if (onCreateFolder) {
+        const newFolderId = await onCreateFolder(name.trim())
+        if (newFolderId) {
+          setSelectedFolderId(newFolderId)
+        }
+      }
+    } catch (err) {
+      console.error('Failed to create folder:', err)
+    } finally {
+      setIsCreatingFolder(false)
+    }
   }
 
   return (
@@ -141,7 +263,8 @@ export default function InstallModPanel({ mods, allTags, onCreateTag, onInstall,
           <button className="close-btn" onClick={onCancel}>×</button>
         </div>
 
-        <div className="mods-table-container card-mode">
+        {/* Mod Cards */}
+        <div className="imp-mods-section">
           {mods.length === 0 ? (
             <div className="install-empty-state">No mods detected in the drop.</div>
           ) : (
@@ -149,8 +272,8 @@ export default function InstallModPanel({ mods, allTags, onCreateTag, onInstall,
               {mods.map((mod, idx) => {
                 const repakLocked = isRepakLocked(mod)
                 const repakTitle = repakLocked
-                  ? 'Detected loose assets; repak handled automatically'
-                  : (mod.is_dir ? 'Folder contains PAK files; ready to repak' : 'Direct PAK - can repak if needed')
+                  ? (mod.is_dir ? 'Folder drops cannot be repaked' : 'Detected loose assets; repak handled automatically')
+                  : 'Direct PAK - can repak if needed'
                 const { character, category, additional } = parseModType(mod.mod_type)
                 const modLabel = mod.is_dir ? 'Folder Drop' : 'PAK File'
                 const toggleDefinitions = [
@@ -173,196 +296,245 @@ export default function InstallModPanel({ mods, allTags, onCreateTag, onInstall,
 
                 return (
                   <div className="install-mod-card" key={mod.path || idx}>
-                    <div className="install-mod-card__header">
-                      <div className="install-mod-card__title">
-                        <label className="field-label">Custom Name</label>
-                        <div className="mod-name-input-wrapper">
-                          <input
-                            type="text"
-                            placeholder="Insert custom name here"
-                            value={modSettings[idx]?.customName || ''}
-                            onChange={(e) => updateModSetting(idx, 'customName', e.target.value)}
-                            className="mod-name-input"
-                          />
-                          <span className="mod-name-suffix-hint">_9999999_P</span>
+                    {/* Left: Mod Options */}
+                    <div className="install-mod-card__left">
+                      <div className="install-mod-card__header">
+                        <div className="install-mod-card__title">
+                          <label className="field-label">Custom Name</label>
+                          <div className="mod-name-input-wrapper">
+                            <input
+                              type="text"
+                              placeholder="Insert custom name here"
+                              value={modSettings[idx]?.customName || ''}
+                              onChange={(e) => updateModSetting(idx, 'customName', e.target.value)}
+                              className="mod-name-input"
+                            />
+                            <span className="mod-name-suffix-hint">_9999999_P</span>
+                          </div>
+                          <span className="install-mod-card__hint" title={mod.path}>
+                            {modSettings[idx]?.customName
+                              ? `${modSettings[idx].customName}_9999999_P.pak`
+                              : mod.mod_name}
+                          </span>
                         </div>
-                        <span className="install-mod-card__hint" title={mod.path}>
-                          {modSettings[idx]?.customName
-                            ? `${modSettings[idx].customName}_9999999_P.pak`
-                            : mod.mod_name}
+                        <span className={`install-mod-card__pill ${mod.is_dir ? 'pill-folder' : 'pill-pak'}`}>
+                          {modLabel}
                         </span>
                       </div>
-                      <span className={`install-mod-card__pill ${mod.is_dir ? 'pill-folder' : 'pill-pak'}`}>
-                        {modLabel}
-                      </span>
-                    </div>
 
-                    <div className="install-mod-card__badges">
-                      {character && (
-                        <span className={`character-badge ${character.startsWith('Multiple Heroes') ? 'multi-hero' : ''}`}>
-                          {getHeroImage(character) && <img src={getHeroImage(character)} alt="" />}
-                          {character}
+                      <div className="install-mod-card__badges">
+                        {character && (
+                          <span className={`character-badge ${character.startsWith('Multiple Heroes') ? 'multi-hero' : ''}`}>
+                            {getHeroImage(character) && <img src={getHeroImage(character)} alt="" />}
+                            {character}
+                          </span>
+                        )}
+                        <span className={`category-badge ${category.toLowerCase().replace(/\s+/g, '-')}-badge`}>
+                          {category}
                         </span>
-                      )}
-                      <span className={`category-badge ${category.toLowerCase().replace(/\s+/g, '-')}-badge`}>
-                        {category}
-                      </span>
-                      {additional.map(tag => (
-                        <span key={tag} className={`additional-badge ${tag.toLowerCase()}-badge`}>
-                          {tag}
-                        </span>
-                      ))}
-                      {mod.contains_uassets === false && (
-                        <span className="no-uassets-badge" title="This mod contains no UAsset files - patch options disabled">
-                          No UAssets
-                        </span>
-                      )}
-                    </div>
+                        {additional.map(tag => (
+                          <span key={tag} className={`additional-badge ${tag.toLowerCase()}-badge`}>
+                            {tag}
+                          </span>
+                        ))}
+                        {mod.contains_uassets === false && (
+                          <span className="no-uassets-badge" title="This mod contains no UAsset files - patch options disabled">
+                            No UAssets
+                          </span>
+                        )}
+                      </div>
 
-                    <div className="install-mod-card__toggles">
-                      {toggleDefinitions.map(({ key, label, hint }) => {
-                        const isLegacyMode = modSettings[idx]?.forceLegacy || false
-                        const canApplyPatches = mod.contains_uassets !== false
-                        const isLocked = isLegacyMode || !canApplyPatches
+                      <div className="install-mod-card__toggles">
+                        {toggleDefinitions.map(({ key, label, hint }) => {
+                          const isLegacyMode = modSettings[idx]?.forceLegacy || false
+                          const canApplyPatches = mod.contains_uassets !== false
+                          const isLocked = isLegacyMode || !canApplyPatches
 
-                        let hintText = hint
-                        if (isLegacyMode) {
-                          hintText = 'Disabled in Legacy PAK mode'
-                        } else if (!canApplyPatches) {
-                          hintText = 'No UAsset files detected'
-                        }
+                          let hintText = hint
+                          if (isLegacyMode) {
+                            hintText = 'Disabled in Legacy PAK mode'
+                          } else if (!canApplyPatches) {
+                            hintText = 'No UAsset files detected'
+                          }
 
-                        return (
-                          <Switch
-                            key={key}
-                            size="sm"
-                            color="primary"
-                            checked={isLocked ? false : (modSettings[idx]?.[key] || false)}
-                            onChange={(value) => updateModSetting(idx, key, value)}
-                            isDisabled={isLocked}
-                            className={`install-toggle ${isLocked ? 'locked' : ''}`}
-                          >
-                            <div className="install-toggle__text">
-                              <span className="install-toggle__label">{label}</span>
-                              <span className="install-toggle__hint">
-                                {hintText}
-                              </span>
-                            </div>
-                          </Switch>
-                        )
-                      })}
-                    </div>
-
-                    <div className="install-mod-card__tags">
-                      <div className="install-mod-card__row">
-                        <span className="field-label">Tags</span>
-                        <div className="tags-cell">
-                          <div className="tags-list">
-                            {(modSettings[idx]?.selectedTags || []).map(tag => (
-                              <span key={tag} className="tag">
-                                <FaTag />
-                                {tag}
-                                <button
-                                  type="button"
-                                  className="tag-remove"
-                                  onClick={() => handleRemoveTag(idx, tag)}
-                                >
-                                  ×
-                                </button>
-                              </span>
-                            ))}
-                          </div>
-                          <div className="add-tag-wrapper" onClick={e => e.stopPropagation()}>
-                            <button
-                              className="add-tag-btn"
-                              onClick={(e) => {
-                                const rect = e.currentTarget.getBoundingClientRect()
-                                setDropdownPos({ x: rect.left, y: rect.bottom })
-                                setOpenDropdown(openDropdown === idx ? null : idx)
-                              }}
-                              title="Add Tag"
+                          return (
+                            <Switch
+                              key={key}
+                              size="sm"
+                              color="primary"
+                              checked={isLocked ? false : (modSettings[idx]?.[key] || false)}
+                              onChange={(value) => updateModSetting(idx, key, value)}
+                              isDisabled={isLocked}
+                              className={`install-toggle ${isLocked ? 'locked' : ''}`}
                             >
-                              +
-                            </button>
-                            {openDropdown === idx && (
-                              <div
-                                className="tag-dropdown"
-                                style={{
-                                  position: 'fixed',
-                                  top: dropdownPos.y,
-                                  left: dropdownPos.x
+                              <div className="install-toggle__text">
+                                <span className="install-toggle__label">{label}</span>
+                                <span className="install-toggle__hint">
+                                  {hintText}
+                                </span>
+                              </div>
+                            </Switch>
+                          )
+                        })}
+                      </div>
+
+                      <div className="install-mod-card__tags">
+                        <div className="install-mod-card__row">
+                          <span className="field-label">Tags</span>
+                          <div className="tags-cell">
+                            <div className="tags-list">
+                              {(modSettings[idx]?.selectedTags || []).map(tag => (
+                                <span key={tag} className="tag">
+                                  <FaTag />
+                                  {tag}
+                                  <button
+                                    type="button"
+                                    className="tag-remove"
+                                    onClick={() => handleRemoveTag(idx, tag)}
+                                  >
+                                    ×
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
+                            <div className="add-tag-wrapper" onClick={e => e.stopPropagation()}>
+                              <button
+                                className="add-tag-btn"
+                                onClick={(e) => {
+                                  const rect = e.currentTarget.getBoundingClientRect()
+                                  setDropdownPos({ x: rect.left, y: rect.bottom })
+                                  setOpenDropdown(openDropdown === idx ? null : idx)
                                 }}
+                                title="Add Tag"
                               >
-                                <div className="dropdown-item" onClick={() => {
-                                  const tag = prompt('Enter new tag name:')
-                                  if (tag && tag.trim()) {
-                                    handleAddTag(idx, tag)
-                                    if (onCreateTag) onCreateTag(tag)
-                                  }
-                                  setOpenDropdown(null)
-                                }}>
-                                  + New Tag...
-                                </div>
-                                {allTags && allTags.length > 0 && <div className="dropdown-separator" />}
-                                {allTags && allTags.map(tag => (
-                                  <div key={tag} className="dropdown-item" onClick={() => {
-                                    handleAddTag(idx, tag)
+                                +
+                              </button>
+                              {openDropdown === idx && (
+                                <div
+                                  className="tag-dropdown"
+                                  style={{
+                                    position: 'fixed',
+                                    top: dropdownPos.y,
+                                    left: dropdownPos.x
+                                  }}
+                                >
+                                  <div className="dropdown-item" onClick={() => {
+                                    const tag = prompt('Enter new tag name:')
+                                    if (tag && tag.trim()) {
+                                      handleAddTag(idx, tag)
+                                      if (onCreateTag) onCreateTag(tag)
+                                    }
                                     setOpenDropdown(null)
                                   }}>
-                                    {tag}
+                                    + New Tag...
                                   </div>
-                                ))}
-                              </div>
-                            )}
+                                  {allTags && allTags.length > 0 && <div className="dropdown-separator" />}
+                                  {allTags && allTags.map(tag => (
+                                    <div key={tag} className="dropdown-item" onClick={() => {
+                                      handleAddTag(idx, tag)
+                                      setOpenDropdown(null)
+                                    }}>
+                                      {tag}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="install-mod-card__footer">
-                      {mod.contains_uassets !== false && (
+                      <div className="install-mod-card__footer">
                         <Switch
                           size="md"
-                          color="secondary"
-                          checked={modSettings[idx]?.toRepak || false}
-                          onChange={(value) => updateModSetting(idx, 'toRepak', value)}
-                          isDisabled={repakLocked}
-                          className={`install-toggle repak-toggle ${repakLocked ? 'locked' : ''}`}
-                          title={repakTitle}
+                          color="warning"
+                          checked={mod.contains_uassets === false ? true : (modSettings[idx]?.forceLegacy || false)}
+                          onChange={(value) => {
+                            if (mod.contains_uassets === false) return
+                            updateModSetting(idx, 'forceLegacy', value)
+                          }}
+                          isDisabled={mod.contains_uassets === false}
+                          className={`install-toggle legacy-toggle ${mod.contains_uassets === false ? 'active locked' : (modSettings[idx]?.forceLegacy ? 'active' : '')}`}
+                          title="Use when making Audio/Config mods (mods that don't contain uassets)"
                         >
                           <div className="install-toggle__text">
-                            <span className="install-toggle__label">Send to Repak</span>
+                            <span className="install-toggle__label">Legacy PAK Format</span>
                             <span className="install-toggle__hint">
-                              {repakLocked ? 'Loose assets detected' : 'Repaks the pak into IOStore format'}
+                              {mod.contains_uassets === false
+                                ? 'Forced for non-UAsset mods'
+                                : (modSettings[idx]?.forceLegacy
+                                  ? 'Skipping IoStore conversion'
+                                  : 'Use for Audio/Config mods (no uassets)')}
                             </span>
                           </div>
                         </Switch>
-                      )}
 
-                      <Switch
-                        size="md"
-                        color="warning"
-                        checked={mod.contains_uassets === false ? true : (modSettings[idx]?.forceLegacy || false)}
-                        onChange={(value) => {
-                          if (mod.contains_uassets === false) return
-                          updateModSetting(idx, 'forceLegacy', value)
-                        }}
-                        isDisabled={mod.contains_uassets === false}
-                        className={`install-toggle legacy-toggle ${mod.contains_uassets === false ? 'active locked' : (modSettings[idx]?.forceLegacy ? 'active' : '')}`}
-                        title="Use when making Audio/Config mods (mods that don't contain uassets)"
-                      >
-                        <div className="install-toggle__text">
-                          <span className="install-toggle__label">Legacy PAK Format</span>
-                          <span className="install-toggle__hint">
-                            {mod.contains_uassets === false
-                              ? 'Forced for non-UAsset mods'
-                              : (modSettings[idx]?.forceLegacy
-                                ? 'Skipping IoStore conversion'
-                                : 'Use for Audio/Config mods (no uassets)')}
-                          </span>
-                        </div>
-                      </Switch>
+                        {mod.contains_uassets !== false && (
+                          <Switch
+                            size="md"
+                            color="secondary"
+                            checked={modSettings[idx]?.toRepak || false}
+                            onChange={(value) => updateModSetting(idx, 'toRepak', value)}
+                            isDisabled={repakLocked}
+                            className={`install-toggle repak-toggle ${repakLocked ? 'locked' : ''}`}
+                            title={repakTitle}
+                          >
+                            <div className="install-toggle__text">
+                              <span className="install-toggle__label">Send to Repak</span>
+                              <span className="install-toggle__hint">
+                                {repakLocked ? (mod.is_dir ? 'Not available for folder drops' : 'Loose assets detected') : 'Repaks the pak into IOStore format'}
+                              </span>
+                            </div>
+                          </Switch>
+                        )}
+                      </div>
                     </div>
+
+                    {/* Divider */}
+                    {folders.length > 0 && <div className="install-mod-card__divider" />}
+
+                    {/* Right: Folder Picker (inside card) */}
+                    {folders.length > 0 && (
+                      <div className="install-mod-card__right">
+                        <div className="imp-section-header">
+                          <MdCreateNewFolder />
+                          <span>Install to</span>
+                          <button
+                            className="imp-btn-new-folder"
+                            onClick={handleNewFolder}
+                            disabled={isCreatingFolder}
+                            title="Create new folder"
+                          >
+                            <VscNewFolder />
+                          </button>
+                        </div>
+
+                        <div className="imp-folder-tree-container">
+                          {/* Root folder */}
+                          {rootFolder && (
+                            <div
+                              className={`imp-folder-item root-item ${selectedFolderId === rootFolder.id || selectedFolderId === null ? 'selected' : ''}`}
+                              onClick={() => setSelectedFolderId(rootFolder.id)}
+                            >
+                              <span className="folder-icon"><VscFolderOpened /></span>
+                              <span className="folder-name">{rootFolder.name}</span>
+                            </div>
+                          )}
+
+                          {/* Subfolders */}
+                          <div className="imp-folder-tree">
+                            {treeData.map(node => (
+                              <FolderNode
+                                key={node.fullPath || node.id}
+                                node={node}
+                                selectedFolderId={selectedFolderId}
+                                onSelect={setSelectedFolderId}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )
               })}

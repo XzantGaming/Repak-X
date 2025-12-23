@@ -18,7 +18,7 @@
   max-width: 95vw;
   max-height: 85vh;
   border-radius: 12px;
-  box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -83,7 +83,7 @@
 }
 
 .btn-icon-close:hover {
-  background: rgba(255,255,255,0.1);
+  background: rgba(255, 255, 255, 0.1);
   color: var(--text-primary);
 }
 
@@ -109,7 +109,7 @@
 }
 
 .p2p-tab:hover {
-  background: rgba(255,255,255,0.05);
+  background: rgba(255, 255, 255, 0.05);
   color: var(--text-primary);
 }
 
@@ -136,7 +136,8 @@
   font-size: 0.9rem;
 }
 
-.p2p-input, .p2p-textarea {
+.p2p-input,
+.p2p-textarea {
   width: 100%;
   padding: 0.75rem;
   background: var(--input-bg);
@@ -146,7 +147,8 @@
   font-family: inherit;
 }
 
-.p2p-input:focus, .p2p-textarea:focus {
+.p2p-input:focus,
+.p2p-textarea:focus {
   border-color: var(--accent-primary);
   outline: none;
 }
@@ -224,14 +226,16 @@
 }
 
 .mod-select-item:hover {
-  background: rgba(255,255,255,0.05);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .mod-select-item.selected {
   background: rgba(74, 158, 255, 0.1);
 }
 
-.btn-primary, .btn-danger, .btn-secondary {
+.btn-primary,
+.btn-danger,
+.btn-secondary {
   width: 100%;
   padding: 0.75rem;
   border: none;
@@ -247,7 +251,8 @@
 
 .btn-primary {
   background: var(--accent-primary);
-  color: var(--btn-text);
+  color: #ffffff;
+  /* Always white on colored bg */
 }
 
 .btn-primary:hover {
@@ -256,7 +261,8 @@
 
 .btn-danger {
   background: var(--danger);
-  color: var(--btn-text);
+  color: #ffffff;
+  /* Always white on colored bg */
 }
 
 .btn-danger:hover {
@@ -396,6 +402,13 @@
   margin-bottom: 1.5rem;
   color: #ffc107;
   font-size: 0.9rem;
+}
+
+/* Light mode: darker amber for readability */
+[data-theme="light"] .security-note {
+  background: rgba(180, 130, 0, 0.12);
+  color: #b45309;
+  border: 1px solid rgba(180, 130, 0, 0.25);
 }
 
 .btn-small {

@@ -49,7 +49,7 @@ import './App.css'
 import './styles/theme.css'
 import './styles/Badges.css'
 import './styles/Fonts.css'
-import logo from './assets/app-icons/RepakIcon-x256.png'
+import ModularLogo from './components/ui/ModularLogo'
 import ClashPanel from './components/ClashPanel'
 import HeroFilterDropdown from './components/HeroFilterDropdown'
 
@@ -100,6 +100,21 @@ function getAdditionalCategories(details) {
     }
   }
   return []
+}
+
+// Generate a normalized mod filename with priority suffix
+// e.g. "My Cool Mod" with minNines=7 -> "My_Cool_Mod_9999999_P"
+function normalizeModBaseName(name, minNines = 7) {
+  // Clean the name: remove existing suffixes and extension
+  let cleanName = name
+    .replace(/\.pak$/i, '')           // Remove .pak extension
+    .replace(/_\d+_P$/gi, '')         // Remove existing priority suffix
+    .replace(/\s+/g, '_')             // Replace spaces with underscores
+    .replace(/[^\w_-]/g, '')          // Remove special characters
+
+  // Generate the priority suffix
+  const nines = '9'.repeat(minNines)
+  return `${cleanName}_${nines}_P`
 }
 
 function App() {
@@ -359,6 +374,28 @@ function App() {
           setNewFolderPrompt({ paths })
           setDropTargetFolder(null)
           return
+        }
+
+        // Check if any dropped items are folders with uassets that need proper processing
+        try {
+          const modsData = await invoke('parse_dropped_files', { paths })
+          const hasFolderWithUassets = modsData.some(mod =>
+            mod.is_dir === true && mod.contains_uassets !== false
+          )
+
+          if (hasFolderWithUassets) {
+            // Cancel quick-organize and show alert
+            setDropTargetFolder(null)
+            alert.warning(
+              'Cannot Quick-Organize Folder Mods',
+              'Folder mods with UAssets need to be processed. Please drop them on the Install Mods area.',
+              { duration: 8000 }
+            )
+            return
+          }
+        } catch (parseError) {
+          console.error('Parse error during quick organize check:', parseError)
+          // If parsing fails, we still try quick organize (might be simple PAK files)
         }
 
         // Quick organize: directly install to the folder without showing install panel
@@ -894,6 +931,9 @@ function App() {
     const targetFolder = folders.find(f => f.id === folderId)
     const effectiveFolderId = (targetFolder && targetFolder.depth === 0) ? null : folderId
 
+    // Clear the mod details panel to prevent stale reference crashes
+    setSelectedMod(null)
+
     try {
       for (const modPath of selectedMods) {
         await invoke('assign_mod_to_folder', { modPath, folderId: effectiveFolderId })
@@ -916,6 +956,11 @@ function App() {
     // Check if folderId corresponds to the root folder (depth 0)
     const targetFolder = folders.find(f => f.id === folderId)
     const effectiveFolderId = (targetFolder && targetFolder.depth === 0) ? null : folderId
+
+    // Clear the mod details panel if the moved mod was selected
+    if (selectedMod && selectedMod.path === modPath) {
+      setSelectedMod(null)
+    }
 
     try {
       await invoke('assign_mod_to_folder', { modPath, folderId: effectiveFolderId })
@@ -1233,45 +1278,63 @@ function App() {
   }
 
   const handleInstallMods = async (modsWithSettings) => {
-    try {
-      setShowInstallPanel(false)
-      setInstallLogs([])
-      setStatus('Installing mods...')
+    setShowInstallPanel(false)
+    setInstallLogs([])
 
-      await invoke('install_mods', { mods: modsWithSettings })
+    const modCount = modsWithSettings.length
 
-      // Mirror tag assignment flow used by the main list/context menu
-      const typeTracker = {}
-      for (const mod of modsWithSettings) {
-        const modType = mod.mod_type || 'Unknown'
-        const count = typeTracker[modType] || 0
-        const minNines = 7 + count
-        const name = mod.customName || mod.mod_name
-        const filename = `${normalizeModBaseName(name, minNines)}.pak`
+    // Use promise toast for loading state and result
+    alert.promise(
+      (async () => {
+        await invoke('install_mods', { mods: modsWithSettings })
 
-        if (mod.selectedTags && mod.selectedTags.length > 0) {
-          const separator = gamePath.includes('\\') ? '\\' : '/'
-          const fullPath = `${gamePath}${separator}${filename}`
+        // Mirror tag assignment flow used by the main list/context menu
+        const typeTracker = {}
+        for (const mod of modsWithSettings) {
+          const modType = mod.mod_type || 'Unknown'
+          const count = typeTracker[modType] || 0
+          const minNines = 7 + count
+          const name = mod.customName || mod.mod_name
+          const filename = `${normalizeModBaseName(name, minNines)}.pak`
 
-          for (const tag of mod.selectedTags) {
-            try {
-              await invoke('add_custom_tag', { modPath: fullPath, tag })
-            } catch (e) {
-              console.error(`Failed to add tag ${tag} to ${fullPath}:`, e)
+          if (mod.selectedTags && mod.selectedTags.length > 0) {
+            const separator = gamePath.includes('\\') ? '\\' : '/'
+            const fullPath = `${gamePath}${separator}${filename}`
+
+            for (const tag of mod.selectedTags) {
+              try {
+                await invoke('add_custom_tag', { modPath: fullPath, tag })
+              } catch (e) {
+                console.error(`Failed to add tag ${tag} to ${fullPath}:`, e)
+              }
             }
           }
+
+          typeTracker[modType] = count + 1
         }
 
-        typeTracker[modType] = count + 1
-      }
+        await loadMods()
+        await loadFolders()
+        await loadTags()
+        setStatus('Mods installed successfully!')
 
-      setStatus('Mods installed successfully!')
-      await loadMods()
-      await loadFolders()
-      await loadTags()
-    } catch (error) {
-      setStatus(`Installation failed: ${error}`)
-    }
+        return { count: modCount }
+      })(),
+      {
+        loading: {
+          title: 'Installing Mods',
+          description: `Processing ${modCount} mod${modCount > 1 ? 's' : ''}...`
+        },
+        success: (result) => ({
+          title: 'Installation Complete',
+          description: `Successfully installed ${result.count} mod${result.count > 1 ? 's' : ''}`
+        }),
+        error: (err) => ({
+          title: 'Installation Failed',
+          description: String(err)
+        })
+      }
+    )
   }
 
   const handleSaveSettings = (settings) => {
@@ -1322,10 +1385,26 @@ function App() {
     localStorage.setItem('theme', newTheme);
   };
 
+  // 4-color palettes for aurora gradient animation
+  const AURORA_PALETTES = {
+    '#be1c1c': ['#be1c1c', '#ff9800', '#ffcc00', '#ff6b35'], // Repak Red: warm fire tones
+    '#4a9eff': ['#4a9eff', '#a855f7', '#ff6b9d', '#38bdf8'], // Blue: cool to pink
+    '#9c27b0': ['#9c27b0', '#e91e63', '#00bcd4', '#7c3aed'], // Purple: vibrant mix
+    '#4CAF50': ['#4CAF50', '#8bc34a', '#00e676', '#e91e63'], // Green: nature with pop
+    '#ff9800': ['#ff9800', '#ff5722', '#ffc107', '#4a9eff'], // Orange: sunset vibes
+    '#FF96BC': ['#FF96BC', '#f472b6', '#c084fc', '#fda4af'], // Pink: soft pastel tones
+  };
+
   const handleAccentChange = (newAccent) => {
     setAccentColor(newAccent);
     document.documentElement.style.setProperty('--accent-primary', newAccent);
     document.documentElement.style.setProperty('--accent-secondary', newAccent);
+    // Set 4-color aurora palette for gradient animations
+    const palette = AURORA_PALETTES[newAccent] || ['#be1c1c', '#ff9800', '#ffcc00', '#ff6b35'];
+    document.documentElement.style.setProperty('--aurora-color-1', palette[0]);
+    document.documentElement.style.setProperty('--aurora-color-2', palette[1]);
+    document.documentElement.style.setProperty('--aurora-color-3', palette[2]);
+    document.documentElement.style.setProperty('--aurora-color-4', palette[3]);
     localStorage.setItem('accentColor', newAccent);
   };
 
@@ -1340,7 +1419,9 @@ function App() {
         <InstallModPanel
           mods={modsToInstall}
           allTags={allTags}
+          folders={folders}
           onCreateTag={registerTagFromInstallPanel}
+          onCreateFolder={handleCreateFolderAndReturn}
           onInstall={handleInstallMods}
           onCancel={() => setShowInstallPanel(false)}
         />
@@ -1368,10 +1449,6 @@ function App() {
           onAutoDetectGamePath={handleAutoDetect}
           onBrowseGamePath={handleBrowseGamePath}
           isGamePathLoading={loading}
-          onOpenCredits={() => {
-            setShowSettings(false);
-            setShowCredits(true);
-          }}
         />
       )}
 
@@ -1454,10 +1531,16 @@ function App() {
 
 
       <header className="header" style={{ display: 'flex', alignItems: 'center' }}>
-        <img src={logo} alt="Repak Icon" className="repak-icon" style={{ width: '50px', height: '50px', marginRight: '10px' }} />
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem' }}>
-          <h1 className="font-bbh-bartle" style={{ margin: 0 }}>Repak <AuroraText className="font-bbh-bartle">X</AuroraText> </h1> <h4 style={{ margin: 0 }}>[DEV]</h4>
-          <span className="version" style={{ fontSize: '0.9rem', opacity: 0.7 }}>v{version}</span>
+        <div
+          className="header-branding"
+          onClick={() => setShowCredits(true)}
+          title="View Credits"
+        >
+          <ModularLogo size={50} className="repak-icon" style={{ marginRight: '10px' }} />
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem' }}>
+            <h1 className="font-bbh-bartle" style={{ margin: 0 }}>Repak <AuroraText className="font-bbh-bartle">X</AuroraText> </h1> <h4 style={{ margin: 0 }}>[DEV]</h4>
+            <span className="version" style={{ fontSize: '0.9rem', opacity: 0.7 }}>v{version}</span>
+          </div>
         </div>
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginLeft: 'auto' }}>
           <button

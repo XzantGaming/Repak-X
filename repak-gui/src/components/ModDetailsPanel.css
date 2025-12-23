@@ -50,6 +50,33 @@
   letter-spacing: 0.5px;
 }
 
+.detail-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.detail-section-header h3 {
+  margin-bottom: 0;
+}
+
+.copy-paths-btn {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.75rem;
+  background: rgba(74, 158, 255, 0.1);
+  border: 1px solid rgba(74, 158, 255, 0.3);
+  color: var(--accent-primary, #4a9eff);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.copy-paths-btn:hover {
+  background: rgba(74, 158, 255, 0.2);
+  border-color: rgba(74, 158, 255, 0.5);
+}
+
 .detail-item {
   display: flex;
   justify-content: space-between;

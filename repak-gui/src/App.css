@@ -59,6 +59,33 @@ body {
   max-width: none;
 }
 
+/* Header Branding - Clickable Logo/Title */
+.header-branding {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 0.5rem;
+  margin: -0.5rem;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+}
+
+
+.header-branding:hover h1,
+.header-branding:hover h4 {
+  text-shadow: 0 0 20px color-mix(in srgb, var(--accent-primary), transparent 40%),
+    0 0 40px color-mix(in srgb, var(--accent-primary), transparent 60%);
+}
+
+.header-branding:hover .repak-icon {
+  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--accent-primary), transparent 30%));
+  transform: scale(1.05);
+}
+
+.header-branding .repak-icon {
+  transition: all 0.3s ease;
+}
+
 /* Main 2-Panel Layout */
 .main-panels {
   display: flex;
@@ -1215,6 +1242,17 @@ input[type="text"]:focus {
   background: color-mix(in srgb, var(--accent-primary), transparent 88%);
 }
 
+/* Light mode override for ghost buttons */
+[data-theme="light"] .btn-ghost {
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="light"] .btn-ghost:hover {
+  border-color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary), transparent 85%);
+}
+
 .folder-icon {
   color: var(--accent-primary, #4a9eff);
 }
@@ -1699,7 +1737,7 @@ input[type="text"]:focus {
 }
 
 .btn-install-large {
-  background: var(--accent-primary);
+  background: var(--accent-gradient);
   color: white;
   border: none;
   border-radius: 12px;
@@ -1715,7 +1753,9 @@ input[type="text"]:focus {
 }
 
 .btn-install-large:hover {
-  background: var(--accent-secondary);
+  background: linear-gradient(135deg,
+      color-mix(in srgb, var(--accent-primary), white 15%),
+      color-mix(in srgb, var(--accent-primary), white 35%));
   transform: translateY(-1px);
   box-shadow: 0 6px 16px color-mix(in srgb, var(--accent-primary), transparent 60%);
 }
