@@ -212,19 +212,20 @@ pub fn get_pak_characteristics_detailed(mod_contents: Vec<String>) -> ModCharact
         // Extract hero names ONLY from primary character folder paths
         // This handles paths like /Characters/1032/, /Hero_ST/1048/, /Hero/1021/
         // We ONLY look at folder structure, NOT filenames, to avoid false positives from shared assets
-        if let Some(caps) = CHAR_ID_REGEX.captures(file) {
-            if let Some(char_id) = caps.get(1) {
-                if let Some(name) = character_data::get_character_name_from_id(char_id.as_str()) {
+        let path_matched = CHAR_ID_REGEX.captures(file).and_then(|caps| {
+            caps.get(1).and_then(|char_id| {
+                character_data::get_character_name_from_id(char_id.as_str()).map(|name| {
                     info!("CHAR_ID_REGEX matched ID {} ({}) in path: {}", char_id.as_str(), name, file);
                     hero_names.insert(name);
-                }
-            }
-        }
+                    true
+                })
+            })
+        }).unwrap_or(false);
         
-        // Fallback: For audio/UI/texture mods without character folders, check filenames
-        // BUT exclude material instances (MI_) to avoid false positives from shared assets
-        // This handles patterns like bnk_vo_1044001.bnk, UI_1048_icon.uasset, or T_1016001_Body_D.uasset
-        if !filename_lower.starts_with("mi_") {
+        // Fallback: For audio/UI/texture mods WITHOUT character folders, check filenames
+        // ONLY use this when path regex didn't match - prevents false positives from shared texture assets
+        // (e.g., T_1018301 texture in a 1048 folder shouldn't count as hero 1018)
+        if !path_matched && !filename_lower.starts_with("mi_") {
             if let Some(caps) = FILENAME_CHAR_ID_REGEX.captures(filename) {
                 if let Some(char_id) = caps.get(1) {
                     let id = char_id.as_str();

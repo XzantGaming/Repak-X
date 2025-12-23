@@ -13,7 +13,7 @@ fn main() {
     let workspace_root = manifest_dir.parent().unwrap().parent().unwrap();
     let tool_project_dir = workspace_root.join("uasset_toolkit").join("tools").join("UAssetTool");
 
-    // Only emit rerun-if-changed if the files actually exist
+    // Watch all C# source files for changes
     let program_cs = tool_project_dir.join("Program.cs");
     let csproj = tool_project_dir.join("UAssetTool.csproj");
     if program_cs.exists() {
@@ -22,13 +22,24 @@ fn main() {
     if csproj.exists() {
         println!("cargo:rerun-if-changed={}", csproj.display());
     }
-
+    
+    // Watch UAssetAPI source directory for changes
+    let uasset_api_dir = workspace_root.join("UAssetAPI").join("UAssetAPI");
+    if uasset_api_dir.exists() {
+        println!("cargo:rerun-if-changed={}", uasset_api_dir.display());
+    }
+    
     // Create output directory
     if let Err(e) = fs::create_dir_all(&tool_output_dir) {
         println!("cargo:warning=failed to create {}: {}", tool_output_dir.display(), e);
     }
 
     let dest_exe = tool_output_dir.join("UAssetTool.exe");
+    
+    // Force rebuild if output doesn't exist
+    if !dest_exe.exists() {
+        println!("cargo:rerun-if-changed=build.rs");
+    }
 
     // 1) Try to publish via dotnet into target/uassettool
     let mut published = false;

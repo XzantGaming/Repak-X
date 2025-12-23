@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("UAssetTool")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+5e4674fb88c541ede8f0564e1a60a0ac33c217c7")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+481d800e35a95270a9a3702316a21b58cfa8e9f8")]
 [assembly: System.Reflection.AssemblyProductAttribute("UAssetTool")]
 [assembly: System.Reflection.AssemblyTitleAttribute("UAssetTool")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
