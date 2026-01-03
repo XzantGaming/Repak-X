@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import PropTypes from 'prop-types'
 import './NumberInput.css'
 
-const NumberInput = ({ value, min = 0, max = 999, onChange, className }) => {
+const NumberInput = ({ value, min = 0, max = 999, onChange, className, disabled }) => {
   const [localValue, setLocalValue] = useState(value)
   const [isOnCooldown, setIsOnCooldown] = useState(false)
   const inputRef = useRef(null)
@@ -21,14 +21,15 @@ const NumberInput = ({ value, min = 0, max = 999, onChange, className }) => {
   }, [])
 
   const commitValue = (newValue) => {
+    if (disabled) return
     // If empty string or NaN, revert to original value
     if (newValue === '' || isNaN(newValue)) {
       setLocalValue(value)
       return
     }
-    
+
     let clamped = Math.max(min, Math.min(max, newValue))
-    
+
     setLocalValue(clamped)
     if (onChange && clamped !== value) {
       onChange(clamped)
@@ -57,8 +58,8 @@ const NumberInput = ({ value, min = 0, max = 999, onChange, className }) => {
 
   const handleIncrement = (e) => {
     e.stopPropagation()
-    if (isOnCooldown) return
-    
+    if (disabled || isOnCooldown) return
+
     const newValue = Math.min(max, localValue + 1)
     setLocalValue(newValue)
     if (onChange && newValue !== value) {
@@ -69,8 +70,8 @@ const NumberInput = ({ value, min = 0, max = 999, onChange, className }) => {
 
   const handleDecrement = (e) => {
     e.stopPropagation()
-    if (isOnCooldown) return
-    
+    if (disabled || isOnCooldown) return
+
     const newValue = Math.max(min, localValue - 1)
     setLocalValue(newValue)
     if (onChange && newValue !== value) {
@@ -80,6 +81,7 @@ const NumberInput = ({ value, min = 0, max = 999, onChange, className }) => {
   }
 
   const handleChange = (e) => {
+    if (disabled) return
     const inputValue = e.target.value
     if (inputValue === '') {
       setLocalValue('')
@@ -90,12 +92,12 @@ const NumberInput = ({ value, min = 0, max = 999, onChange, className }) => {
   }
 
   return (
-    <div className={`number-input-container ${className || ''}`} onClick={(e) => e.stopPropagation()}>
-      <button 
-        type="button" 
-        className="number-btn minus" 
+    <div className={`number-input-container ${className || ''} ${disabled ? 'disabled' : ''}`} onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        className="number-btn minus"
         onClick={handleDecrement}
-        disabled={localValue <= min || isOnCooldown}
+        disabled={disabled || localValue <= min || isOnCooldown}
       >
         −
       </button>
@@ -109,12 +111,13 @@ const NumberInput = ({ value, min = 0, max = 999, onChange, className }) => {
         onKeyDown={handleKeyDown}
         min={min}
         max={max}
+        disabled={disabled}
       />
-      <button 
-        type="button" 
-        className="number-btn plus" 
+      <button
+        type="button"
+        className="number-btn plus"
         onClick={handleIncrement}
-        disabled={localValue >= max || isOnCooldown}
+        disabled={disabled || localValue >= max || isOnCooldown}
       >
         +
       </button>
@@ -127,7 +130,8 @@ NumberInput.propTypes = {
   min: PropTypes.number,
   max: PropTypes.number,
   onChange: PropTypes.func,
-  className: PropTypes.string
+  className: PropTypes.string,
+  disabled: PropTypes.bool
 }
 
 export default NumberInput

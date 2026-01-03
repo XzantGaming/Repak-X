@@ -81,7 +81,10 @@ function ModItem({
     characterData,
     onRename,
     shouldStartRenaming,
-    onClearRenaming
+    onClearRenaming,
+    gameRunning,
+    onRenameBlocked,
+    onDeleteBlocked
 }) {
     const [isDeleteHolding, setIsDeleteHolding] = useState(false)
     const [isRenaming, setIsRenaming] = useState(false)
@@ -113,6 +116,10 @@ function ModItem({
 
     const startDeleteHold = (e) => {
         e.stopPropagation()
+        if (gameRunning) {
+            onDeleteBlocked?.()
+            return
+        }
         setIsDeleteHolding(true)
         holdTimeoutRef.current = setTimeout(() => {
             handleDeleteMod(mod.path, e.shiftKey)
@@ -132,6 +139,10 @@ function ModItem({
     // Inline rename handlers
     const startRename = (e) => {
         e?.stopPropagation()
+        if (gameRunning) {
+            onRenameBlocked?.()
+            return
+        }
         setRenameValue(cleanName)
         setIsRenaming(true)
     }
@@ -322,6 +333,7 @@ function ModItem({
                         min={0}
                         max={7}
                         onChange={(newPriority) => handleSetPriority(mod.path, newPriority)}
+                        disabled={gameRunning}
                     />
                     <Tooltip title={mod.enabled ? 'Disable mod' : 'Enable mod'}>
                         <div className="mod-switch-wrapper" onClick={(e) => e.stopPropagation()}>
@@ -381,12 +393,17 @@ export default function ModsList({
     characterData,
     onRename,
     renamingModPath,
-    onClearRenaming
+    onClearRenaming,
+    gridRef,
+    gameRunning,
+    onRenameBlocked,
+    onDeleteBlocked
 }) {
     return (
         <div
             key={viewMode}
-            className={`mod-list-grid view-${viewMode}`}
+            ref={gridRef}
+            className={`mod-list-grid view-${viewMode} ${mods.length === 0 ? 'empty' : ''}`}
             style={{ overflowY: 'auto', padding: '1rem' }}
         >
             {mods.length === 0 ? (
@@ -421,6 +438,9 @@ export default function ModsList({
                             onRename={onRename}
                             shouldStartRenaming={renamingModPath === mod.path}
                             onClearRenaming={onClearRenaming}
+                            gameRunning={gameRunning}
+                            onRenameBlocked={onRenameBlocked}
+                            onDeleteBlocked={onDeleteBlocked}
                         />
                     )
                 })

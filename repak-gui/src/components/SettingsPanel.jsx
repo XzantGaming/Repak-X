@@ -6,6 +6,7 @@ import Checkbox from './ui/Checkbox'
 import { LuFolderInput } from "react-icons/lu"
 import { RiSparkling2Fill } from "react-icons/ri"
 import './SettingsPanel.css'
+import { useAlert } from './AlertHandler'
 
 const ACCENT_COLORS = {
   repakRed: '#be1c1c',
@@ -16,7 +17,10 @@ const ACCENT_COLORS = {
   pink: '#FF96BC'
 };
 
+
+
 export default function SettingsPanel({ settings, onSave, onClose, theme, setTheme, accentColor, setAccentColor, gamePath, onAutoDetectGamePath, onBrowseGamePath, isGamePathLoading }) {
+  const alert = useAlert();
   const [globalUsmap, setGlobalUsmap] = useState(settings.globalUsmap || '');
   const [hideSuffix, setHideSuffix] = useState(settings.hideSuffix || false);
   const [autoOpenDetails, setAutoOpenDetails] = useState(settings.autoOpenDetails || false);
@@ -54,6 +58,7 @@ export default function SettingsPanel({ settings, onSave, onClose, theme, setThe
       showHeroBg,
       showModType
     });
+    alert.success('Settings Saved', 'Your preferences have been updated.');
     onClose();
   };
 

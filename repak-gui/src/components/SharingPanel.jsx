@@ -20,10 +20,12 @@ import {
 import Checkbox from './ui/Checkbox';
 import './SharingPanel.css';
 
+import { useAlert } from './AlertHandler';
+
 export default function SharingPanel({ onClose, gamePath, installedMods, selectedMods }) {
+  const alert = useAlert();
   const [activeTab, setActiveTab] = useState('share'); // 'share' or 'receive'
-  const [status, setStatus] = useState('');
-  const [error, setError] = useState('');
+  // const [error, setError] = useState(''); // Removed local error state in favor of toasts
 
   // Share State
   const [packName, setPackName] = useState('');
@@ -116,6 +118,7 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
         if (prog && prog.status && prog.status.hasOwnProperty('Completed')) {
           setReceiveComplete(true);
           setIsReceiving(false);
+          alert.success('Download Complete', 'All mods have been received and installed.');
         }
       }
     } catch (err) {
@@ -153,7 +156,7 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
       setPackPreview(preview);
     } catch (err) {
       console.error("Preview failed", err);
-      setError("Failed to calculate preview: " + err);
+      alert.error("Calculation Failed", String(err));
     } finally {
       setCalculatingPreview(false);
     }
@@ -161,17 +164,23 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
 
   const handleStartSharing = async () => {
     if (selectedModPaths.size === 0) {
-      setError("Please select at least one mod to share.");
+      alert.error("Select Mods", "Please select at least one mod to share.");
       return;
     }
     if (!packName.trim()) {
-      setError("Please enter a pack name.");
+      alert.error("Missing Name", "Please enter a pack name.");
       return;
     }
 
+    const toastId = alert.showAlert({
+      title: 'Starting Session',
+      description: 'Initializing P2P network...',
+      color: 'default',
+      isLoading: true,
+      duration: 0 // Persistent while loading
+    });
+
     try {
-      setError('');
-      setStatus('Starting share session...');
       const session = await invoke('p2p_start_sharing', {
         name: packName,
         description: packDesc,
@@ -180,71 +189,93 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
       });
       setShareSession(session);
       setIsSharing(true);
-      setStatus('Sharing active!');
+
+
+      // Update toast to Info (Primary) state instead of Success
+      alert.updateToast(toastId, {
+        title: 'Sharing Active',
+        description: 'Your mod pack is now online.',
+        color: 'primary',
+        isLoading: false,
+        duration: 5000
+      });
     } catch (err) {
-      setError(`Failed to start sharing: ${err}`);
-      setStatus('');
+      alert.updateToast(toastId, {
+        title: 'Share Failed',
+        description: String(err),
+        color: 'danger',
+        isLoading: false,
+        duration: 5000
+      });
     }
   };
 
   const handleStopSharing = async () => {
     try {
-      await invoke('p2p_stop_sharing');
+      if (shareSession && shareSession.share_code) {
+        await invoke('p2p_stop_sharing', { shareCode: shareSession.share_code });
+      } else {
+        // Fallback if session is lost but UI thinks we are sharing
+        await invoke('p2p_stop_sharing', { shareCode: "" });
+      }
+
       setShareSession(null);
       setIsSharing(false);
-      setStatus('Sharing stopped.');
+
+      alert.info('Sharing Stopped', 'The sharing session has been terminated.');
     } catch (err) {
-      setError(`Failed to stop sharing: ${err}`);
+      alert.error('Stop Failed', `Failed to stop sharing: ${err}`);
     }
   };
 
   const handleStartReceiving = async () => {
     if (!connectionString.trim()) {
-      setError("Please enter a connection string.");
+      alert.error("Missing Code", "Please enter a connection string.");
       return;
     }
 
     if (!validateConnectionString(connectionString)) {
-      setError("Invalid connection string format.");
+      alert.error("Invalid Code", "The connection string format is incorrect.");
       return;
     }
 
-    try {
-      setError('');
-      setStatus('Connecting...');
+    alert.promise(
+      async () => {
+        // Validate first
+        await invoke('p2p_validate_connection_string', { connectionString });
 
-      // Validate first
-      await invoke('p2p_validate_connection_string', { connectionString });
+        // Start receiving
+        await invoke('p2p_start_receiving', {
+          connectionString,
+          clientName: clientName
+        });
 
-      // Start receiving
-      await invoke('p2p_start_receiving', {
-        connectionString,
-        clientName: clientName
-      });
+        setIsReceiving(true);
+        setReceiveComplete(false);
 
-      setIsReceiving(true);
-      setReceiveComplete(false);
-      setStatus('Download started...');
-    } catch (err) {
-      setError(`Failed to start download: ${err}`);
-      setStatus('');
-    }
+      },
+      {
+        loading: { title: 'Connecting', description: 'Establishing connection to host...' },
+        success: { title: 'Connected', description: 'Download starting...' },
+        error: (err) => ({ title: 'Connection Failed', description: String(err) })
+      }
+    );
   };
 
   const handleStopReceiving = async () => {
     try {
       await invoke('p2p_stop_receiving');
       setIsReceiving(false);
-      setStatus('Download cancelled.');
+
+      alert.info('Download Cancelled', 'The download was cancelled by user.');
     } catch (err) {
-      setError(`Failed to stop download: ${err}`);
+      alert.error('Cancel Failed', `Failed to stop download: ${err}`);
     }
   };
 
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
-    setStatus('Copied to clipboard!');
-    setTimeout(() => setStatus(''), 2000);
+    alert.info('Copied!', 'Share code copied to clipboard.');
   };
 
   const toggleModSelection = (path) => {
@@ -292,17 +323,7 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
         </div>
 
         <div className="p2p-content">
-          {error && (
-            <div className="p2p-error">
-              <ErrorIcon fontSize="small" /> {error}
-            </div>
-          )}
 
-          {status && !error && (
-            <div className="p2p-status">
-              <InfoIcon fontSize="small" /> {status}
-            </div>
-          )}
 
           {activeTab === 'share' && (
             <div className="share-view">
@@ -310,6 +331,48 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
                 <>
                   <div className="share-layout-grid">
                     <div className="share-left-col">
+                      <div className="mod-selection-list">
+                        <div className="mod-list-header">
+                          <label>Select Mods to Share ({selectedModPaths.size})</label>
+                          <div className="search-box">
+                            <SearchIcon fontSize="small" className="search-icon" />
+                            <input
+                              type="text"
+                              value={searchTerm}
+                              onChange={(e) => setSearchTerm(e.target.value)}
+                              placeholder="Search mods..."
+                            />
+                          </div>
+                        </div>
+                        <div className="mod-list-scroll">
+                          {installedMods.filter(mod => {
+                            const filename = mod.path.split('\\').pop();
+                            const name = mod.custom_name || filename.replace(/_9999999_P/g, '').replace(/\.pak$/i, '');
+                            return name.toLowerCase().includes(searchTerm.toLowerCase());
+                          }).map(mod => {
+                            const filename = mod.path.split('\\').pop();
+                            const displayName = mod.custom_name || filename.replace(/_9999999_P/g, '').replace(/\.pak$/i, '');
+                            return (
+                              <div
+                                key={mod.path}
+                                className={`mod-select-item ${selectedModPaths.has(mod.path) ? 'selected' : ''}`}
+                                onClick={() => toggleModSelection(mod.path)}
+                              >
+                                <Checkbox
+                                  checked={selectedModPaths.has(mod.path)}
+                                  size="sm"
+                                />
+                                <span className="mod-name">
+                                  {displayName}
+                                </span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="share-right-col">
                       <div className="form-group">
                         <label>Pack Name</label>
                         <input
@@ -362,48 +425,6 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
                       <button onClick={handleStartSharing} className="btn-primary btn-large">
                         <ShareIcon /> Start Sharing
                       </button>
-                    </div>
-
-                    <div className="share-right-col">
-                      <div className="mod-selection-list">
-                        <div className="mod-list-header">
-                          <label>Select Mods to Share ({selectedModPaths.size})</label>
-                          <div className="search-box">
-                            <SearchIcon fontSize="small" className="search-icon" />
-                            <input
-                              type="text"
-                              value={searchTerm}
-                              onChange={(e) => setSearchTerm(e.target.value)}
-                              placeholder="Search mods..."
-                            />
-                          </div>
-                        </div>
-                        <div className="mod-list-scroll">
-                          {installedMods.filter(mod => {
-                            const filename = mod.path.split('\\').pop();
-                            const name = mod.custom_name || filename.replace(/_9999999_P/g, '').replace(/\.pak$/i, '');
-                            return name.toLowerCase().includes(searchTerm.toLowerCase());
-                          }).map(mod => {
-                            const filename = mod.path.split('\\').pop();
-                            const displayName = mod.custom_name || filename.replace(/_9999999_P/g, '').replace(/\.pak$/i, '');
-                            return (
-                              <div
-                                key={mod.path}
-                                className={`mod-select-item ${selectedModPaths.has(mod.path) ? 'selected' : ''}`}
-                                onClick={() => toggleModSelection(mod.path)}
-                              >
-                                <Checkbox
-                                  checked={selectedModPaths.has(mod.path)}
-                                  size="sm"
-                                />
-                                <span className="mod-name">
-                                  {displayName}
-                                </span>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
                     </div>
                   </div>
                 </>
@@ -493,7 +514,7 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
                   <button
                     onClick={handleStartReceiving}
                     className="btn-primary btn-large"
-                    disabled={isValidCode === false}
+                    disabled={isValidCode !== true}
                   >
                     <DownloadIcon /> Connect & Download
                   </button>

@@ -52,6 +52,7 @@ import './styles/Fonts.css'
 import ModularLogo from './components/ui/ModularLogo'
 import ClashPanel from './components/ClashPanel'
 import HeroFilterDropdown from './components/HeroFilterDropdown'
+import ShortcutsHelpModal from './components/ShortcutsHelpModal'
 
 const toTagArray = (tags) => Array.isArray(tags) ? tags : (tags ? [tags] : [])
 
@@ -167,6 +168,8 @@ function App() {
   const [showInstallPanel, setShowInstallPanel] = useState(false)
   const [modsToInstall, setModsToInstall] = useState([])
   const [installLogs, setInstallLogs] = useState([])
+  const [modLoadingProgress, setModLoadingProgress] = useState(0) // 0-100 for progress, -1 for indeterminate
+  const [isModsLoading, setIsModsLoading] = useState(false) // Track if mods are being loaded
   const [selectedFolderId, setSelectedFolderId] = useState('all')
   const [viewMode, setViewMode] = useState('list') // 'grid', 'compact', 'list'
   const [contextMenu, setContextMenu] = useState(null) // { x, y, mod }
@@ -181,7 +184,11 @@ function App() {
   const [extensionModPath, setExtensionModPath] = useState(null) // Path of mod received from browser extension
   const [quickOrganizePaths, setQuickOrganizePaths] = useState(null) // Paths of PAKs to quick-organize (no uassets)
   const [newFolderPrompt, setNewFolderPrompt] = useState(null) // {paths: []} when prompting for new folder name
+  const [showShortcutsHelp, setShowShortcutsHelp] = useState(false)
   const dropTargetFolderRef = useRef(null)
+  const searchInputRef = useRef(null)
+  const modsGridRef = useRef(null)
+  const gameRunningRef = useRef(false)
 
   // Alert system hook
   const alert = useAlert();
@@ -260,7 +267,10 @@ function App() {
 
   const handleSetPriority = async (modPath, priority) => {
     if (gameRunning) {
-      setStatus('Cannot change priority while game is running')
+      alert.warning(
+        'Game Running',
+        'Cannot change priority while game is running.'
+      )
       return
     }
     try {
@@ -321,11 +331,16 @@ function App() {
 
     // Listen for install progress
     const unlisten = listen('install_progress', (event) => {
-      setStatus(`Installing... ${Math.round(event.payload)}%`)
+      const progress = Math.round(event.payload)
+      setStatus(`Installing... ${progress}%`)
+      setModLoadingProgress(progress)
+      setIsModsLoading(true)
     })
 
     const unlistenComplete = listen('install_complete', () => {
       setStatus('Installation complete!')
+      setIsModsLoading(false)
+      setModLoadingProgress(0)
       loadMods()
     })
 
@@ -361,7 +376,57 @@ function App() {
     // Listen for extension mod errors
     const unlistenExtensionError = listen('extension-mod-error', (event) => {
       console.error('Extension mod error:', event.payload)
-      setStatus(`Extension error: ${event.payload}`)
+      alert.error('Extension Error', event.payload)
+    })
+
+    // Listen for general toast notifications from Rust backend
+    const unlistenToast = listen('toast_notification', (event) => {
+      const { type, title, description, duration } = event.payload
+
+      // Map Rust type to AlertHandler method
+      const showAlertByType = {
+        'danger': () => alert.error(title, description, { duration: duration ?? 5000 }),
+        'warning': () => alert.warning(title, description, { duration: duration ?? 5000 }),
+        'success': () => alert.success(title, description, { duration: duration ?? 5000 }),
+        'primary': () => alert.info(title, description, { duration: duration ?? 5000 }),
+        'default': () => alert.showAlert({ color: 'default', title, description, duration: duration ?? 5000 })
+      }
+
+      const showFn = showAlertByType[type] || showAlertByType['default']
+      showFn()
+    })
+
+    // Listen for game crash notifications
+    const unlistenCrash = listen('game_crash_detected', (event) => {
+      const payload = event.payload
+
+      // Build enhanced description for crashes
+      let enhancedDesc = payload.description
+      if (payload.is_mesh_crash) {
+        enhancedDesc += '\n\n💡 Tip: Try disabling "Fix Mesh" for this mod'
+      }
+
+      // Show persistent error toast for crashes
+      alert.showAlert({
+        color: 'danger',
+        title: payload.title || 'Game Crashed',
+        description: enhancedDesc,
+        duration: 0 // Persistent - user must dismiss
+      })
+
+      // Log detailed crash info to console for debugging
+      console.error('Game Crash Detected:', {
+        crashType: payload.crash_type,
+        assetPath: payload.asset_path,
+        details: payload.details,
+        isMeshCrash: payload.is_mesh_crash,
+        crashFolder: payload.crash_folder
+      })
+    })
+
+    // Check for crashes from previous game sessions
+    invoke('check_for_previous_crash').catch(err => {
+      console.error('Failed to check for previous crashes:', err)
     })
 
     // Unified file drop handler function
@@ -404,21 +469,57 @@ function App() {
 
         // Quick organize: directly install to the folder without showing install panel
         console.log('Quick organizing to folder:', targetFolder)
-        setStatus(`Quick installing ${paths.length} item(s) to ${targetFolder}...`)
 
-        try {
-          // Install directly using the new backend implementation
-          // Passes raw paths and target folder name
-          await invoke('quick_organize', { paths, targetFolder })
-          setStatus(`Installed ${paths.length} item(s) to ${targetFolder}!`)
-          await loadMods()
-          await loadFolders()
-        } catch (installError) {
-          console.error('Quick install error:', installError)
-          setStatus(`Error installing mods: ${installError}`)
-        }
+        const pathCount = paths.length
+        const pathsCopy = [...paths]
+        const folderName = targetFolder
 
         setDropTargetFolder(null) // Reset for next drop
+
+        // Start progress bar (indeterminate since quick_organize doesn't report progress)
+        setIsModsLoading(true)
+        setModLoadingProgress(-1)
+
+        // Use promise toast for loading state and result
+        alert.promise(
+          (async () => {
+            try {
+              await invoke('quick_organize', { paths: pathsCopy, targetFolder: folderName })
+              await loadMods()
+              await loadFolders()
+              setStatus(`Installed ${pathCount} item(s) to ${folderName}!`)
+
+              // Show warning after success if game is running
+              if (gameRunningRef.current) {
+                alert.warning(
+                  'Game Running',
+                  'Mods installed, but changes will only take effect after restarting the game.',
+                  { duration: 8000 }
+                )
+              }
+
+              return { count: pathCount, folder: folderName }
+            } finally {
+              setIsModsLoading(false)
+              setModLoadingProgress(0)
+            }
+          })(),
+          {
+            loading: {
+              title: 'Quick Installing',
+              description: `Copying ${pathCount} file${pathCount > 1 ? 's' : ''} to "${folderName}"...`
+            },
+            success: (result) => ({
+              title: 'Installation Complete',
+              description: `Installed ${result.count} mod${result.count > 1 ? 's' : ''} to "${result.folder}"`
+            }),
+            error: (err) => ({
+              title: 'Installation Failed',
+              description: String(err)
+            })
+          }
+        )
+
         return
       }
 
@@ -486,6 +587,8 @@ function App() {
       unlistenDirChanged.then(f => f())
       unlistenExtensionMod.then(f => f())
       unlistenExtensionError.then(f => f())
+      unlistenToast.then(f => f())
+      unlistenCrash.then(f => f())
       document.removeEventListener('dragover', preventDefault)
       document.removeEventListener('drop', preventDefault)
     }
@@ -522,6 +625,11 @@ function App() {
   useEffect(() => {
     dropTargetFolderRef.current = dropTargetFolder
   }, [dropTargetFolder])
+
+  // Keep gameRunning ref in sync for event listener closures
+  useEffect(() => {
+    gameRunningRef.current = gameRunning
+  }, [gameRunning])
 
   // Periodically check game running state every 5 seconds
   useEffect(() => {
@@ -562,15 +670,25 @@ function App() {
   const loadMods = async () => {
     try {
       console.log('Loading mods...')
+      setIsModsLoading(true)
+      setModLoadingProgress(-1) // Indeterminate while fetching list
+      setStatus('Loading mods...')
+
       const modList = await invoke('get_pak_files')
       console.log('Loaded mods:', modList)
       setMods(modList)
+      setStatus(`Loading ${modList.length} mod(s) details...`)
+
+      // After loading mods, refresh details for each (with progress tracking)
+      await preloadModDetails(modList)
+
       setStatus(`Loaded ${modList.length} mod(s)`)
-      // After loading mods, refresh details for each
-      preloadModDetails(modList)
     } catch (error) {
       console.error('Error loading mods:', error)
       setStatus('Error loading mods: ' + error)
+    } finally {
+      setIsModsLoading(false)
+      setModLoadingProgress(0)
     }
   }
 
@@ -592,11 +710,22 @@ function App() {
       if (pathsToFetch.length === 0) {
         // Already have details; recompute filters source lists
         recomputeFilterSources(modList, modDetails)
+        setModLoadingProgress(100)
         return
       }
 
+      // Track progress as details are loaded
+      let completedCount = 0
+      const totalCount = pathsToFetch.length
+      setModLoadingProgress(0)
+
       const results = await Promise.allSettled(
-        pathsToFetch.map(p => invoke('get_mod_details', { modPath: p }))
+        pathsToFetch.map(async (p) => {
+          const result = await invoke('get_mod_details', { modPath: p })
+          completedCount++
+          setModLoadingProgress(Math.round((completedCount / totalCount) * 100))
+          return result
+        })
       )
 
       const newMap = { ...existing }
@@ -780,7 +909,10 @@ function App() {
 
   const handleDeleteMod = async (modPath) => {
     if (gameRunning) {
-      setStatus('Cannot delete mods while game is running')
+      alert.warning(
+        'Game Running',
+        'Cannot delete mods while game is running.'
+      )
       return
     }
     // No confirmation prompt needed here, the hold-to-delete button handles the intent
@@ -802,7 +934,10 @@ function App() {
 
   const handleToggleMod = async (modPath) => {
     if (gameRunning) {
-      setStatus('Cannot toggle mods while game is running')
+      alert.warning(
+        'Game Running',
+        'Cannot toggle mods while game is running.'
+      )
       return
     }
     try {
@@ -868,24 +1003,58 @@ function App() {
     if (!newFolderPrompt || !newFolderPrompt.paths) return
 
     const paths = newFolderPrompt.paths
+    const pathCount = paths.length
+    const pathsCopy = [...paths]
     setNewFolderPrompt(null) // Close the modal
 
-    try {
-      setStatus(`Creating folder "${folderName}"...`)
-      // Create the folder first
-      await invoke('create_folder', { name: folderName })
-      await loadFolders()
+    // Start progress bar (indeterminate)
+    setIsModsLoading(true)
+    setModLoadingProgress(-1)
 
-      // Then quick organize to the new folder
-      setStatus(`Installing ${paths.length} item(s) to "${folderName}"...`)
-      await invoke('quick_organize', { paths, targetFolder: folderName })
-      setStatus(`Installed ${paths.length} item(s) to "${folderName}"!`)
-      await loadMods()
-      await loadFolders()
-    } catch (error) {
-      console.error('New folder install error:', error)
-      setStatus(`Error: ${error}`)
-    }
+    // Use promise toast for loading state and result
+    alert.promise(
+      (async () => {
+        try {
+          // Create the folder first
+          await invoke('create_folder', { name: folderName })
+          await loadFolders()
+
+          // Then quick organize to the new folder
+          await invoke('quick_organize', { paths: pathsCopy, targetFolder: folderName })
+          await loadMods()
+          await loadFolders()
+          setStatus(`Installed ${pathCount} item(s) to "${folderName}"!`)
+
+          // Show warning after success if game is running
+          if (gameRunning) {
+            alert.warning(
+              'Game Running',
+              'Mods installed, but changes will only take effect after restarting the game.',
+              { duration: 8000 }
+            )
+          }
+
+          return { count: pathCount, folder: folderName }
+        } finally {
+          setIsModsLoading(false)
+          setModLoadingProgress(0)
+        }
+      })(),
+      {
+        loading: {
+          title: 'Creating Folder & Installing',
+          description: `Creating "${folderName}" and copying ${pathCount} file${pathCount > 1 ? 's' : ''}...`
+        },
+        success: (result) => ({
+          title: 'Installation Complete',
+          description: `Created folder and installed ${result.count} mod${result.count > 1 ? 's' : ''}`
+        }),
+        error: (err) => ({
+          title: 'Installation Failed',
+          description: String(err)
+        })
+      }
+    )
   }
 
   const handleDeleteFolder = async (folderId) => {
@@ -921,7 +1090,10 @@ function App() {
 
   const handleAssignToFolder = async (folderId) => {
     if (gameRunning) {
-      setStatus('Cannot move mods while game is running')
+      alert.warning(
+        'Game Running',
+        'Cannot move mods while game is running.'
+      )
       return
     }
 
@@ -953,7 +1125,10 @@ function App() {
 
   const handleMoveSingleMod = async (modPath, folderId) => {
     if (gameRunning) {
-      setStatus('Cannot move mods while game is running')
+      alert.warning(
+        'Game Running',
+        'Cannot move mods while game is running.'
+      )
       return
     }
 
@@ -1024,7 +1199,10 @@ function App() {
   // Rename a mod (calls backend to rename actual file)
   const handleRenameMod = async (modPath, newName) => {
     if (gameRunning) {
-      setStatus('Cannot rename mods while game is running')
+      alert.warning(
+        'Game Running',
+        'Cannot rename mods while game is running.'
+      )
       return
     }
 
@@ -1044,100 +1222,117 @@ function App() {
   const handleExtensionModInstall = async (targetFolderId) => {
     if (!extensionModPath) return
 
-    try {
-      setStatus(`Installing mod from extension...`)
+    const modPath = extensionModPath // Copy path before clearing state
 
-      // Use quick_organize to install the mod to the selected folder
-      // If no folder selected, it installs to root
-      await invoke('quick_organize', {
-        paths: [extensionModPath],
-        targetFolder: targetFolderId || null
-      })
+    // Close the overlay immediately
+    setExtensionModPath(null)
 
-      setStatus(`Mod installed successfully!`)
-      setExtensionModPath(null) // Close the overlay
-      await loadMods()
-      await loadFolders()
-    } catch (error) {
-      console.error('Extension mod install error:', error)
-      setStatus(`Error installing mod: ${error}`)
-    }
+    // Start progress bar (indeterminate)
+    setIsModsLoading(true)
+    setModLoadingProgress(-1)
+
+    // Use promise toast for loading state and result
+    alert.promise(
+      (async () => {
+        try {
+          await invoke('quick_organize', {
+            paths: [modPath],
+            targetFolder: targetFolderId || null
+          })
+
+          await loadMods()
+          await loadFolders()
+          setStatus(`Mod installed successfully!`)
+
+          // Show warning after success if game is running
+          if (gameRunning) {
+            alert.warning(
+              'Game Running',
+              'Mods installed, but changes will only take effect after restarting the game.',
+              { duration: 8000 }
+            )
+          }
+
+          return {}
+        } finally {
+          setIsModsLoading(false)
+          setModLoadingProgress(0)
+        }
+      })(),
+      {
+        loading: {
+          title: 'Installing from Extension',
+          description: 'Copying mod file...'
+        },
+        success: () => ({
+          title: 'Installation Complete',
+          description: 'Mod installed successfully from browser extension'
+        }),
+        error: (err) => ({
+          title: 'Installation Failed',
+          description: String(err)
+        })
+      }
+    )
   }
 
   // Handle quick organize for PAKs with no uassets (skips install panel)
   const handleQuickOrganizeInstall = async (targetFolderId) => {
     if (!quickOrganizePaths || quickOrganizePaths.length === 0) return
 
-    try {
-      setStatus(`Quick organizing ${quickOrganizePaths.length} PAK file(s)...`)
+    const pathCount = quickOrganizePaths.length
+    const pathsCopy = [...quickOrganizePaths] // Copy paths before clearing state
 
-      // Use quick_organize to copy the PAKs to the selected folder
-      await invoke('quick_organize', {
-        paths: quickOrganizePaths,
-        targetFolder: targetFolderId || null
-      })
+    // Close the overlay immediately
+    setQuickOrganizePaths(null)
 
-      setStatus(`${quickOrganizePaths.length} PAK file(s) copied successfully!`)
-      setQuickOrganizePaths(null) // Close the overlay
-      await loadMods()
-      await loadFolders()
-    } catch (error) {
-      console.error('Quick organize error:', error)
-      setStatus(`Error copying PAK files: ${error}`)
-    }
-  }
+    // Start progress bar (indeterminate)
+    setIsModsLoading(true)
+    setModLoadingProgress(-1)
 
-  const handleDragStart = (e, mod) => {
-    if (gameRunning) {
-      e.preventDefault()
-      setStatus('Cannot move mods while game is running')
-      return
-    }
-    console.log('Drag started:', mod.path)
-    e.dataTransfer.setData('text', mod.path)
-    e.dataTransfer.setData('modpath', mod.path)
-    e.dataTransfer.effectAllowed = 'move'
-  }
+    // Use promise toast for loading state and result
+    alert.promise(
+      (async () => {
+        try {
+          await invoke('quick_organize', {
+            paths: pathsCopy,
+            targetFolder: targetFolderId || null
+          })
 
-  const handleDragOver = (e) => {
-    e.preventDefault()
-    e.stopPropagation()
-    if (e.dataTransfer.types.includes('modpath')) {
-      e.dataTransfer.dropEffect = 'move'
-    }
-  }
+          await loadMods()
+          await loadFolders()
+          setStatus(`${pathCount} PAK file(s) copied successfully!`)
 
-  const handleDropOnFolder = async (e, folderId) => {
-    e.preventDefault()
-    e.stopPropagation()
-    e.currentTarget.classList.remove('drag-over')
+          // Show warning after success if game is running
+          if (gameRunning) {
+            alert.warning(
+              'Game Running',
+              'Mods installed, but changes will only take effect after restarting the game.',
+              { duration: 8000 }
+            )
+          }
 
-    if (gameRunning) {
-      setStatus('Cannot move mods while game is running')
-      return
-    }
-
-    const modPath = e.dataTransfer.getData('modpath') || e.dataTransfer.getData('text/plain')
-    console.log('Drop on folder:', folderId, 'modPath:', modPath)
-
-    if (modPath) {
-      try {
-        // Check if folderId corresponds to the root folder (depth 0)
-        const targetFolder = folders.find(f => f.id === folderId)
-        const effectiveFolderId = (targetFolder && targetFolder.depth === 0) ? null : folderId
-
-        console.log('Calling assign_mod_to_folder with:', { modPath, folderId: effectiveFolderId })
-        await invoke('assign_mod_to_folder', { modPath, folderId: effectiveFolderId })
-        setStatus(`Mod moved to ${folderId}!`)
-        await loadMods()
-        await loadFolders()
-      } catch (error) {
-        setStatus(`Error: ${error}`)
-        console.error('Error moving mod:', error)
+          return { count: pathCount }
+        } finally {
+          setIsModsLoading(false)
+          setModLoadingProgress(0)
+        }
+      })(),
+      {
+        loading: {
+          title: 'Quick Installing',
+          description: `Copying ${pathCount} PAK file${pathCount > 1 ? 's' : ''}...`
+        },
+        success: (result) => ({
+          title: 'Installation Complete',
+          description: `Successfully installed ${result.count} mod${result.count > 1 ? 's' : ''}`
+        }),
+        error: (err) => ({
+          title: 'Installation Failed',
+          description: String(err)
+        })
       }
-    } else {
-      console.error('No modPath in dataTransfer, types:', e.dataTransfer.types)
-    }
+    )
   }
 
   const handleResizeStart = (e) => {
@@ -1264,6 +1459,125 @@ function App() {
       (mod.folder_id && mod.folder_id.startsWith(selectedFolderId + '/'))
   })
 
+  // Keyboard shortcuts handler (must be after filteredMods is defined)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      const key = e.key.toLowerCase()
+      const ctrl = e.ctrlKey || e.metaKey
+      const shift = e.shiftKey
+
+      // Skip if typing in an input field (except Escape and Ctrl+F)
+      const isInputActive = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA'
+      if (isInputActive && key !== 'escape' && !(ctrl && key === 'f')) return
+
+      // Ctrl+F - Focus search
+      if (ctrl && key === 'f') {
+        e.preventDefault()
+        searchInputRef.current?.focus()
+      }
+      // Ctrl+Shift+R - Refresh mods
+      else if (ctrl && shift && key === 'r') {
+        e.preventDefault()
+        loadMods()
+      }
+      // Ctrl+, - Settings
+      else if (ctrl && key === ',') {
+        e.preventDefault()
+        setShowSettings(true)
+      }
+      // Escape - Close panels or deselect
+      else if (key === 'escape') {
+        if (showShortcutsHelp) setShowShortcutsHelp(false)
+        else if (showSettings) setShowSettings(false)
+        else if (showToolsPanel) setShowToolsPanel(false)
+        else if (showSharingPanel) setShowSharingPanel(false)
+        else if (showInstallPanel) setShowInstallPanel(false)
+        else if (showClashPanel) setShowClashPanel(false)
+        else if (selectedMod) setSelectedMod(null)
+      }
+      // Ctrl+E - Toggle mod enabled/disabled
+      else if (ctrl && key === 'e' && selectedMod) {
+        e.preventDefault()
+        handleToggleMod(selectedMod.path)
+      }
+      // F2 - Rename mod
+      else if (key === 'f2' && selectedMod) {
+        e.preventDefault()
+        if (gameRunning) {
+          alert.warning(
+            'Game Running',
+            'Cannot rename mods while game is running.'
+          )
+          return
+        }
+        setRenamingModPath(selectedMod.path)
+      }
+      // Enter - Open mod details
+      else if (key === 'enter' && selectedMod && !isRightPanelOpen) {
+        e.preventDefault()
+        setLeftPanelWidth(lastPanelWidth > 60 ? lastPanelWidth : 70)
+        setIsRightPanelOpen(true)
+      }
+      // Arrow navigation
+      else if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
+        if (filteredMods.length === 0) return
+        e.preventDefault()
+
+        const currentIndex = selectedMod
+          ? filteredMods.findIndex(m => m.path === selectedMod.path)
+          : -1
+
+        let newIndex = currentIndex
+
+        if (viewMode === 'list') {
+          // List view: only up/down
+          if (key === 'arrowup') newIndex = Math.max(0, currentIndex - 1)
+          else if (key === 'arrowdown') newIndex = Math.min(filteredMods.length - 1, currentIndex + 1)
+        } else {
+          // Grid/Card view: all 4 directions
+          // Calculate actual items per row by measuring the grid layout
+          let itemsPerRow = 1
+          const grid = modsGridRef.current
+          if (grid) {
+            const items = grid.querySelectorAll('.mod-card')
+            if (items.length >= 2) {
+              // Count how many items share the same top offset (are in the first row)
+              const firstTop = items[0].offsetTop
+              let count = 0
+              for (const item of items) {
+                if (item.offsetTop === firstTop) count++
+                else break
+              }
+              itemsPerRow = Math.max(1, count)
+            }
+          }
+          if (key === 'arrowup') newIndex = Math.max(0, currentIndex - itemsPerRow)
+          else if (key === 'arrowdown') newIndex = Math.min(filteredMods.length - 1, currentIndex + itemsPerRow)
+          else if (key === 'arrowleft') newIndex = Math.max(0, currentIndex - 1)
+          else if (key === 'arrowright') newIndex = Math.min(filteredMods.length - 1, currentIndex + 1)
+        }
+
+        if (newIndex !== currentIndex && newIndex >= 0 && newIndex < filteredMods.length) {
+          setSelectedMod(filteredMods[newIndex])
+        } else if (currentIndex === -1 && filteredMods.length > 0) {
+          setSelectedMod(filteredMods[0])
+        }
+      }
+      // F1 - Show shortcuts help
+      else if (key === 'f1') {
+        e.preventDefault()
+        setShowShortcutsHelp(true)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [
+    selectedMod, showSettings, showToolsPanel, showSharingPanel,
+    showInstallPanel, showClashPanel, showShortcutsHelp, viewMode,
+    filteredMods, isRightPanelOpen, lastPanelWidth
+  ])
+
   // Group mods by folder
   const modsByFolder = {}
   modsByFolder['_root'] = filteredMods.filter(m => !m.folder_id)
@@ -1286,6 +1600,10 @@ function App() {
     setInstallLogs([])
 
     const modCount = modsWithSettings.length
+
+    // Start progress bar (indeterminate until backend sends progress events)
+    setIsModsLoading(true)
+    setModLoadingProgress(-1)
 
     // Use promise toast for loading state and result
     // The backend spawns threads and returns immediately, so we need to wait
@@ -1360,6 +1678,15 @@ function App() {
         await loadFolders()
         await loadTags()
         setStatus('Mods installed successfully!')
+
+        // Show warning after success if game is running
+        if (gameRunning) {
+          alert.warning(
+            'Game Running',
+            'Mods installed, but changes will only take effect after restarting the game.',
+            { duration: 8000 }
+          )
+        }
 
         return { count: modCount }
       })(),
@@ -1601,22 +1928,35 @@ function App() {
           </button>
           <button
             className="btn-settings"
-            title="Launch Rivals"
+            title={gameRunning ? "Game is currently running" : "Launch Rivals"}
             style={{
-              background: launchSuccess ? 'rgba(76, 175, 80, 0.15)' : 'rgba(74, 158, 255, 0.1)',
-              color: launchSuccess ? '#4CAF50' : '#4a9eff',
-              border: launchSuccess ? '1px solid rgba(76, 175, 80, 0.5)' : '1px solid rgba(74, 158, 255, 0.3)',
+              background: gameRunning
+                ? 'rgba(255, 152, 0, 0.15)'
+                : launchSuccess
+                  ? 'rgba(76, 175, 80, 0.15)'
+                  : 'rgba(74, 158, 255, 0.1)',
+              color: gameRunning
+                ? '#ff9800'
+                : launchSuccess
+                  ? '#4CAF50'
+                  : '#4a9eff',
+              border: gameRunning
+                ? '1px solid rgba(255, 152, 0, 0.5)'
+                : launchSuccess
+                  ? '1px solid rgba(76, 175, 80, 0.5)'
+                  : '1px solid rgba(74, 158, 255, 0.3)',
               display: 'flex',
               alignItems: 'center',
               gap: '0.5rem',
               fontWeight: 600,
               transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
               padding: '6px 16px',
-              minWidth: '100px',
-              justifyContent: 'center'
+              minWidth: '130px',
+              justifyContent: 'center',
+              cursor: gameRunning ? 'default' : 'pointer'
             }}
             onClick={async () => {
-              if (launchSuccess) return
+              if (gameRunning || launchSuccess) return
               try {
                 await invoke('launch_game')
                 setStatus('Game launched')
@@ -1628,7 +1968,17 @@ function App() {
             }}
           >
             <AnimatePresence mode="wait">
-              {launchSuccess ? (
+              {gameRunning ? (
+                <motion.span
+                  key="running"
+                  initial={{ opacity: 0, scale: 0.5 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.5 }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                >
+                  <span className="blink-icon" style={{ fontSize: '1rem' }}>⚠️</span> Game Running
+                </motion.span>
+              ) : launchSuccess ? (
                 <motion.span
                   key="success"
                   initial={{ opacity: 0, scale: 0.5 }}
@@ -1679,12 +2029,6 @@ function App() {
               </button>
             </>
           )}
-          {gameRunning && (
-            <div className="game-running-indicator">
-              <span className="blink-icon">⚠️</span>
-              <span className="running-text">Game Running</span>
-            </div>
-          )}
           <button
             onClick={() => setShowSharingPanel(true)}
             className="btn-settings"
@@ -1715,6 +2059,7 @@ function App() {
           <div className="search-wrapper">
             <SearchIcon className="search-icon-large" />
             <input
+              ref={searchInputRef}
               type="text"
               placeholder="Search installed mods..."
               value={searchQuery}
@@ -1959,6 +2304,16 @@ function App() {
                 onRename={handleRenameMod}
                 renamingModPath={renamingModPath}
                 onClearRenaming={() => setRenamingModPath(null)}
+                gridRef={modsGridRef}
+                gameRunning={gameRunning}
+                onRenameBlocked={() => alert.warning(
+                  'Game Running',
+                  'Cannot rename mods while game is running.'
+                )}
+                onDeleteBlocked={() => alert.warning(
+                  'Game Running',
+                  'Cannot delete mods while game is running.'
+                )}
               />
             </div>
           </motion.div>
@@ -2007,6 +2362,8 @@ function App() {
         status={status}
         logs={installLogs}
         onClear={() => setInstallLogs([])}
+        progress={modLoadingProgress}
+        isLoading={isModsLoading}
       />
 
       {
@@ -2031,6 +2388,13 @@ function App() {
             onToggle={() => contextMenu.mod && handleToggleMod(contextMenu.mod.path)}
             onRename={() => {
               if (contextMenu.mod) {
+                if (gameRunning) {
+                  alert.warning(
+                    'Game Running',
+                    'Cannot rename mods while game is running.'
+                  )
+                  return
+                }
                 setRenamingModPath(contextMenu.mod.path)
               }
             }}
@@ -2039,6 +2403,11 @@ function App() {
           />
         )
       }
+
+      <ShortcutsHelpModal
+        isOpen={showShortcutsHelp}
+        onClose={() => setShowShortcutsHelp(false)}
+      />
     </div >
   )
 }

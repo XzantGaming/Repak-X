@@ -116,7 +116,7 @@
 .p2p-tab.active {
   color: var(--accent-primary);
   border-bottom-color: var(--accent-primary);
-  background: rgba(74, 158, 255, 0.05);
+  background: color-mix(in srgb, var(--accent-primary), transparent 95%);
 }
 
 .p2p-content {
@@ -257,6 +257,14 @@
 
 .btn-primary:hover {
   background: var(--accent-secondary);
+}
+
+.btn-primary:disabled {
+  background: var(--bg-lighter);
+  color: var(--text-secondary);
+  cursor: not-allowed;
+  opacity: 0.5;
+  filter: grayscale(1);
 }
 
 .btn-danger {

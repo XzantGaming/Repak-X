@@ -1,0 +1,80 @@
+/* Shortcuts Modal - uses .modal-overlay and .modal-content from App.css */
+
+.shortcuts-modal {
+  min-width: 340px;
+  max-width: 420px;
+}
+
+.shortcuts-list {
+  padding: 1rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.75rem;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+
+.shortcut-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.shortcut-keys {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.shortcut-keys kbd {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  font-family: inherit;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  color: var(--text-primary);
+  min-width: 1.5rem;
+  text-align: center;
+}
+
+.key-separator {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  margin: 0 0.15rem;
+}
+
+.shortcut-action {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.shortcuts-footer {
+  padding: 0.75rem 1.5rem;
+  border-top: 1px solid var(--panel-border);
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.shortcuts-footer kbd {
+  display: inline-block;
+  padding: 0.15rem 0.4rem;
+  font-size: 0.7rem;
+  font-family: inherit;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+  margin: 0 0.25rem;
+}

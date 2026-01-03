@@ -18,6 +18,9 @@
 
 .log-drawer-header {
   height: 36px;
+  min-height: 36px;
+  max-height: 36px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -27,6 +30,69 @@
   border-bottom: 1px solid var(--border-light);
   cursor: pointer;
   user-select: none;
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* Loading state for header */
+.log-drawer-header.is-loading {
+  background: transparent;
+}
+
+/* Progress bar background container - full background */
+.log-drawer-progress-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: var(--field-bg);
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+/* Simple progress bar */
+.log-drawer-progress-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background-color: var(--accent-primary);
+  opacity: 0.35;
+  transition: width 0.3s ease-out;
+  margin: 0;
+  padding: 0;
+}
+
+/* Indeterminate animation */
+.log-drawer-progress-bar.indeterminate {
+  width: 30%;
+  animation: log-progress-indeterminate 1.5s ease-in-out infinite;
+}
+
+@keyframes log-progress-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  50% {
+    transform: translateX(200%);
+  }
+
+  100% {
+    transform: translateX(400%);
+  }
+}
+
+/* Ensure header content sits above progress bar */
+.log-drawer-header .log-drawer-status,
+.log-drawer-header .log-drawer-actions {
+  position: relative;
+  z-index: 1;
 }
 
 .log-drawer-status {
@@ -100,13 +166,23 @@
   position: relative;
 }
 
-.log-drawer-clear-btn {
+/* Controls Container */
+.log-drawer-controls {
   position: absolute;
   top: 0.5rem;
   right: 0.5rem;
+  display: flex;
+  gap: 0.5rem;
+  z-index: 10;
+  align-items: center;
+  margin-right: 24px;
+}
+
+/* Action Buttons (Clear, Copy) */
+.log-drawer-action-btn {
   background: var(--bg-light);
   border: none;
-  color: #b33a3a;
+  color: var(--text-secondary);
   padding: 6px;
   border-radius: 6px;
   cursor: pointer;
@@ -116,14 +192,51 @@
   font-size: 1.1rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   transition: all 0.15s ease;
-  z-index: 10;
 }
 
-.log-drawer-clear-btn:hover {
+.log-drawer-action-btn:hover {
   background: var(--bg-lighter);
-  color: #ff4444;
+  color: var(--text-primary);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   transform: scale(1.05);
+}
+
+/* Copy All Feedback Toast */
+.log-drawer-feedback {
+  background: var(--accent-primary);
+  color: white;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  margin-right: 0.5rem;
+  animation: fade-in 0.2s ease-out;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Single Line Copy Success Indicator */
+.log-line-feedback {
+  font-size: 0.75rem;
+  color: var(--accent-primary);
+  background: rgba(0, 0, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: auto;
+  opacity: 0.9;
+  font-weight: 500;
+  animation: fade-in 0.2s ease-out;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .log-drawer-empty {

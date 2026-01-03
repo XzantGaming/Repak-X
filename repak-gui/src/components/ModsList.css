@@ -5,6 +5,14 @@
     box-sizing: border-box;
 }
 
+.mod-list-grid.empty {
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+}
+
 /* Grid View (Spacious) */
 .mod-list-grid.view-grid {
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));

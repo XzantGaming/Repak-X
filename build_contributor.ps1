@@ -52,7 +52,7 @@ try {
     # ============================================
     # Step 1: Check Prerequisites
     # ============================================
-    Write-Step "[1/5] Checking Prerequisites"
+    Write-Step "[1/4] Checking Prerequisites"
     
     # Check Rust
     Write-Info "Checking Rust installation..."
@@ -84,7 +84,7 @@ try {
     # ============================================
     # Step 2: Build C# Projects
     # ============================================
-    Write-Step "[2/5] Building C# Projects"
+    Write-Step "[2/4] Building C# Projects"
 
     # Build UAssetTool (unified asset tool - replaces UAssetBridge and UAssetMeshFixer)
     Write-Info "Building UAssetTool.exe..."
@@ -108,21 +108,23 @@ try {
         if (Test-Path $toolExe) {
             Write-Success "UAssetTool.exe built successfully"
             Write-Info "Location: $toolExe"
-        } else {
+        }
+        else {
             Write-Error-Custom "UAssetTool.exe not found after build!"
             exit 1
         }
         
         # NOTE: UE4-DDS-Tools (Python) is no longer needed
         # Texture conversion now uses native C# UAssetTool (TEXTURE_IMPLEMENTATION = "csharp")
-    } else {
+    }
+    else {
         Write-Warning "UAssetTool project not found at $toolProject"
     }
 
     # ============================================
     # Step 3: Install Frontend Dependencies
     # ============================================
-    Write-Step "[3/5] Installing Frontend Dependencies"
+    Write-Step "[3/4] Installing Frontend Dependencies"
     
     $frontendDir = Join-Path $workspaceRoot "repak-gui"
     if (Test-Path $frontendDir) {
@@ -138,35 +140,21 @@ try {
         Write-Success "Frontend dependencies installed"
         
         Pop-Location
-    } else {
+    }
+    else {
         Write-Error-Custom "Frontend directory not found at $frontendDir"
         exit 1
     }
 
     # ============================================
-    # Step 4: Build Frontend (React)
+    # Step 4: Build Rust Workspace (Backend + Tauri)
     # ============================================
-    Write-Step "[4/5] Building Frontend (React)"
-    
-    Push-Location $frontendDir
-    
-    Write-Info "Building React frontend..."
-    & npm run build
-    if ($LASTEXITCODE -ne 0) {
-        Pop-Location
-        Write-Error-Custom "Frontend build failed!"
-        exit 1
-    }
-    Write-Success "Frontend built successfully"
-    
-    Pop-Location
+    # NOTE: Tauri's beforeBuildCommand in tauri.conf.json automatically
+    # runs "npm-build.bat" which builds the React frontend via Vite.
+    # We don't need a separate frontend build step - Tauri handles it!
+    Write-Step "[4/4] Building Rust Workspace (Backend + Tauri)"
 
-    # ============================================
-    # Step 5: Build Rust Workspace (Backend + Tauri)
-    # ============================================
-    Write-Step "[5/5] Building Rust Workspace (Backend + Tauri)"
-
-    Write-Info "Building Tauri application via CLI (ensures bundled frontend)..."
+    Write-Info "Building Tauri application (includes frontend build via beforeBuildCommand)..."
     Push-Location $frontendDir
 
     $tauriArgs = @("build")
@@ -200,13 +188,15 @@ try {
     
     if (Test-Path $exePath) {
         Write-Success "Main Application: $exePath"
-    } else {
+    }
+    else {
         Write-Warning "Main Application not found at: $exePath"
     }
     
     if (Test-Path $toolPath) {
         Write-Success "UAssetTool: $toolPath"
-    } else {
+    }
+    else {
         Write-Warning "UAssetTool not found at: $toolPath"
     }
     
@@ -218,9 +208,11 @@ try {
     Write-Host "  .\package_release.ps1 -Configuration $Configuration" -ForegroundColor White
     Write-Host ""
 
-} catch {
+}
+catch {
     Write-Error-Custom "Build failed with error: $_"
     exit 1
-} finally {
+}
+finally {
     Pop-Location
 }
