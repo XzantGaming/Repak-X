@@ -523,8 +523,8 @@ fn apply_binary_patch(uasset_path: &Path, old_size: i64, new_size: i64) -> Resul
     Ok(())
 }
 
-/// Process all .uasset files in a directory - re-serialize with UAssetAPI (like UAssetGUI)
-/// This fixes SerializeSize automatically for all asset types
+/// Process Static Mesh .uasset files in a directory - fix SerializeSize for Static Meshes ONLY
+/// Uses UAssetAPI to detect asset type before processing
 fn process_static_mesh_serializesize(dir: &Path, usmap_path: Option<&str>) -> Result<usize, Box<dyn std::error::Error>> {
     let mut total_fixed = 0;
     let mut uasset_files = Vec::new();
@@ -532,7 +532,7 @@ fn process_static_mesh_serializesize(dir: &Path, usmap_path: Option<&str>) -> Re
     // Collect all .uasset files
     collect_uasset_files(dir, &mut uasset_files)?;
 
-    info!("📁 Found {} .uasset files to process in: {:?}", uasset_files.len(), dir);
+    info!("📁 Found {} .uasset files to scan in: {:?}", uasset_files.len(), dir);
     
     if let Some(usmap) = usmap_path {
         info!("🗺️  Using USmap file: {}", usmap);
@@ -541,11 +541,38 @@ fn process_static_mesh_serializesize(dir: &Path, usmap_path: Option<&str>) -> Re
         return Ok(0);
     }
 
-    // Process ALL .uasset files (like UAssetGUI does - no detection needed)
-    // Re-serializing with UAssetAPI automatically fixes SerializeSize
+    // Filter to only Static Mesh files using UAssetAPI detection
+    let mut static_mesh_files = Vec::new();
     for uasset_file in &uasset_files {
         let filename = uasset_file.file_name().unwrap_or_default().to_string_lossy();
-        info!("🔧 Processing: {}", filename);
+        
+        // Detect asset type using UAssetAPI
+        match detect_asset_type_with_uasset_api(uasset_file, usmap_path) {
+            Ok(asset_type) => {
+                if asset_type == "static_mesh" {
+                    info!("   ✓ Detected Static Mesh: {}", filename);
+                    static_mesh_files.push(uasset_file.clone());
+                } else {
+                    debug!("   ⏭️  Skipping {} (type: {})", filename, asset_type);
+                }
+            }
+            Err(e) => {
+                warn!("   ⚠️  Failed to detect type for {}: {}", filename, e);
+            }
+        }
+    }
+    
+    info!("📁 Found {} Static Mesh files to process", static_mesh_files.len());
+    
+    if static_mesh_files.is_empty() {
+        info!("✓ No Static Mesh files found - nothing to fix");
+        return Ok(0);
+    }
+
+    // Process only Static Mesh files
+    for uasset_file in &static_mesh_files {
+        let filename = uasset_file.file_name().unwrap_or_default().to_string_lossy();
+        info!("🔧 Processing Static Mesh: {}", filename);
         
         match fix_static_mesh_serializesize(uasset_file, usmap_path) {
             Ok(count) => {
@@ -558,7 +585,7 @@ fn process_static_mesh_serializesize(dir: &Path, usmap_path: Option<&str>) -> Re
         }
     }
 
-    info!("📊 Total files processed: {}", total_fixed);
+    info!("📊 Total Static Meshes processed: {}", total_fixed);
 
     Ok(total_fixed)
 }

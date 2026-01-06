@@ -8,7 +8,6 @@ Write-Host "=== Backend Push Helper ===" -ForegroundColor Cyan
 Write-Host "Staging Rust files (*.rs, Cargo.toml, Cargo.lock)..."
 git add "**/*.rs"
 git add "**/Cargo.toml"
-git add "**/Cargo.lock"
 
 # 2. Add C# Source Files (UAssetAPI and UAssetTool)
 Write-Host "Staging C# files (*.cs, *.csproj, *.sln)..."

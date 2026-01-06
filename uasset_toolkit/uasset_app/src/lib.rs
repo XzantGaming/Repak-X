@@ -158,6 +158,12 @@ pub enum UAssetRequest {
     // Batch native C# mipmap stripping - processes multiple files in one call
     #[serde(rename = "batch_strip_mipmaps_native")]
     BatchStripMipmapsNative { file_paths: Vec<String>, usmap_path: Option<String> },
+    // Check if texture has inline data (no .ubulk needed)
+    #[serde(rename = "has_inline_texture_data")]
+    HasInlineTextureData { file_path: String, usmap_path: Option<String> },
+    // Batch check for inline texture data - returns list of files with inline data
+    #[serde(rename = "batch_has_inline_texture_data")]
+    BatchHasInlineTextureData { file_paths: Vec<String>, usmap_path: Option<String> },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -650,6 +656,52 @@ impl UAssetToolkit {
         }
         
         results
+    }
+
+    /// Check if a texture has inline data (no .ubulk needed)
+    /// Returns true if the texture data is stored inline in the .uexp file
+    pub async fn has_inline_texture_data(&self, file_path: &str, usmap_path: Option<&str>) -> Result<bool> {
+        let request = UAssetRequest::HasInlineTextureData {
+            file_path: file_path.to_string(),
+            usmap_path: usmap_path.map(|s| s.to_string()),
+        };
+        
+        let response = self.send_request(request).await?;
+        
+        if !response.success {
+            anyhow::bail!("Failed to check inline texture data: {}", response.message);
+        }
+        
+        Ok(response.data
+            .and_then(|d| d.as_bool())
+            .unwrap_or(false))
+    }
+
+    /// Batch check for inline texture data
+    /// Returns a list of file paths that have inline texture data
+    pub async fn batch_has_inline_texture_data(&self, file_paths: &[String], usmap_path: Option<&str>) -> Result<Vec<String>> {
+        let request = UAssetRequest::BatchHasInlineTextureData {
+            file_paths: file_paths.to_vec(),
+            usmap_path: usmap_path.map(|s| s.to_string()),
+        };
+        
+        let response = self.send_request(request).await?;
+        
+        if !response.success {
+            anyhow::bail!("Failed to batch check inline texture data: {}", response.message);
+        }
+        
+        // Parse the response data as a list of file paths
+        let inline_files = response.data
+            .and_then(|d| d.as_array().cloned())
+            .map(|arr| {
+                arr.into_iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        
+        Ok(inline_files)
     }
 }
 

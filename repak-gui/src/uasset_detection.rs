@@ -60,59 +60,76 @@ pub async fn detect_mesh_files_async(mod_contents: &[String]) -> bool {
 }
 
 /// Detects texture files that need the texture fix (Texture2D with .ubulk companion)
-/// Uses UAssetAPI batch detection to find Texture2D assets that need MipGen fixing,
-/// but only returns true if there's also a .ubulk file (bulk texture data)
+/// Uses UAssetAPI to find Texture2D assets, then checks if they have a matching .ubulk file
 /// Async version for use in Tauri commands
 pub async fn detect_texture_files_async(mod_contents: &[String]) -> bool {
     info!("[Detection] Texture detection received {} files to check", mod_contents.len());
     
-    // Log a sample of files to see what we're getting
-    let ubulk_files: Vec<&String> = mod_contents.iter()
+    // Collect all .ubulk file stems (without extension) for quick lookup
+    let ubulk_stems: std::collections::HashSet<String> = mod_contents.iter()
         .filter(|f| f.to_lowercase().ends_with(".ubulk"))
+        .filter_map(|f| {
+            std::path::Path::new(f)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .map(|s| s.to_lowercase())
+        })
         .collect();
     
-    info!("[Detection] Found {} .ubulk files in input", ubulk_files.len());
-    for (i, f) in ubulk_files.iter().take(3).enumerate() {
-        info!("[Detection] .ubulk sample {}: {}", i + 1, f);
-    }
+    info!("[Detection] Found {} .ubulk files in input", ubulk_stems.len());
     
-    // First check: do we have any .ubulk files at all?
-    // If not, no texture fix is needed regardless of Texture2D presence
-    let has_ubulk = !ubulk_files.is_empty();
-    if !has_ubulk {
+    if ubulk_stems.is_empty() {
         info!("[Detection] No .ubulk files found - texture fix NOT needed");
         return false;
     }
     
+    // Get all .uasset files
     let uasset_files: Vec<String> = mod_contents.iter()
         .filter(|f| f.to_lowercase().ends_with(".uasset"))
         .cloned()
         .collect();
-    info!("[Detection] Scanning {} uasset files for Texture2D needing MipGen fix (has .ubulk)", uasset_files.len());
+    
+    info!("[Detection] Scanning {} uasset files for Texture2D with matching .ubulk", uasset_files.len());
     
     if uasset_files.is_empty() {
         return false;
     }
     
-    // Use global UAssetToolkit singleton for batch detection
+    // Use global UAssetToolkit singleton to detect which files are textures
     match get_global_toolkit() {
         Ok(toolkit) => {
             info!("[Detection] Using global UAssetToolkit singleton");
-            info!("[Detection] Using UAssetAPI batch detection for Texture2D");
-            match toolkit.batch_detect_texture(&uasset_files).await {
-                Ok(true) => {
-                    info!("[Detection] FOUND Texture2D needing MipGen fix with .ubulk - texture fix ENABLED");
-                    return true;
-                }
-                Ok(false) => {
-                    info!("[Detection] No Texture2D needing MipGen fix found (UAssetAPI)");
-                    return false;
-                }
-                Err(e) => {
-                    info!("[Detection] UAssetAPI batch detection error: {}", e);
-                    info!("[Detection] This may indicate USMAP issues or file read errors");
+            
+            // Check each uasset file - if it's a texture AND has a matching .ubulk, we need the fix
+            for uasset_path in &uasset_files {
+                // Get the file stem to check against .ubulk files
+                let file_stem = std::path::Path::new(uasset_path)
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .map(|s| s.to_lowercase());
+                
+                if let Some(stem) = file_stem {
+                    // Check if there's a matching .ubulk file
+                    if ubulk_stems.contains(&stem) {
+                        // This .uasset has a matching .ubulk - check if it's a texture
+                        match toolkit.is_texture_uasset(uasset_path).await {
+                            Ok(true) => {
+                                info!("[Detection] FOUND Texture2D with matching .ubulk: {} - texture fix ENABLED", uasset_path);
+                                return true;
+                            }
+                            Ok(false) => {
+                                // Not a texture, continue checking
+                            }
+                            Err(e) => {
+                                info!("[Detection] Error checking {}: {}", uasset_path, e);
+                            }
+                        }
+                    }
                 }
             }
+            
+            info!("[Detection] No Texture2D with matching .ubulk found");
+            return false;
         }
         Err(e) => {
             info!("[Detection] Failed to get global UAssetToolkit: {}", e);
@@ -225,15 +242,21 @@ pub fn detect_mesh_files(mod_contents: &[String]) -> bool {
 }
 
 /// Detects texture files that need the texture fix (Texture2D with .ubulk companion)
-/// Uses UAssetAPI to find Texture2D assets that need MipGen fixing,
-/// but only returns true if there's also a .ubulk file (bulk texture data)
+/// Uses UAssetAPI to find Texture2D assets, then checks if they have a matching .ubulk file
 /// Sync version for use in install_mod.rs
 pub fn detect_texture_files(mod_contents: &[String]) -> bool {
-    // First check: do we have any .ubulk files at all?
-    // If not, no texture fix is needed regardless of Texture2D presence
-    let has_ubulk = mod_contents.iter().any(|f| f.to_lowercase().ends_with(".ubulk"));
+    // Collect all .ubulk file stems (without extension) for quick lookup
+    let ubulk_stems: std::collections::HashSet<String> = mod_contents.iter()
+        .filter(|f| f.to_lowercase().ends_with(".ubulk"))
+        .filter_map(|f| {
+            std::path::Path::new(f)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .map(|s| s.to_lowercase())
+        })
+        .collect();
     
-    if !has_ubulk {
+    if ubulk_stems.is_empty() {
         return false;
     }
     
@@ -245,15 +268,26 @@ pub fn detect_texture_files(mod_contents: &[String]) -> bool {
         return false;
     }
     
-    // Use global singleton for detection
-    for file in uasset_files {
-        if let Ok(true) = uasset_toolkit::is_texture_uasset(file) {
-            // UAssetAPI found a texture needing fix, and we already confirmed .ubulk exists
-            return true;
+    // Check each uasset file - if it's a texture AND has a matching .ubulk, we need the fix
+    for uasset_path in uasset_files {
+        // Get the file stem to check against .ubulk files
+        let file_stem = std::path::Path::new(uasset_path)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .map(|s| s.to_lowercase());
+        
+        if let Some(stem) = file_stem {
+            // Check if there's a matching .ubulk file
+            if ubulk_stems.contains(&stem) {
+                // This .uasset has a matching .ubulk - check if it's a texture
+                if let Ok(true) = uasset_toolkit::is_texture_uasset(uasset_path) {
+                    return true;
+                }
+            }
         }
     }
 
-    // UAssetAPI unavailable or no matches found
+    // No texture with matching .ubulk found
     false
 }
 

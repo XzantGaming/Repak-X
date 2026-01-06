@@ -281,6 +281,8 @@ public class Program
                 "strip_mipmaps" => StripMipmaps(request.FilePath),
                 "strip_mipmaps_native" => StripMipmapsNative(request.FilePath, request.UsmapPath),
                 "batch_strip_mipmaps_native" => BatchStripMipmapsNative(request.FilePaths, request.UsmapPath),
+                "has_inline_texture_data" => HasInlineTextureData(request.FilePath, request.UsmapPath),
+                "batch_has_inline_texture_data" => BatchHasInlineTextureData(request.FilePaths, request.UsmapPath),
                 
                 // Mesh operations
                 "patch_mesh" => PatchMesh(request.FilePath, request.UexpPath),
@@ -336,22 +338,7 @@ public class Program
                 return "texture";
         }
         
-        // Filename heuristics as last resort
-        string? fileName = asset.FilePath != null ? Path.GetFileNameWithoutExtension(asset.FilePath) : null;
-        if (!string.IsNullOrEmpty(fileName))
-        {
-            if (fileName.StartsWith("SM_", StringComparison.OrdinalIgnoreCase))
-                return "static_mesh";
-            if (fileName.StartsWith("SK_", StringComparison.OrdinalIgnoreCase))
-                return "skeletal_mesh";
-            if (fileName.StartsWith("T_", StringComparison.OrdinalIgnoreCase))
-                return "texture";
-            if (fileName.StartsWith("MI_", StringComparison.OrdinalIgnoreCase))
-                return "material_instance";
-            if (fileName.StartsWith("BP_", StringComparison.OrdinalIgnoreCase))
-                return "blueprint";
-        }
-        
+        // No filename heuristics - rely only on actual asset class detection
         return "other";
     }
     
@@ -499,6 +486,118 @@ public class Program
             }
         }
         return false;
+    }
+    
+    /// <summary>
+    /// Check if a texture has inline data (no .ubulk needed).
+    /// Returns true if texture data is stored inline in the .uexp file.
+    /// </summary>
+    private static bool CheckTextureHasInlineData(UAsset asset)
+    {
+        foreach (var export in asset.Exports)
+        {
+            if (GetExportClassName(asset, export) == "Texture2D" && export is TextureExport textureExport)
+            {
+                // Check if PlatformData exists and has mips
+                if (textureExport.PlatformData?.Mips != null && textureExport.PlatformData.Mips.Count > 0)
+                {
+                    var mip = textureExport.PlatformData.Mips[0];
+                    
+                    // Check if the mip has inline data (ForceInlinePayload flag or DataResourceIndex >= 0)
+                    if (mip.BulkData?.Header != null)
+                    {
+                        var header = mip.BulkData.Header;
+                        
+                        // ForceInlinePayload = 0x40, SingleUse = 0x08
+                        // Inline textures typically have flags 0x48 (ForceInlinePayload | SingleUse)
+                        bool hasInlineFlag = ((int)header.BulkDataFlags & 0x40) != 0;
+                        
+                        // Also check if DataResourceIndex is valid (UE5.3+ inline data)
+                        bool hasDataResource = header.DataResourceIndex >= 0;
+                        
+                        // If either condition is true, data is inline
+                        if (hasInlineFlag || hasDataResource)
+                        {
+                            return true;
+                        }
+                    }
+                    
+                    // Also check if mip has actual pixel data stored
+                    if (mip.BulkData?.Data != null && mip.BulkData.Data.Length > 0)
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+    
+    private static UAssetResponse HasInlineTextureData(string? filePath, string? usmapPath)
+    {
+        if (string.IsNullOrEmpty(filePath))
+            return new UAssetResponse { Success = false, Message = "File path required" };
+        if (!File.Exists(filePath))
+            return new UAssetResponse { Success = false, Message = $"File not found: {filePath}" };
+
+        try
+        {
+            var asset = LoadAsset(filePath, usmapPath);
+            
+            if (!IsAssetType(asset, "texture"))
+                return new UAssetResponse { Success = true, Message = "Not a texture", Data = false };
+            
+            bool hasInline = CheckTextureHasInlineData(asset);
+            return new UAssetResponse 
+            { 
+                Success = true, 
+                Message = hasInline ? "Texture has inline data" : "Texture uses external bulk data",
+                Data = hasInline 
+            };
+        }
+        catch (Exception ex)
+        {
+            return new UAssetResponse { Success = false, Message = $"Error: {ex.Message}" };
+        }
+    }
+    
+    private static UAssetResponse BatchHasInlineTextureData(List<string>? filePaths, string? usmapPath)
+    {
+        if (filePaths == null || filePaths.Count == 0)
+            return new UAssetResponse { Success = false, Message = "file_paths required" };
+
+        try
+        {
+            Usmap? mappings = LoadMappings(usmapPath);
+            
+            // Return list of files that have inline texture data
+            var inlineFiles = filePaths.AsParallel()
+                .Where(filePath =>
+                {
+                    if (!File.Exists(filePath)) return false;
+                    try
+                    {
+                        var asset = LoadAssetWithMappings(filePath, mappings);
+                        return IsAssetType(asset, "texture") && CheckTextureHasInlineData(asset);
+                    }
+                    catch
+                    {
+                        return false;
+                    }
+                })
+                .ToList();
+
+            return new UAssetResponse
+            {
+                Success = true,
+                Message = $"Found {inlineFiles.Count} textures with inline data",
+                Data = inlineFiles
+            };
+        }
+        catch (Exception ex)
+        {
+            return new UAssetResponse { Success = false, Message = $"Batch detection error: {ex.Message}" };
+        }
     }
     
     private static UAssetResponse SetMipGen(string? filePath, string? mipGen)
@@ -1432,6 +1531,22 @@ public class Program
         long headerSize = asset.Exports.Min(e => e.SerialOffset);
         var sortedExports = asset.Exports.OrderBy(e => e.SerialOffset).ToList();
         
+        // Check for .ubulk file - if present, we need to add its size + overhead to the last export
+        // This is because the game reads bulk data inline with the export in Zen/IoStore format
+        string ubulkPath = Path.ChangeExtension(uassetPath, ".ubulk");
+        long bulkDataAdjustment = 0;
+        if (File.Exists(ubulkPath))
+        {
+            long ubulkSize = new FileInfo(ubulkPath).Length;
+            // The game reads bulk data inline with serialization overhead
+            // Overhead = FBulkData headers + alignment padding
+            // TODO: Calculate this properly based on number of bulk data entries
+            // For now, 432 bytes works for tested StaticMesh assets
+            const long BULK_DATA_OVERHEAD = 432;
+            bulkDataAdjustment = ubulkSize + BULK_DATA_OVERHEAD;
+            Console.Error.WriteLine($"[FixSerializeSize] Found .ubulk ({ubulkSize} bytes), adding {bulkDataAdjustment} (overhead={BULK_DATA_OVERHEAD}) to last export");
+        }
+        
         var fixes = new List<object>();
         int fixedCount = 0;
 
@@ -1439,24 +1554,32 @@ public class Program
         {
             var export = sortedExports[i];
             long startInUexp = export.SerialOffset - headerSize;
+            // For the last export, exclude the 4-byte PACKAGE_FILE_TAG (0x9E2A83C1) at the end of .uexp
+            // The tag is not part of the export data and should not be included in SerialSize
             long endInUexp = (i < sortedExports.Count - 1) 
                 ? sortedExports[i + 1].SerialOffset - headerSize 
-                : uexpSize;
+                : uexpSize - 4;  // Subtract 4 bytes for PACKAGE_FILE_TAG
             
             long actualSize = endInUexp - startInUexp;
+            
+            // For the last export, add bulk data adjustment if .ubulk exists
+            if (i == sortedExports.Count - 1 && bulkDataAdjustment > 0)
+            {
+                actualSize += bulkDataAdjustment;
+            }
+            
             long headerSize_current = export.SerialSize;
             
             if (actualSize != headerSize_current)
             {
-                long iostorePadding = 24;
-                long finalSize = actualSize + iostorePadding;
-                
+                // Use actual size directly - no padding added
+                // This ensures SerialSize matches the real export data size
                 fixes.Add(new
                 {
                     export_name = export.ObjectName?.Value?.Value ?? $"Export_{i}",
                     old_size = headerSize_current,
-                    new_size = finalSize,
-                    difference = finalSize - headerSize_current
+                    new_size = actualSize,
+                    difference = actualSize - headerSize_current
                 });
                 fixedCount++;
             }

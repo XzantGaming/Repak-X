@@ -10,12 +10,12 @@
 using System;
 using System.Reflection;
 
-[assembly: System.Reflection.AssemblyCompanyAttribute("UAssetTool")]
+[assembly: System.Reflection.AssemblyCompanyAttribute("UsmapDecompressor")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+cacea1ec79189997f44ef87e8fb78905b08472ce")]
-[assembly: System.Reflection.AssemblyProductAttribute("UAssetTool")]
-[assembly: System.Reflection.AssemblyTitleAttribute("UAssetTool")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+bf2a1471ec295ab8136fd0b5552476afffa307ea")]
+[assembly: System.Reflection.AssemblyProductAttribute("UsmapDecompressor")]
+[assembly: System.Reflection.AssemblyTitleAttribute("UsmapDecompressor")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
 
 // Von der MSBuild WriteCodeFragment-Klasse generiert.

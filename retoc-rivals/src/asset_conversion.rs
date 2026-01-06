@@ -472,6 +472,31 @@ fn resolve_local_package_object(builder: &mut LegacyAssetBuilder, package_object
     builder.zen_import_lookup.insert(package_object, import_map_index);
     Ok(import_map_index)
 }
+
+// Resolves a package object with fallback to a placeholder import if resolution fails.
+// This is used for export map building where we want to continue even if some references can't be resolved.
+fn resolve_local_package_object_with_fallback(builder: &mut LegacyAssetBuilder, package_object: FPackageObjectIndex, context: &str) -> FPackageIndex {
+    match resolve_local_package_object(builder, package_object) {
+        Ok(index) => index,
+        Err(err) => {
+            let loading_error_message = err.to_string();
+            if !loading_error_message.contains("failed loading previously") {
+                log!(builder.package_context.log, "Failed to resolve {} {} for package {}: {}", 
+                    context, package_object, builder.zen_package.package_name(), loading_error_message);
+            }
+            builder.has_failed_import_map_entries = true;
+
+            // Create a placeholder import for the unresolved reference
+            let null_package_import = create_and_add_unknown_package_import(builder);
+            let import_map_index = FPackageIndex::create_import(builder.legacy_package.imports.len() as u32);
+            let null_object_import = create_unknown_object_import_map_entry(builder, null_package_import);
+
+            builder.legacy_package.imports.push(null_object_import);
+            builder.zen_import_lookup.insert(package_object, import_map_index);
+            import_map_index
+        }
+    }
+}
 fn find_or_add_resolved_import(builder: &mut LegacyAssetBuilder, import: &ResolvedZenImport) -> FPackageIndex {
     if let Some(existing_import) = builder.resolved_import_lookup.get(import) {
         return *existing_import
@@ -550,11 +575,12 @@ fn build_export_map(builder: &mut LegacyAssetBuilder) -> anyhow::Result<()> {
     for export_index in 0..builder.zen_package.export_map.len() {
         let zen_export: FExportMapEntry = builder.zen_package.as_ref().export_map[export_index].clone();
 
-        // Resolve class, outer, template index. These are required dependencies for the export construction and, as such, package extraction
-        let class_index = resolve_local_package_object(builder, zen_export.class_index)?;
-        let super_index = resolve_local_package_object(builder, zen_export.super_index)?;
-        let template_index = resolve_local_package_object(builder, zen_export.template_index)?;
-        let outer_index = resolve_local_package_object(builder, zen_export.outer_index)?;
+        // Resolve class, outer, template index. Use fallback to placeholder imports if resolution fails
+        // to avoid failing the entire conversion when some references can't be resolved
+        let class_index = resolve_local_package_object_with_fallback(builder, zen_export.class_index, "class_index");
+        let super_index = resolve_local_package_object_with_fallback(builder, zen_export.super_index, "super_index");
+        let template_index = resolve_local_package_object_with_fallback(builder, zen_export.template_index, "template_index");
+        let outer_index = resolve_local_package_object_with_fallback(builder, zen_export.outer_index, "outer_index");
 
         let export_name_string = builder.zen_package.name_map.get(zen_export.object_name).to_string();
         let object_name = builder.legacy_package.name_map.store(&export_name_string);

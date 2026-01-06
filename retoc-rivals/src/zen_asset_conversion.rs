@@ -842,8 +842,31 @@ fn serialize_zen_asset(builder: &ZenPackageBuilder, legacy_asset_bundle: &FSeria
     let legacy_external_arcs_serialized_offsets = FZenPackageHeader::serialize(&builder.zen_package, &mut result_package_writer, &mut result_store_entry, builder.container_header_version)?;
 
     if builder.container_header_version >= EIoContainerHeaderVersion::NoExportInfo {
-        // Write export buffer without any changes if we are following cooked offsets
-        result_package_writer.write_all(&legacy_asset_bundle.exports_file_buffer)?;
+        // Write export buffer, stripping the trailing PACKAGE_FILE_TAG (4 bytes) if present
+        // The tag is 0x9E2A83C1 and should not be included in Zen packages
+        let exports_buffer = &legacy_asset_bundle.exports_file_buffer;
+        let buffer_len = exports_buffer.len();
+        
+        // Check if the last 4 bytes are the PACKAGE_FILE_TAG
+        if buffer_len >= 4 {
+            let tag_offset = buffer_len - 4;
+            let potential_tag = u32::from_le_bytes([
+                exports_buffer[tag_offset],
+                exports_buffer[tag_offset + 1],
+                exports_buffer[tag_offset + 2],
+                exports_buffer[tag_offset + 3],
+            ]);
+            
+            if potential_tag == FLegacyPackageFileSummary::PACKAGE_FILE_TAG {
+                // Strip the PACKAGE_FILE_TAG
+                result_package_writer.write_all(&exports_buffer[..tag_offset])?;
+            } else {
+                // No tag found, write the entire buffer
+                result_package_writer.write_all(exports_buffer)?;
+            }
+        } else {
+            result_package_writer.write_all(exports_buffer)?;
+        }
     } else {
         // Write export buffer in bundle order otherwise, moving exports around to follow bundle serialization order
         write_exports_in_bundle_order(&mut result_package_writer, builder, &legacy_asset_bundle.exports_file_buffer)?;

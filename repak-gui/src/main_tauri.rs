@@ -2546,6 +2546,72 @@ async fn extract_pak_to_destination(mod_path: String, dest_path: String) -> Resu
     Ok(())
 }
 
+/// Cleanup .ubulk files for textures that have inline data.
+/// This is called after extraction to remove unnecessary .ubulk files
+/// that were pulled from the base game but aren't needed because the
+/// mod's textures have been patched to use inline data.
+async fn cleanup_ubulk_for_inline_textures(output_dir: &PathBuf) {
+    use walkdir::WalkDir;
+    use uasset_toolkit::get_global_toolkit;
+    
+    // Find all .uasset files - UAssetTool will detect which are textures
+    let uasset_files: Vec<String> = WalkDir::new(output_dir)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            let path = e.path();
+            if let Some(ext) = path.extension() {
+                return ext.to_string_lossy().to_lowercase() == "uasset";
+            }
+            false
+        })
+        .map(|e| e.path().to_string_lossy().to_string())
+        .collect();
+    
+    if uasset_files.is_empty() {
+        return;
+    }
+    
+    log::info!("[Extraction] Checking {} uasset files for textures with inline data...", uasset_files.len());
+    
+    // Use UAssetToolkit to check which are textures with inline data
+    // The batch_has_inline_texture_data function internally checks asset type
+    match get_global_toolkit() {
+        Ok(toolkit) => {
+            // Get USMAP path from environment
+            let usmap_path = std::env::var("USMAP_PATH").ok();
+            
+            match toolkit.batch_has_inline_texture_data(&uasset_files, usmap_path.as_deref()).await {
+                Ok(inline_files) => {
+                    log::info!("[Extraction] Found {} textures with inline data", inline_files.len());
+                    
+                    // Delete .ubulk files for textures with inline data
+                    let mut deleted_count = 0;
+                    for uasset_path in inline_files {
+                        let ubulk_path = uasset_path.replace(".uasset", ".ubulk");
+                        if std::path::Path::new(&ubulk_path).exists() {
+                            if let Ok(_) = std::fs::remove_file(&ubulk_path) {
+                                deleted_count += 1;
+                                log::debug!("[Extraction] Deleted unnecessary .ubulk: {}", ubulk_path);
+                            }
+                        }
+                    }
+                    
+                    if deleted_count > 0 {
+                        log::info!("[Extraction] Cleaned up {} unnecessary .ubulk files", deleted_count);
+                    }
+                }
+                Err(e) => {
+                    log::warn!("[Extraction] Failed to check inline texture data: {}", e);
+                }
+            }
+        }
+        Err(e) => {
+            log::warn!("[Extraction] UAssetToolkit unavailable for cleanup: {}", e);
+        }
+    }
+}
+
 /// Extract assets from a mod file (PAK or IoStore) to a destination directory.
 /// Automatically detects the mod type and uses the appropriate extraction method.
 /// Handles disabled mods (.bak_repak extension) by treating them as PAK files.
@@ -2632,6 +2698,10 @@ async fn extract_mod_assets(mod_path: String, dest_path: String) -> Result<usize
                 .map_err(|e| format!("Failed to extract IoStore: {}", e))?;
             
             log::info!("Extracted {} files from IoStore to {:?}", file_count, output_dir);
+            
+            // Post-extraction cleanup: Remove .ubulk files for textures with inline data
+            cleanup_ubulk_for_inline_textures(&output_dir).await;
+            
             Ok(file_count)
         }
         "pak" => {
@@ -4089,6 +4159,15 @@ struct ModClash {
     mod_paths: Vec<String>,
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+struct SingleModConflict {
+    conflicting_mod_path: String,
+    conflicting_mod_name: String,
+    overlapping_files: Vec<String>,
+    priority_comparison: String,
+    affected_characters: Vec<String>,
+}
+
 #[tauri::command]
 async fn check_mod_clashes(state: State<'_, Arc<Mutex<AppState>>>) -> Result<Vec<ModClash>, String> {
     use repak::PakBuilder;
@@ -4236,9 +4315,10 @@ async fn check_mod_clashes(state: State<'_, Arc<Mutex<AppState>>>) -> Result<Vec
                 let files1: HashSet<&String> = mod1.files.iter().collect();
                 let files2: HashSet<&String> = mod2.files.iter().collect();
 
-                // Find overlapping files
+                // Find overlapping files, excluding metadata files like 'patched_files'
                 let overlapping_files: Vec<String> = files1
                     .intersection(&files2)
+                    .filter(|f| !f.ends_with("patched_files") && !f.contains("/patched_files"))
                     .map(|s| (*s).clone())
                     .collect();
 
@@ -4295,6 +4375,180 @@ async fn check_mod_clashes(state: State<'_, Arc<Mutex<AppState>>>) -> Result<Vec
     }
     info!("Found {} clashes", clashes.len());
     Ok(clashes)
+}
+
+#[tauri::command]
+async fn check_single_mod_conflicts(
+    mod_path: String,
+    state: State<'_, Arc<Mutex<AppState>>>
+) -> Result<Vec<SingleModConflict>, String> {
+    use repak::PakBuilder;
+    use repak::utils::AesKey;
+    use std::str::FromStr;
+    use std::fs::File;
+    use std::io::BufReader;
+    use std::collections::HashSet;
+    
+    let target_path = PathBuf::from(&mod_path);
+    
+    if !target_path.exists() {
+        return Err(format!("Mod file does not exist: {}", mod_path));
+    }
+    
+    let game_path = {
+        let state = state.lock().unwrap();
+        state.game_path.clone()
+    };
+    
+    if !game_path.exists() {
+        return Err("Game path does not exist".to_string());
+    }
+    
+    info!("Checking conflicts for mod: {}", target_path.display());
+    
+    let aes_key = AesKey::from_str("0C263D8C22DCB085894899C3A3796383E9BF9DE0CBFB08C9BF2DEF2E84F29D74")
+        .map_err(|e| format!("Failed to create AES key: {}", e))?;
+    
+    // Helper to calculate priority from filename
+    fn calculate_priority(path: &Path) -> usize {
+        let mut priority = 0;
+        let file_stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+        
+        if file_stem.starts_with("!") {
+            priority = 0;
+        } else if file_stem.ends_with("_P") {
+            let base_no_p = file_stem.strip_suffix("_P").unwrap();
+            let re_nums = Regex::new(r"_(\d+)$").unwrap();
+            if let Some(caps) = re_nums.captures(base_no_p) {
+                let nums = &caps[1];
+                if nums.chars().all(|c| c == '9') {
+                    let actual_nines = nums.len();
+                    if actual_nines >= 7 {
+                        priority = actual_nines - 6;
+                    }
+                }
+            }
+        }
+        priority
+    }
+    
+    // Helper to get files from a PAK
+    fn get_pak_files(path: &Path, aes_key: &AesKey) -> Result<Vec<String>, String> {
+        let file = File::open(path).map_err(|e| format!("Failed to open PAK: {}", e))?;
+        let mut reader = BufReader::new(file);
+        let pak = PakBuilder::new()
+            .key(aes_key.0.clone())
+            .reader(&mut reader)
+            .map_err(|e| format!("Failed to read PAK: {}", e))?;
+        
+        let mut utoc_path = path.to_path_buf();
+        utoc_path.set_extension("utoc");
+        
+        if utoc_path.exists() {
+            use crate::utoc_utils::read_utoc;
+            Ok(read_utoc(&utoc_path, &pak, path)
+                .iter()
+                .map(|entry| entry.file_path.clone())
+                .collect())
+        } else {
+            Ok(pak.files())
+        }
+    }
+    
+    // Get target mod info
+    let target_priority = calculate_priority(&target_path);
+    let target_files: HashSet<String> = get_pak_files(&target_path, &aes_key)?
+        .into_iter()
+        .collect();
+    
+    info!("Target mod has {} files at priority {}", target_files.len(), target_priority);
+    
+    let mut conflicts: Vec<SingleModConflict> = Vec::new();
+    
+    // Scan all other enabled mods
+    for entry in WalkDir::new(&game_path)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        let path = entry.path();
+        
+        if path.is_dir() {
+            continue;
+        }
+        
+        // Skip non-pak files
+        let ext = path.extension().and_then(|s| s.to_str());
+        if ext != Some("pak") {
+            continue;
+        }
+        
+        // Skip the target mod itself
+        if path == target_path {
+            continue;
+        }
+        
+        // Get this mod's files
+        let other_files: HashSet<String> = match get_pak_files(path, &aes_key) {
+            Ok(files) => files.into_iter().collect(),
+            Err(e) => {
+                warn!("Failed to read mod {:?}: {}", path, e);
+                continue;
+            }
+        };
+        
+        // Find overlapping files, excluding metadata files like 'patched_files'
+        let overlapping: Vec<String> = target_files
+            .intersection(&other_files)
+            .filter(|f| !f.ends_with("patched_files") && !f.contains("/patched_files"))
+            .cloned()
+            .collect();
+        
+        if overlapping.is_empty() {
+            continue;
+        }
+        
+        // Calculate priority comparison
+        let other_priority = calculate_priority(path);
+        let priority_comparison = if target_priority == other_priority {
+            "Same priority (conflict!)".to_string()
+        } else if target_priority < other_priority {
+            format!("Target has higher priority ({} vs {})", target_priority, other_priority)
+        } else {
+            format!("Target has lower priority ({} vs {})", target_priority, other_priority)
+        };
+        
+        // Extract affected characters from overlapping files
+        let mut affected_characters: HashSet<String> = HashSet::new();
+        for file_path in &overlapping {
+            if let Some(char_match) = file_path.split('/').find(|s| {
+                s.len() == 4 && s.chars().all(|c| c.is_ascii_digit()) && s.starts_with("10")
+            }) {
+                affected_characters.insert(char_match.to_string());
+            }
+        }
+        
+        let mod_name = path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("Unknown")
+            .to_string();
+        
+        info!(
+            "Found conflict with {} ({} overlapping files)",
+            mod_name,
+            overlapping.len()
+        );
+        
+        conflicts.push(SingleModConflict {
+            conflicting_mod_path: path.to_string_lossy().to_string(),
+            conflicting_mod_name: mod_name,
+            overlapping_files: overlapping,
+            priority_comparison,
+            affected_characters: affected_characters.into_iter().collect(),
+        });
+    }
+    
+    info!("Found {} conflicts for mod {}", conflicts.len(), target_path.file_name().unwrap_or_default().to_string_lossy());
+    Ok(conflicts)
 }
 
 // ============================================================================
@@ -4654,6 +4908,7 @@ fn main() {
             get_mod_details,
             set_mod_priority,
             check_mod_clashes,
+            check_single_mod_conflicts,
             extract_pak_to_destination,
             extract_mod_assets,
             extract_script_objects,
