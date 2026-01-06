@@ -1,6 +1,6 @@
 {
   "name": "repak-gui-frontend",
-  "version": "2.6.22",
+  "version": "2.6.23",
   "type": "module",
   "scripts": {
     "dev": "vite",
