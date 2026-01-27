@@ -1,8 +1,38 @@
+/* Mods List Wrapper - enables bottom fade effect */
+.mods-list-wrapper {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* Bottom fade overlay */
+.mods-list-wrapper::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 40px;
+    background: linear-gradient(to top,
+            var(--panel-bg, rgba(15, 16, 18, 1)) 0%,
+            var(--panel-bg, rgba(15, 16, 18, 0.8)) 30%,
+            transparent 100%);
+    pointer-events: none;
+    z-index: 10;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    mask-image: linear-gradient(to top, black 0%, black 50%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to top, black 0%, black 50%, transparent 100%);
+}
+
 /* Mods List Container */
 .mod-list-grid {
     display: grid;
     width: 100%;
     box-sizing: border-box;
+    /* Add bottom padding so last items aren't hidden under the fade */
+    padding-bottom: 60px !important;
 }
 
 .mod-list-grid.empty {
@@ -18,6 +48,8 @@
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     gap: 20px;
     padding: 20px;
+    align-items: start;
+    align-content: start;
 }
 
 .mod-list-grid.view-grid .mod-card {
@@ -32,6 +64,8 @@
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: 8px;
     padding: 12px;
+    align-items: start;
+    align-content: start;
 }
 
 .mod-list-grid.view-compact .mod-card,
@@ -98,6 +132,78 @@
     border-top: none;
     padding-top: 0;
     flex: 0 0 auto;
+}
+
+/* Compact List View (Dense) */
+.mod-list-grid.view-list-compact {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.mod-list-grid.view-list-compact .mod-card {
+    flex-direction: row;
+    align-items: center;
+    padding: 0 10px;
+    gap: 10px;
+    min-height: 38px;
+    max-height: 38px;
+    border-radius: 6px;
+}
+
+.mod-list-grid.view-list-compact .mod-main-row {
+    flex: 1;
+    gap: 8px;
+}
+
+.mod-list-grid.view-list-compact .mod-tags-row {
+    flex: 0 1 auto;
+    margin-top: 0;
+    height: auto;
+    min-height: 0;
+    padding: 0;
+}
+
+.mod-list-grid.view-list-compact .tag {
+    height: 16px;
+    font-size: 0.65rem;
+    padding: 0 4px;
+}
+
+.mod-list-grid.view-list-compact .mod-actions-row {
+    margin-top: 0;
+    border-top: none;
+    padding-top: 0;
+    flex: 0 0 auto;
+    gap: 4px;
+}
+
+.mod-list-grid.view-list-compact .mod-name-button {
+    font-size: 0.85rem;
+}
+
+.mod-list-grid.view-list-compact .mod-size {
+    font-size: 0.7rem;
+    min-width: 48px;
+}
+
+.mod-list-grid.view-list-compact .mod-hero-icon-inline {
+    width: 20px;
+    height: 20px;
+}
+
+.mod-list-grid.view-list-compact .mod-checkbox-wrapper {
+    transform: scale(0.9);
+}
+
+.mod-list-grid.view-list-compact .mod-switch-wrapper {
+    transform: scale(0.85);
+    transform-origin: right center;
+}
+
+.mod-list-grid.view-list-compact .hold-delete {
+    width: 24px;
+    height: 24px;
 }
 
 /* --- Sleek Mod Card Design --- */
@@ -411,15 +517,24 @@
 .hold-delete::after {
     content: '';
     position: absolute;
+    top: 0;
     bottom: 0;
     left: 0;
     width: 0%;
-    height: 2px;
-    background: #ff4444;
+    height: 100%;
+    background: rgba(255, 68, 68, 0.4);
     transition: width 0s;
+    z-index: 0;
+    border-radius: 8px;
 }
 
 .hold-delete.holding::after {
     width: 100%;
     transition: width 2s linear;
+}
+
+/* Keep icon above the fill */
+.hold-delete svg {
+    position: relative;
+    z-index: 1;
 }

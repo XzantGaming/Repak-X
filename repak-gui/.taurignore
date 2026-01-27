@@ -1,0 +1,20 @@
+# Ignore frontend files - handled by Vite HMR
+*.css
+*.js
+*.jsx
+*.ts
+*.tsx
+*.html
+*.svg
+*.png
+*.ico
+
+# Ignore node_modules
+node_modules
+
+# Ignore dist folder (Vite output)
+dist
+
+# Ignore other frontend assets
+public
+assets

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, memo } from 'react'
 import { motion } from 'framer-motion'
 import { Tooltip } from '@mui/material'
 import { RiDeleteBin2Fill } from 'react-icons/ri'
@@ -6,12 +6,13 @@ import { FaTag } from "react-icons/fa6"
 import Checkbox from './ui/Checkbox'
 import Switch from './ui/Switch'
 import NumberInput from './ui/NumberInput'
+import { toTagArray } from '../utils/tags'
+import { formatFileSize } from '../utils/format'
+import { detectHeroesWithData } from '../utils/heroes'
 import './ModsList.css'
 import './ModDetailsPanel.css'
 
 const heroImages = import.meta.glob('../assets/hero/*.png', { eager: true })
-
-const toTagArray = (tags) => Array.isArray(tags) ? tags : (tags ? [tags] : [])
 
 // Get hero image by character name
 function getHeroImage(heroName, characterData) {
@@ -58,8 +59,8 @@ function getHeroImage(heroName, characterData) {
     return fallbackImage
 }
 
-// Mod Item Component
-function ModItem({
+// Mod Item Component - Memoized for virtualization performance
+const ModItem = memo(function ModItem({
     mod,
     selectedMod,
     selectedMods,
@@ -69,7 +70,6 @@ function ModItem({
     handleSetPriority,
     handleDeleteMod,
     handleRemoveTag,
-    formatFileSize,
     hideSuffix,
     onContextMenu,
     showHeroIcons,
@@ -84,7 +84,8 @@ function ModItem({
     onClearRenaming,
     gameRunning,
     onRenameBlocked,
-    onDeleteBlocked
+    onDeleteBlocked,
+    modDetails
 }) {
     const [isDeleteHolding, setIsDeleteHolding] = useState(false)
     const [isRenaming, setIsRenaming] = useState(false)
@@ -194,6 +195,15 @@ function ModItem({
     const heroImage = (showHeroIcons || showHeroBg) ? getHeroImage(characterName, characterData) : null
     const isCardView = viewMode === 'grid' || viewMode === 'compact'
 
+    // Detect heroes for multi-hero mods - check both characterName and mod_type
+    const isMultiHero = (
+        (characterName && characterName.toLowerCase().includes('multiple')) ||
+        (modDetails?.mod_type && typeof modDetails.mod_type === 'string' && modDetails.mod_type.startsWith('Multiple Heroes'))
+    )
+    const heroesList = isMultiHero && modDetails?.files && Array.isArray(modDetails.files)
+        ? detectHeroesWithData(modDetails.files, characterData)
+        : []
+
     return (
         <div
             className={`mod-card ${selectedMods.has(mod.path) ? 'selected' : ''} ${selectedMod?.path === mod.path ? 'viewing' : ''} ${heroImage && showHeroBg ? 'has-hero-bg' : ''}`}
@@ -221,8 +231,42 @@ function ModItem({
                     />
                 </div>
                 {/* Hero icon before name in list view */}
-                {heroImage && showHeroIcons && viewMode === 'list' && (
-                    <img src={heroImage} alt="" className="mod-hero-icon-inline" />
+                {heroImage && showHeroIcons && (viewMode === 'list' || viewMode === 'list-compact') && (
+                    isMultiHero && heroesList.length > 0 ? (
+                        <Tooltip
+                            title={
+                                <div className="heroes-list">
+                                    {heroesList.map(name => (
+                                        <span key={name} className="tag hero-tag">
+                                            {getHeroImage(name, characterData) && (
+                                                <img src={getHeroImage(name, characterData)} alt="" />
+                                            )}
+                                            {name}
+                                        </span>
+                                    ))}
+                                </div>
+                            }
+                            arrow
+                            placement="bottom"
+                            slotProps={{
+                                tooltip: {
+                                    className: 'multi-hero-tooltip'
+                                },
+                                arrow: {
+                                    className: 'multi-hero-arrow'
+                                }
+                            }}
+                        >
+                            <img src={heroImage} alt="" className="mod-hero-icon-inline" />
+                        </Tooltip>
+                    ) : (
+                        <img
+                            src={heroImage}
+                            alt=""
+                            className="mod-hero-icon-inline"
+                            title={characterName || 'Unknown Hero'}
+                        />
+                    )
                 )}
                 {isRenaming ? (
                     <div className="mod-rename-wrapper" onClick={(e) => e.stopPropagation()}>
@@ -263,9 +307,38 @@ function ModItem({
             {((heroImage && showHeroIcons && isCardView) || (showModType && category) || tags.length > 0) ? (
                 <div className="mod-tags-row">
                     {heroImage && showHeroIcons && isCardView && (
-                        <Tooltip title={characterName || 'Unknown Hero'}>
-                            <img src={heroImage} alt="" className="mod-hero-icon-badge" />
-                        </Tooltip>
+                        isMultiHero && heroesList.length > 0 ? (
+                            <Tooltip
+                                title={
+                                    <div className="heroes-list">
+                                        {heroesList.map(name => (
+                                            <span key={name} className="tag hero-tag">
+                                                {getHeroImage(name, characterData) && (
+                                                    <img src={getHeroImage(name, characterData)} alt="" />
+                                                )}
+                                                {name}
+                                            </span>
+                                        ))}
+                                    </div>
+                                }
+                                arrow
+                                placement="bottom"
+                                slotProps={{
+                                    tooltip: {
+                                        className: 'multi-hero-tooltip'
+                                    },
+                                    arrow: {
+                                        className: 'multi-hero-arrow'
+                                    }
+                                }}
+                            >
+                                <img src={heroImage} alt="" className="mod-hero-icon-badge" />
+                            </Tooltip>
+                        ) : (
+                            <Tooltip title={characterName || 'Unknown Hero'}>
+                                <img src={heroImage} alt="" className="mod-hero-icon-badge" />
+                            </Tooltip>
+                        )
                     )}
                     {/* Type badge at start for card views */}
                     {showModType && category && isCardView && (
@@ -335,42 +408,39 @@ function ModItem({
                         onChange={(newPriority) => handleSetPriority(mod.path, newPriority)}
                         disabled={gameRunning}
                     />
-                    <Tooltip title={mod.enabled ? 'Disable mod' : 'Enable mod'}>
-                        <div className="mod-switch-wrapper" onClick={(e) => e.stopPropagation()}>
-                            <Switch
-                                size="sm"
-                                color="primary"
-                                checked={mod.enabled}
-                                onChange={(_, event) => {
-                                    event?.stopPropagation()
-                                    handleToggleMod(mod.path)
-                                }}
-                                className="mod-switch"
-                            />
-                        </div>
-                    </Tooltip>
-                    <Tooltip title="Hold 2s to delete">
-                        <button
-                            className={`hold-delete ${isDeleteHolding ? 'holding' : ''}`}
-                            onMouseDown={startDeleteHold}
-                            onMouseUp={cancelDeleteHold}
-                            onMouseLeave={cancelDeleteHold}
-                            onTouchStart={startDeleteHold}
-                            onTouchEnd={cancelDeleteHold}
-                            aria-label="Hold to delete mod"
-                        >
-                            <RiDeleteBin2Fill size={18} />
-                        </button>
-                    </Tooltip>
+                    <div className="mod-switch-wrapper" onClick={(e) => e.stopPropagation()} >
+                        <Switch title={mod.enabled ? 'Disable mod' : 'Enable mod'}
+                            size="sm"
+                            color="primary"
+                            checked={mod.enabled}
+                            onChange={(_, event) => {
+                                event?.stopPropagation()
+                                handleToggleMod(mod.path)
+                            }}
+                            className="mod-switch"
+                        />
+                    </div>
+                    <button
+                        className={`hold-delete ${isDeleteHolding ? 'holding' : ''}`}
+                        onMouseDown={startDeleteHold}
+                        onMouseUp={cancelDeleteHold}
+                        onMouseLeave={cancelDeleteHold}
+                        onTouchStart={startDeleteHold}
+                        onTouchEnd={cancelDeleteHold}
+                        aria-label="Hold to delete mod"
+                        title="Hold 2s to delete"
+                    >
+                        <RiDeleteBin2Fill size={18} />
+                    </button>
                 </div>
             </div>
         </div>
     )
-}
+})
 
 /**
  * ModsList Component
- * Renders the grid/list of mods state, utilizing virtualized rendering if needed (currently explicit)
+ * Renders the grid/list of mods with virtualized rendering for list view
  */
 export default function ModsList({
     mods,
@@ -384,7 +454,6 @@ export default function ModsList({
     onRemoveTag,
     onSetPriority,
     onContextMenu,
-    formatFileSize,
     hideSuffix,
     showHeroIcons,
     showHeroBg,
@@ -400,51 +469,53 @@ export default function ModsList({
     onDeleteBlocked
 }) {
     return (
-        <div
-            key={viewMode}
-            ref={gridRef}
-            className={`mod-list-grid view-${viewMode} ${mods.length === 0 ? 'empty' : ''}`}
-            style={{ overflowY: 'auto', padding: '1rem' }}
-        >
-            {mods.length === 0 ? (
-                <div className="empty-state">
-                    <p>No mods found in this folder.</p>
-                </div>
-            ) : (
-                mods.map(mod => {
-                    const details = modDetails?.[mod.path]
-                    return (
-                        <ModItem
-                            key={mod.path}
-                            mod={mod}
-                            selectedMod={selectedMod}
-                            selectedMods={selectedMods}
-                            onSelect={onSelect}
-                            handleToggleModSelection={onToggleSelection}
-                            handleToggleMod={onToggleMod}
-                            handleDeleteMod={onDeleteMod}
-                            handleRemoveTag={onRemoveTag}
-                            handleSetPriority={onSetPriority}
-                            onContextMenu={onContextMenu}
-                            formatFileSize={formatFileSize}
-                            hideSuffix={hideSuffix}
-                            showHeroIcons={showHeroIcons}
-                            showHeroBg={showHeroBg}
-                            showModType={showModType}
-                            characterName={details?.character_name}
-                            category={details?.category}
-                            viewMode={viewMode}
-                            characterData={characterData}
-                            onRename={onRename}
-                            shouldStartRenaming={renamingModPath === mod.path}
-                            onClearRenaming={onClearRenaming}
-                            gameRunning={gameRunning}
-                            onRenameBlocked={onRenameBlocked}
-                            onDeleteBlocked={onDeleteBlocked}
-                        />
-                    )
-                })
-            )}
+        <div className="mods-list-wrapper">
+            <div
+                key={viewMode}
+                ref={gridRef}
+                className={`mod-list-grid view-${viewMode} ${mods.length === 0 ? 'empty' : ''}`}
+                style={{ overflowY: 'auto', height: '100%' }}
+            >
+                {mods.length === 0 ? (
+                    <div className="empty-state">
+                        <p>No mods found in this folder.</p>
+                    </div>
+                ) : (
+                    mods.map(mod => {
+                        const details = modDetails?.[mod.path]
+                        return (
+                            <ModItem
+                                key={mod.path}
+                                mod={mod}
+                                selectedMod={selectedMod}
+                                selectedMods={selectedMods}
+                                onSelect={onSelect}
+                                handleToggleModSelection={onToggleSelection}
+                                handleToggleMod={onToggleMod}
+                                handleDeleteMod={onDeleteMod}
+                                handleRemoveTag={onRemoveTag}
+                                handleSetPriority={onSetPriority}
+                                onContextMenu={onContextMenu}
+                                hideSuffix={hideSuffix}
+                                showHeroIcons={showHeroIcons}
+                                showHeroBg={showHeroBg}
+                                showModType={showModType}
+                                characterName={details?.character_name}
+                                category={details?.category}
+                                viewMode={viewMode}
+                                characterData={characterData}
+                                onRename={onRename}
+                                shouldStartRenaming={renamingModPath === mod.path}
+                                onClearRenaming={onClearRenaming}
+                                gameRunning={gameRunning}
+                                onRenameBlocked={onRenameBlocked}
+                                onDeleteBlocked={onDeleteBlocked}
+                                modDetails={details}
+                            />
+                        )
+                    })
+                )}
+            </div>
         </div>
     )
 }

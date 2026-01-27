@@ -28,7 +28,6 @@ body {
 
 .header,
 .footer {
-  padding: clamp(0.75rem, 2vw, 1.25rem) clamp(1.25rem, 3vw, 3rem);
   width: 100%;
   box-sizing: border-box;
 }
@@ -48,10 +47,12 @@ body {
 
 /* Override legacy header/container sizing */
 .header {
+  display: flex;
+  align-items: center;
   position: sticky;
   top: 0;
   z-index: 100;
-  padding: clamp(0.75rem, 2vw, 1.25rem) clamp(1.25rem, 3vw, 3rem);
+  padding: 1rem 1.5rem 1rem 1.5rem;
   background: var(--header-bg);
   border-bottom: 1px solid var(--header-border);
   width: 100%;
@@ -84,6 +85,145 @@ body {
 
 .header-branding .repak-icon {
   transition: all 0.3s ease;
+  margin-right: 10px;
+}
+
+/* Header Title Group - flexbox layout for title and version */
+.header-title-group {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+
+.header-title-group h1,
+.header-title-group h4 {
+  margin: 0;
+}
+
+.header-title-group .version {
+  font-size: 0.9rem;
+  opacity: 0.7;
+}
+
+/* Header Right Actions */
+.header-actions-right {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  margin-left: auto;
+}
+
+/* Launch Button Content Wrapper */
+.launch-button-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.launch-button-content .blink-icon {
+  font-size: 1rem;
+}
+
+/* Content Wrapper - Full height flex container */
+.content-wrapper {
+  display: flex;
+  height: 100%;
+}
+
+/* Sidebar Filters Section */
+.sidebar-filters {
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.sidebar-filters-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.filter-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.filter-label {
+  font-size: 0.75rem;
+  opacity: 0.7;
+  font-weight: 600;
+}
+
+.filter-label-secondary {
+  font-size: 0.75rem;
+  opacity: 0.6;
+}
+
+/* Filter Section Headers */
+.filter-section-header {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.filter-section-header.with-margin {
+  margin-top: 0.25rem;
+}
+
+.filter-chevron {
+  font-size: 0.7rem;
+  opacity: 0.5;
+}
+
+/* Sidebar Header Actions */
+.sidebar-header-actions {
+  display: flex;
+  gap: 4px;
+}
+
+/* Center Panel Layout */
+.center-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Mod Count Badge */
+.mod-count {
+  margin-left: 0.75rem;
+  opacity: 0.5;
+  font-size: 0.65em;
+  font-weight: normal;
+}
+
+
+
+/* Mod Details Layout */
+.mod-details-and-contents {
+  display: flex;
+  gap: 1rem;
+  height: 100%;
+  overflow: hidden;
+}
+
+.mod-details-wrapper {
+  flex: 1;
+  min-width: 200px;
+  height: 100%;
+}
+
+.selected-mod-contents {
+  width: 360px;
+  max-width: 45%;
+  min-width: 200px;
+  height: 100%;
+  overflow: auto;
+}
+
+.selected-mod-contents h3 {
+  margin-top: 0;
 }
 
 /* Main 2-Panel Layout */
@@ -96,13 +236,6 @@ body {
   min-height: 0;
 }
 
-.left-panel {
-  background: var(--panel-bg);
-  border-right: 1px solid var(--panel-border);
-  flex: 0 0 60%;
-  overflow-y: auto;
-  max-width: 60%;
-}
 
 .resize-handle {
   width: 4px;
@@ -125,6 +258,8 @@ body {
 }
 
 .right-panel {
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
   background: var(--panel-bg);
   display: flex;
   flex-direction: column;
@@ -148,7 +283,7 @@ body {
 .details-panel {
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
-  border-radius: 6px;
+  border-radius: 8px;
   flex: 1 1 auto;
   align-self: stretch;
   width: 100% !important;
@@ -186,23 +321,6 @@ body {
   border-color: var(--accent-primary);
 }
 
-/* Buttons */
-button {
-  background: var(--bg-light);
-  color: var(--text-primary);
-  border: 1px solid var(--panel-border);
-}
-
-.btn-primary {
-  background: var(--accent-primary);
-  color: var(--btn-text);
-  border-color: var(--accent-primary);
-}
-
-.btn-primary:hover {
-  background: var(--accent-secondary);
-}
-
 /* Mod Items - Deprecated, styles moved to .mod-card */
 
 /* App Header */
@@ -230,14 +348,6 @@ button {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-
-/* Section */
-.section {
-  padding: 1.5rem;
-  background: var(--bg-light);
-  margin: 0 0 1.25rem 0;
-  border-radius: 8px;
 }
 
 .section h2 {
@@ -462,10 +572,10 @@ button {
   height: 22px;
   padding: 0 8px 0 6px;
   border-radius: 4px;
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--bg-light);
+  border: 1px solid var(--border-light);
   font-size: 0.75rem;
-  color: #ffffff;
+  color: var(--accent-primary);
   font-weight: 500;
   line-height: 1;
   transition: all 0.2s ease;
@@ -691,7 +801,7 @@ button {
   border: 1px solid var(--border-light);
   border-radius: 4px;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
   background: var(--bg-light);
@@ -700,7 +810,6 @@ button {
 }
 
 button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent-primary), transparent 90%);
   border-color: var(--accent-primary);
 }
 
@@ -708,6 +817,7 @@ button:hover:not(:disabled) {
 .btn-primary {
   background: var(--accent-primary);
   border-color: var(--accent-primary);
+  color: var(--btn-text);
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -770,13 +880,6 @@ input[type="text"]:focus {
   outline: none;
 }
 
-/* Update panels */
-.left-panel,
-.right-panel {
-  background: var(--bg-darker);
-  border: 1px solid var(--border-dark);
-}
-
 /* Update folder styles */
 .folder-item {
   background: var(--bg-dark);
@@ -786,33 +889,6 @@ input[type="text"]:focus {
 .folder-item:hover {
   background: var(--bg-light);
   border-color: var(--border-light);
-}
-
-/* Update tag styles */
-.tag {
-  background: var(--bg-light);
-  border: 1px solid var(--border-light);
-  color: var(--accent-primary);
-}
-
-/* Update modal styles */
-.modal-content {
-  background: var(--bg-dark);
-  border: 1px solid var(--border-light);
-}
-
-/* Update scrollbar */
-::-webkit-scrollbar-track {
-  background: var(--bg-darkest);
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--bg-lighter);
-  border: 1px solid var(--border-light);
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--border-light);
 }
 
 /* Status Bar */
@@ -1040,27 +1116,7 @@ input[type="text"]:focus {
   flex-wrap: wrap;
 }
 
-.tag {
-  padding: 4px 8px;
-  background: var(--bg-light);
-  color: var(--accent-primary);
-  border-radius: 4px;
-  font-size: 0.8rem;
-  font-weight: 500;
-}
-
 /* Mod Item styles merged into .mod-card */
-
-/* Header and Container Styles */
-.header {
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  padding: 0.8rem 1.5rem;
-  background: var(--header-bg);
-  border-bottom: 1px solid var(--header-border);
-  width: 100%;
-}
 
 /* Animations */
 @keyframes fadeIn {
@@ -1374,7 +1430,8 @@ input[type="text"]:focus {
 .left-sidebar {
   width: 250px;
   background: var(--panel-bg);
-  border-right: 1px solid var(--panel-border);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
@@ -1435,9 +1492,55 @@ input[type="text"]:focus {
   opacity: 0.5;
 }
 
-.folder-item.empty:hover {
-  opacity: 0.8;
+
+/* Danger Button Styles (Hold to Delete) */
+
+/* Danger Button Styles (Hold to Delete) */
+.btn-ghost.danger {
+  color: var(--danger);
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(255, 68, 68, 0.3);
 }
+
+.btn-ghost.danger:hover {
+  background: rgba(255, 68, 68, 0.1);
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.btn-ghost.danger .danger-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  background: var(--danger);
+  z-index: 1;
+  transform-origin: left;
+  transform: scaleX(0);
+  transition: transform 0.2s ease;
+  opacity: 0.2;
+}
+
+.btn-ghost.danger:hover .danger-bg {
+  transform: scaleX(1);
+}
+
+.btn-ghost.danger.holding .danger-bg {
+  transform: scaleX(0);
+  transition: transform 2s linear;
+  opacity: 1;
+}
+
+/* Bulk Controls Layout */
+.bulk-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+
 
 .folder-name {
   flex: 1;
@@ -1473,7 +1576,8 @@ input[type="text"]:focus {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid var(--panel-border);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
   background: var(--panel-bg);
   flex-shrink: 0;
 }
@@ -1490,7 +1594,8 @@ input[type="text"]:focus {
 .bulk-actions-toolbar {
   padding: 0.5rem 1rem;
   background: var(--bg-darker);
-  border-bottom: 1px solid var(--panel-border);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1560,20 +1665,23 @@ input[type="text"]:focus {
 .view-switcher {
   display: flex;
   background: var(--bg-darker);
-  border-radius: 6px;
-  padding: 2px;
+  border-radius: 12px;
   border: 1px solid var(--panel-border);
 }
 
 .view-switcher .btn-icon-small {
   padding: 4px;
-  border-radius: 4px;
+  border-radius: 12px;
   color: var(--text-secondary);
 }
 
 .view-switcher .btn-icon-small.active {
   background: var(--bg-light);
   color: var(--text-primary);
+}
+
+.view-switcher .btn-icon-small:hover {
+  background: color-mix(in srgb, var(--accent-primary), transparent 85%);
 }
 
 .divider-vertical {
@@ -1588,14 +1696,6 @@ input[type="text"]:focus {
   align-items: center;
 }
 
-/* --- View Variables --- */
-
-/* CSS Moved to ModsList.css */
-
-
-/* Refined Mod Card Styles */
-
-/* Truncate Mod Names */
 .mod-card-main {
   min-width: 0;
   /* Allow flex child to shrink below content size */
@@ -1606,7 +1706,10 @@ input[type="text"]:focus {
   min-width: 0;
   width: 100%;
   justify-content: flex-start;
-  /* Align text to left */
+}
+
+.mod-name-button:hover {
+  background: color-mix(in srgb, var(--accent-primary), transparent 90%);
 }
 
 .mod-name-text {
@@ -1618,7 +1721,6 @@ input[type="text"]:focus {
   text-align: left;
 }
 
-/* Slimmer Switch */
 .mod-switch-track {
   width: 36px;
   height: 20px;
@@ -1676,7 +1778,7 @@ input[type="text"]:focus {
   border-radius: 12px;
   display: flex;
   align-items: center;
-  padding: 0 1rem;
+  padding: 0.5rem;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
@@ -1696,13 +1798,15 @@ input[type="text"]:focus {
   border: none;
   font-size: 1.1rem;
   color: var(--text-primary);
+  caret-color: var(--accent-primary);
   width: 100%;
   height: 100%;
   outline: none;
 }
 
 .main-search-input::placeholder {
-  color: rgba(255, 255, 255, 0.3);
+  color: var(--text-secondary);
+  opacity: 0.8;
 }
 
 .btn-icon-clear {
@@ -1722,26 +1826,27 @@ input[type="text"]:focus {
   color: var(--text-primary);
 }
 
+/* MUI Clear Search Button - Theme-aware styling */
+.clear-search-btn {
+  color: var(--text-secondary) !important;
+  transition: all 0.2s !important;
+}
+
+.clear-search-btn:hover {
+  color: var(--text-primary) !important;
+  background-color: color-mix(in srgb, var(--text-secondary), transparent 90%) !important;
+}
+
+.clear-search-btn svg {
+  color: inherit !important;
+}
+
 .action-controls {
   display: flex;
   gap: 1rem;
 }
 
-.filter-select-large {
-  background: var(--bg-darker);
-  border: 1px solid var(--panel-border);
-  border-radius: 12px;
-  padding: 0 1.5rem;
-  color: var(--text-primary);
-  font-size: 1rem;
-  cursor: pointer;
-  outline: none;
-  min-width: 160px;
-}
 
-.filter-select-large:focus {
-  border-color: var(--accent-primary);
-}
 
 .btn-install-large {
   background: var(--accent-gradient);
@@ -1932,4 +2037,19 @@ input[type="text"]:focus {
   justify-content: space-between;
   min-height: 22px;
   margin-bottom: 0.25rem;
+}
+
+/* Global Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  backdrop-filter: blur(4px);
 }

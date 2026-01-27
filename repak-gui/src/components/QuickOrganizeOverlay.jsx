@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { VscFolder, VscFolderOpened, VscChevronRight, VscChevronDown, VscClose, VscNewFolder } from 'react-icons/vsc';
+import { VscFolder, VscFolderOpened, VscChevronRight, VscChevronDown, VscClose, VscNewFolder, VscCheck } from 'react-icons/vsc';
 import { MdContentCopy, MdCreateNewFolder } from 'react-icons/md';
 import { BsFiletypeRaw } from 'react-icons/bs';
 import './QuickOrganizeOverlay.css';
@@ -150,18 +150,32 @@ const QuickOrganizeOverlay = ({
         }
     };
 
-    const handleNewFolder = async () => {
-        const name = prompt('Enter new folder name:');
-        if (!name || !name.trim()) return;
+    const [newFolderName, setNewFolderName] = useState('');
+    const [isAskingFolderName, setIsAskingFolderName] = useState(false);
+
+    const handleNewFolderClick = () => {
+        setNewFolderName('');
+        setIsAskingFolderName(true);
+    };
+
+    const handleCancelNewFolder = () => {
+        setIsAskingFolderName(false);
+        setNewFolderName('');
+    };
+
+    const handleConfirmNewFolder = async () => {
+        if (!newFolderName || !newFolderName.trim()) return;
 
         setIsCreatingFolder(true);
         try {
             if (onCreateFolder) {
-                const newFolderId = await onCreateFolder(name.trim());
+                const newFolderId = await onCreateFolder(newFolderName.trim());
                 if (newFolderId) {
                     setSelectedFolderId(newFolderId);
                 }
             }
+            setIsAskingFolderName(false);
+            setNewFolderName('');
         } catch (err) {
             console.error('Failed to create folder:', err);
         } finally {
@@ -226,15 +240,38 @@ const QuickOrganizeOverlay = ({
                                 <div className="section-header">
                                     <MdCreateNewFolder />
                                     <span>Choose destination folder</span>
-                                    <button
-                                        className="btn-new-folder"
-                                        onClick={handleNewFolder}
-                                        disabled={isCreatingFolder}
-                                        title="Create new folder"
-                                    >
-                                        <VscNewFolder />
-                                        {isCreatingFolder ? 'Creating...' : 'New Folder'}
-                                    </button>
+                                    {isAskingFolderName ? (
+                                        <div className="new-folder-input-container">
+                                            <input
+                                                type="text"
+                                                value={newFolderName}
+                                                onChange={(e) => setNewFolderName(e.target.value)}
+                                                placeholder="Folder name"
+                                                autoFocus
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') handleConfirmNewFolder();
+                                                    if (e.key === 'Escape') handleCancelNewFolder();
+                                                }}
+                                                onClick={(e) => e.stopPropagation()}
+                                            />
+                                            <button className="btn-confirm-folder" onClick={handleConfirmNewFolder} title="Confirm">
+                                                <VscCheck />
+                                            </button>
+                                            <button className="btn-cancel-folder" onClick={handleCancelNewFolder} title="Cancel">
+                                                <VscClose />
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            className="btn-new-folder"
+                                            onClick={handleNewFolderClick}
+                                            disabled={isCreatingFolder}
+                                            title="Create new folder"
+                                        >
+                                            <VscNewFolder />
+                                            {isCreatingFolder ? 'Creating...' : 'New Folder'}
+                                        </button>
+                                    )}
                                 </div>
 
                                 <div className="folder-tree-container" ref={folderTreeRef}>

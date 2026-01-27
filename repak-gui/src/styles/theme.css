@@ -155,14 +155,7 @@ button {
   border-color: color-mix(in srgb, var(--accent-primary), white 15%);
 }
 
-.tag {
-  background: var(--bg-light);
-  color: var(--accent-primary);
-  padding: 4px 8px;
-  border-radius: 4px;
-  border: 1px solid var(--panel-border);
-  font-size: 12px;
-}
+/* Note: .tag styles are defined in App.css with full hover/transition support */
 
 .modal-overlay {
   background: var(--overlay);

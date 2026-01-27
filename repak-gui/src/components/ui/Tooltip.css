@@ -1,48 +1,52 @@
-/* HeroUI Tooltip Styles */
-.heroui-tooltip-trigger {
+/* RepakX Tooltip Styles */
+.repakx-tooltip-trigger {
   display: inline-flex;
   position: relative;
   box-sizing: border-box;
 }
 
-.heroui-tooltip-content {
+.repakx-tooltip-content {
   position: absolute;
   z-index: 1000;
   padding: 0.5rem 0.75rem;
   border-radius: 0.5rem;
   font-size: 0.875rem;
   line-height: 1.25rem;
-  font-weight: 400;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  font-weight: 500;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 
+              0 4px 12px rgba(0, 0, 0, 0.3),
+              0 0 0 1px rgba(255, 255, 255, 0.1);
   pointer-events: none;
   white-space: nowrap;
   max-width: 300px;
   width: max-content;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 /* Placements */
-.heroui-tooltip-content[data-placement="top"] {
+.repakx-tooltip-content[data-placement="top"] {
   bottom: 100%;
   left: 50%;
   transform: translateX(-50%);
   margin-bottom: var(--tooltip-offset, 7px);
 }
 
-.heroui-tooltip-content[data-placement="bottom"] {
+.repakx-tooltip-content[data-placement="bottom"] {
   top: 100%;
   left: 50%;
   transform: translateX(-50%);
   margin-top: var(--tooltip-offset, 7px);
 }
 
-.heroui-tooltip-content[data-placement="left"] {
+.repakx-tooltip-content[data-placement="left"] {
   right: 100%;
   top: 50%;
   transform: translateY(-50%);
   margin-right: var(--tooltip-offset, 7px);
 }
 
-.heroui-tooltip-content[data-placement="right"] {
+.repakx-tooltip-content[data-placement="right"] {
   left: 100%;
   top: 50%;
   transform: translateY(-50%);
@@ -50,66 +54,96 @@
 }
 
 /* Colors */
-.heroui-tooltip-content.default {
-  background-color: #ffffff;
+.repakx-tooltip-content.default {
+  background-color: rgba(255, 255, 255, 0.95);
   color: #000000;
+  border: 1px solid rgba(0, 0, 0, 0.1);
 }
-[data-theme="dark"] .heroui-tooltip-content.default {
-  background-color: #27272a;
+[data-theme="dark"] .repakx-tooltip-content.default {
+  background: rgba(30, 32, 36, 0.92);
   color: #ffffff;
-  border: 1px solid #3f3f46;
+  border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
-.heroui-tooltip-content.primary {
-  background-color: #006fee;
+.repakx-tooltip-content.primary {
+  background: linear-gradient(135deg, 
+    rgba(74, 158, 255, 0.95) 0%, 
+    rgba(58, 134, 255, 0.95) 100%);
   color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-.heroui-tooltip-content.secondary {
-  background-color: #7828c8;
+.repakx-tooltip-content.secondary {
+  background: rgba(120, 40, 200, 0.92);
   color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
-.heroui-tooltip-content.success {
-  background-color: #17c964;
+.repakx-tooltip-content.success {
+  background: rgba(23, 201, 100, 0.92);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.repakx-tooltip-content.warning {
+  background: rgba(245, 165, 36, 0.92);
   color: #000000;
+  border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
-.heroui-tooltip-content.warning {
-  background-color: #f5a524;
-  color: #000000;
-}
-
-.heroui-tooltip-content.danger {
-  background-color: #f31260;
+.repakx-tooltip-content.danger {
+  background: rgba(243, 18, 96, 0.92);
   color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 /* Sizes */
-.heroui-tooltip-content.sm {
-  padding: 0.25rem 0.5rem;
+.repakx-tooltip-content.sm {
+  padding: 0.35rem 0.6rem;
   font-size: 0.75rem;
+  line-height: 1.2;
 }
 
-.heroui-tooltip-content.md {
+.repakx-tooltip-content.md {
   padding: 0.5rem 0.75rem;
   font-size: 0.875rem;
+  line-height: 1.3;
 }
 
-.heroui-tooltip-content.lg {
-  padding: 0.75rem 1rem;
-  font-size: 1rem;
+.repakx-tooltip-content.lg {
+  padding: 0.65rem 0.95rem;
+  font-size: 0.95rem;
+  line-height: 1.4;
 }
 
 /* Radius */
-.heroui-tooltip-content.radius-none { border-radius: 0; }
-.heroui-tooltip-content.radius-sm { border-radius: 0.25rem; }
-.heroui-tooltip-content.radius-md { border-radius: 0.5rem; }
-.heroui-tooltip-content.radius-lg { border-radius: 0.75rem; }
-.heroui-tooltip-content.radius-full { border-radius: 9999px; }
+.repakx-tooltip-content.radius-none { border-radius: 0; }
+.repakx-tooltip-content.radius-sm { border-radius: 0.375rem; }
+.repakx-tooltip-content.radius-md { border-radius: 0.5rem; }
+.repakx-tooltip-content.radius-lg { border-radius: 0.75rem; }
+.repakx-tooltip-content.radius-full { border-radius: 9999px; }
+
+/* Subtle glow effect for tooltips */
+[data-theme="dark"] .repakx-tooltip-content.primary {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 
+              0 4px 12px rgba(74, 158, 255, 0.3),
+              0 0 0 1px rgba(255, 255, 255, 0.15);
+}
+
+[data-theme="dark"] .repakx-tooltip-content.success {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 
+              0 4px 12px rgba(23, 201, 100, 0.25),
+              0 0 0 1px rgba(255, 255, 255, 0.15);
+}
+
+[data-theme="dark"] .repakx-tooltip-content.danger {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 
+              0 4px 12px rgba(243, 18, 96, 0.3),
+              0 0 0 1px rgba(255, 255, 255, 0.15);
+}
 
 /* Arrow */
-.heroui-tooltip-arrow {
+.repakx-tooltip-arrow {
   position: absolute;
   width: 8px;
   height: 8px;
@@ -118,25 +152,25 @@
   z-index: -1;
 }
 
-[data-placement="top"] .heroui-tooltip-arrow {
+[data-placement="top"] .repakx-tooltip-arrow {
   bottom: -4px;
   left: 50%;
   margin-left: -4px;
 }
 
-[data-placement="bottom"] .heroui-tooltip-arrow {
+[data-placement="bottom"] .repakx-tooltip-arrow {
   top: -4px;
   left: 50%;
   margin-left: -4px;
 }
 
-[data-placement="left"] .heroui-tooltip-arrow {
+[data-placement="left"] .repakx-tooltip-arrow {
   right: -4px;
   top: 50%;
   margin-top: -4px;
 }
 
-[data-placement="right"] .heroui-tooltip-arrow {
+[data-placement="right"] .repakx-tooltip-arrow {
   left: -4px;
   top: 50%;
   margin-top: -4px;

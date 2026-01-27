@@ -1,55 +1,50 @@
 .hero-filter-dropdown {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
+    padding-bottom: 8px;
 }
 
-/* Special filters - always visible at top */
 .hero-filter-special {
     display: flex;
-    gap: 4px;
+    gap: 6px;
+    flex-wrap: wrap;
     padding-bottom: 6px;
-    border-bottom: 1px solid var(--panel-border);
-    flex-shrink: 0;
+    border-bottom: 1px solid var(--border-light);
 }
 
 .hero-filter-special .filter-chip-compact {
     flex: 1;
-    justify-content: center;
     display: flex;
-    align-items: center;
-    gap: 4px;
+    justify-content: center;
+    text-align: center;
 }
 
-.chip-count {
-    padding: 1px 4px;
-    background: color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 85%);
-    border-radius: 3px;
-    font-size: 0.6rem;
-}
-
-.filter-chip-compact.active .chip-count {
-    background: color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 60%);
-}
-
-/* Scrollable hero list */
 .hero-filter-list {
     display: flex;
     flex-direction: column;
-    gap: 1px;
-    max-height: 250px;
+    gap: 2px;
+    max-height: 400px;
     overflow-y: auto;
     padding-right: 4px;
 }
 
+/* Custom Scrollbar for the list */
 .hero-filter-list::-webkit-scrollbar {
-    width: 4px;
+    width: 6px;
+}
+
+.hero-filter-list::-webkit-scrollbar-track {
+    background: transparent;
 }
 
 .hero-filter-list::-webkit-scrollbar-thumb {
-    background: var(--text-secondary);
-    border-radius: 4px;
-    opacity: 0.5;
+    background: var(--tag-border);
+    border-radius: 3px;
+}
+
+.hero-filter-list::-webkit-scrollbar-thumb:hover {
+    background: var(--tag-hover-bg);
 }
 
 .hero-filter-item {
@@ -60,138 +55,142 @@
 .hero-filter-row {
     display: flex;
     align-items: center;
-    gap: 2px;
+    gap: 4px;
 }
 
+/* Buttons */
 .hero-expand-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 16px;
-    height: 16px;
-    padding: 0;
+    width: 20px;
+    height: 24px;
     background: transparent;
     border: none;
     color: var(--text-secondary);
-    font-size: 0.55rem;
+    font-size: 10px;
     cursor: pointer;
-    opacity: 0.6;
-    transition: opacity 0.15s ease;
-    flex-shrink: 0;
+    border-radius: 4px;
+    transition: all 0.2s ease;
 }
 
 .hero-expand-btn:hover {
-    opacity: 1;
+    color: var(--text-primary);
+    background: var(--tag-hover-bg);
 }
 
 .hero-filter-base {
+    flex: 1;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    flex: 1;
-    padding: 5px 8px;
+    padding: 6px 12px 6px 12px;
     background: transparent;
-    border: 1px solid transparent;
-    border-radius: 5px;
-    color: var(--text-secondary);
-    font-size: 0.72rem;
+    border: none;
+    border-radius: 4px;
     cursor: pointer;
-    transition: all 0.15s ease;
     text-align: left;
-}
-
-.hero-filter-base.no-skins {
-    margin-left: 18px;
+    transition: all 0.2s ease;
+    border-left: 3px solid transparent;
 }
 
 .hero-filter-base:hover {
-    background: color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 90%);
-    border-color: color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 70%);
-    color: var(--text-primary);
-}
-
-.hero-filter-base.has-selection {
-    color: var(--text-primary);
-    font-weight: 500;
+    background: var(--tag-hover-bg);
 }
 
 .hero-filter-base.active {
-    background: color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 75%);
-    border-color: var(--accent-primary);
-    color: var(--accent-primary);
+    background: rgba(190, 28, 28, 0.15);
+    /* Repak Red tint */
+    border-left: 3px solid #be1c1c;
+}
+
+.hero-filter-base.partial {
+    background: var(--tag-bg);
+    /* Lighter than unselected, darker than active */
+    border-left: 3px solid color-mix(in srgb, var(--accent-primary), transparent 50%);
+    /* Partial indicator line */
+    padding-left: 9px;
+    /* Compensate for border */
+}
+
+/* No skins available -> faint style */
+.hero-filter-base.no-skins {
+    opacity: 0.6;
+    pointer-events: none;
 }
 
 .hero-name {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.hero-mod-count,
-.skin-mod-count {
-    flex-shrink: 0;
-    padding: 1px 5px;
-    background: var(--bg-lighter);
-    border-radius: 4px;
-    font-size: 0.6rem;
+    font-size: 0.9rem;
     color: var(--text-secondary);
-    margin-left: 6px;
+    font-weight: 500;
 }
 
-.hero-filter-base:hover .hero-mod-count,
-.hero-filter-base.active .hero-mod-count {
-    background: color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 80%);
+.hero-filter-base.active .hero-name {
     color: var(--accent-primary);
+    /* Orange highlight */
+    font-weight: 600;
 }
 
-/* Nested skins - inline below hero */
+.hero-mod-count {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    background: var(--tag-bg);
+    padding: 1px 5px;
+    border-radius: 4px;
+}
+
+.hero-filter-base.active .hero-mod-count {
+    color: var(--accent-primary);
+    background: color-mix(in srgb, var(--accent-primary), transparent 85%);
+}
+
+/* Nested Skins */
 .hero-skins-nested {
     display: flex;
     flex-direction: column;
     gap: 1px;
-    margin-left: 18px;
-    padding-left: 8px;
-    border-left: 1px solid var(--panel-border);
+    margin-left: 24px;
+    /* Indent skins */
+    padding: 4px 0;
+    border-left: 1px solid var(--border-light);
 }
 
 .hero-skin-item {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 4px;
-    padding: 4px 8px;
+    padding: 4px 10px;
     background: transparent;
-    border: 1px solid transparent;
-    border-radius: 4px;
-    color: var(--text-secondary);
-    font-size: 0.68rem;
+    border: none;
     cursor: pointer;
-    transition: all 0.15s ease;
     text-align: left;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    transition: all 0.2s ease;
+    margin-left: 4px;
+    /* Space from border line */
+    border-radius: 0 4px 4px 0;
+    font-weight: normal;
 }
 
 .hero-skin-item:hover {
-    background: color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 90%);
-    border-color: color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 70%);
+    background: var(--tag-hover-bg);
     color: var(--text-primary);
 }
 
 .hero-skin-item.active {
-    background: color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 75%);
-    border-color: var(--accent-primary);
+    background: color-mix(in srgb, var(--accent-primary), transparent 90%);
     color: var(--accent-primary);
+    border-left: 2px solid var(--accent-primary);
+    font-weight: 600;
 }
 
-.hero-skin-item:hover .skin-mod-count,
-.hero-skin-item.active .skin-mod-count {
-    background: color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 80%);
-    color: var(--accent-primary);
+.skin-mod-count {
+    font-size: 12px;
+    opacity: 0.5;
 }
 
-.skin-name {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+.hero-skin-item.default-skin-entry {
+    font-style: normal;
+    opacity: 0.9;
 }

@@ -290,7 +290,9 @@ export default function InstallModPanel({ mods, allTags, folders = [], onCreateT
                   {
                     key: 'fixSerializeSize',
                     label: 'Patch Static Meshes',
-                    hint: 'Applies fixes to static mesh serialization sizes'
+                    hint: 'Applies fixes to static mesh serialization sizes',
+                    temporarilyDisabled: true,
+                    disabledHint: 'Temporarily unavailable'
                   }
                 ]
 
@@ -345,13 +347,15 @@ export default function InstallModPanel({ mods, allTags, folders = [], onCreateT
                       </div>
 
                       <div className="install-mod-card__toggles">
-                        {toggleDefinitions.map(({ key, label, hint }) => {
+                        {toggleDefinitions.map(({ key, label, hint, temporarilyDisabled, disabledHint }) => {
                           const isLegacyMode = modSettings[idx]?.forceLegacy || false
                           const canApplyPatches = mod.contains_uassets !== false
-                          const isLocked = isLegacyMode || !canApplyPatches
+                          const isLocked = isLegacyMode || !canApplyPatches || temporarilyDisabled
 
                           let hintText = hint
-                          if (isLegacyMode) {
+                          if (temporarilyDisabled) {
+                            hintText = disabledHint || 'Temporarily unavailable'
+                          } else if (isLegacyMode) {
                             hintText = 'Disabled in Legacy PAK mode'
                           } else if (!canApplyPatches) {
                             hintText = 'No UAsset files detected'

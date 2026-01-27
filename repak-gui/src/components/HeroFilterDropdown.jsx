@@ -64,22 +64,41 @@ const calculateModCounts = (modDetails) => {
     return counts;
 };
 
-// Individual hero item with nested skins
 const HeroFilterItem = ({ hero, selectedCharacters, onToggle }) => {
     const [isExpanded, setIsExpanded] = useState(false);
 
-    // Check if base hero or any of its skins are selected
-    const isBaseSelected = selectedCharacters.has(hero.baseName);
-    const selectedSkinCount = hero.skins.filter(s => selectedCharacters.has(s.fullName)).length;
-    const hasSelection = isBaseSelected || selectedSkinCount > 0;
+    // Gather all IDs for this hero group: baseName + all skin fullNames
+    const allGroupIds = [hero.baseName, ...hero.skins.map(s => s.fullName)];
+
+    // Check how many of this group are selected
+    const selectedCountInGroup = allGroupIds.filter(id => selectedCharacters.has(id)).length;
+    const isAllSelected = selectedCountInGroup === allGroupIds.length;
+    const isSomeSelected = selectedCountInGroup > 0 && !isAllSelected;
+
+    // Check specific selection for the base/default skin
+    const isDefaultSelected = selectedCharacters.has(hero.baseName);
+
     const hasSkins = hero.skins.length > 0;
 
     // Total mod count for this hero (base + all skins)
     const totalModCount = hero.baseModCount + hero.skins.reduce((sum, s) => sum + s.modCount, 0);
 
-    const handleBaseClick = (e) => {
+    const handleGroupClick = (e) => {
         e.stopPropagation();
-        onToggle(hero.baseName);
+        // If all are selected, deselect all. Otherwise, select all.
+        if (isAllSelected) {
+            // Send array of IDs to toggle (which will remove them if they are present)
+            // But we need to communicate "remove these" vs "add these". 
+            // The App.jsx handler needs to be smart or we send a specific signal.
+            // Let's assume onToggle handles "toggle these": if we want to force select/deselect,
+            // we might need a more robust contract.
+            // SIMPLE APPROACH: Pass array. App.jsx will check:
+            // "Are ALL of these currently selected?" -> Remove all.
+            // "Are SOME or NONE selected?" -> Add all (missing ones).
+            onToggle(allGroupIds);
+        } else {
+            onToggle(allGroupIds);
+        }
     };
 
     const handleExpandClick = (e) => {
@@ -87,26 +106,33 @@ const HeroFilterItem = ({ hero, selectedCharacters, onToggle }) => {
         setIsExpanded(!isExpanded);
     };
 
+    const handleDefaultSkinClick = (e) => {
+        e.stopPropagation();
+        onToggle(hero.baseName);
+    };
+
     const handleSkinClick = (e, skinFullName) => {
         e.stopPropagation();
         onToggle(skinFullName);
     };
 
+    // Determine the visual state of the parent button
+    const parentClass = `hero-filter-base ${isAllSelected ? 'active' : ''} ${isSomeSelected ? 'partial' : ''}`;
+
     return (
         <div className="hero-filter-item">
             <div className="hero-filter-row">
-                {hasSkins && (
-                    <button
-                        className="hero-expand-btn"
-                        onClick={handleExpandClick}
-                    >
-                        {isExpanded ? '▼' : '▶'}
-                    </button>
-                )}
                 <button
-                    className={`hero-filter-base ${hasSelection ? 'has-selection' : ''} ${isBaseSelected ? 'active' : ''} ${!hasSkins ? 'no-skins' : ''}`}
-                    onClick={handleBaseClick}
-                    title={hero.baseName}
+                    className="hero-expand-btn"
+                    onClick={handleExpandClick}
+                    style={{ visibility: hasSkins || hero.baseModCount > 0 ? 'visible' : 'hidden' }}
+                >
+                    {isExpanded ? '▼' : '▶'}
+                </button>
+                <button
+                    className={parentClass}
+                    onClick={handleGroupClick}
+                    title={`Toggle all ${hero.baseName} skins`}
                 >
                     <span className="hero-name">{hero.baseName}</span>
                     {totalModCount > 0 && (
@@ -115,9 +141,22 @@ const HeroFilterItem = ({ hero, selectedCharacters, onToggle }) => {
                 </button>
             </div>
 
-            {/* Nested skins - shown when expanded */}
-            {hasSkins && isExpanded && (
+            {/* Nested items - shown when expanded */}
+            {isExpanded && (
                 <div className="hero-skins-nested">
+                    {/* Explicit "Default Skin" entry if base mods exist */}
+                    {hero.baseModCount > 0 && (
+                        <button
+                            className={`hero-skin-item ${isDefaultSelected ? 'active' : ''} default-skin-entry`}
+                            onClick={handleDefaultSkinClick}
+                            title={`${hero.baseName} (Default Skin)`}
+                        >
+                            <span className="skin-name">Default Skin</span>
+                            <span className="skin-mod-count">{hero.baseModCount}</span>
+                        </button>
+                    )}
+
+                    {/* Other Skins */}
                     {hero.skins.map(skin => (
                         <button
                             key={skin.fullName}

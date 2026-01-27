@@ -13,7 +13,7 @@
   display: flex;
   flex-direction: column;
   max-height: 85vh;
-  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-family: var(--font-mono);
 }
 
 .log-drawer-header {
@@ -337,6 +337,7 @@
 /* Log line type colors - these remain semantic colors */
 .log-drawer-line.success .log-drawer-line-content {
   color: #4caf50;
+  font-weight: 700;
 }
 
 .log-drawer-line.success .log-drawer-line-number {

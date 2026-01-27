@@ -1,12 +1,12 @@
 /* Progress Component Styles */
-.heroui-progress {
+.repakx-progress {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
   width: 100%;
 }
 
-.heroui-progress-header {
+.repakx-progress-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -14,27 +14,27 @@
   color: var(--text-primary);
 }
 
-.heroui-progress-label {
+.repakx-progress-label {
   font-weight: 500;
 }
 
-.heroui-progress-value {
+.repakx-progress-value {
   font-variant-numeric: tabular-nums;
   opacity: 0.8;
 }
 
-.heroui-progress-track {
+.repakx-progress-track {
   width: 100%;
   background-color: var(--bg-lighter, #e4e4e7);
   border-radius: 999px;
   overflow: hidden;
   position: relative;
 }
-[data-theme="dark"] .heroui-progress-track {
+[data-theme="dark"] .repakx-progress-track {
   background-color: #3f3f46;
 }
 
-.heroui-progress-indicator {
+.repakx-progress-indicator {
   height: 100%;
   background-color: var(--progress-color, #006fee);
   border-radius: 999px;
@@ -42,22 +42,22 @@
 }
 
 /* Sizes */
-.heroui-progress.sm .heroui-progress-track { height: 4px; }
-.heroui-progress.md .heroui-progress-track { height: 8px; }
-.heroui-progress.lg .heroui-progress-track { height: 12px; }
+.repakx-progress.sm .repakx-progress-track { height: 4px; }
+.repakx-progress.md .repakx-progress-track { height: 8px; }
+.repakx-progress.lg .repakx-progress-track { height: 12px; }
 
 /* Colors */
-.heroui-progress.default { --progress-color: #3f3f46; }
-[data-theme="dark"] .heroui-progress.default { --progress-color: #a1a1aa; }
+.repakx-progress.default { --progress-color: #3f3f46; }
+[data-theme="dark"] .repakx-progress.default { --progress-color: #a1a1aa; }
 
-.heroui-progress.primary { --progress-color: #006fee; }
-.heroui-progress.secondary { --progress-color: #7828c8; }
-.heroui-progress.success { --progress-color: #17c964; }
-.heroui-progress.warning { --progress-color: #f5a524; }
-.heroui-progress.danger { --progress-color: #f31260; }
+.repakx-progress.primary { --progress-color: #006fee; }
+.repakx-progress.secondary { --progress-color: #7828c8; }
+.repakx-progress.success { --progress-color: #17c964; }
+.repakx-progress.warning { --progress-color: #f5a524; }
+.repakx-progress.danger { --progress-color: #f31260; }
 
 /* Indeterminate Animation */
-.heroui-progress.indeterminate .heroui-progress-indicator {
+.repakx-progress.indeterminate .repakx-progress-indicator {
   width: 30% !important;
   position: absolute;
   left: -30%;
@@ -71,7 +71,7 @@
 }
 
 /* Striped Animation */
-.heroui-progress.striped .heroui-progress-indicator {
+.repakx-progress.striped .repakx-progress-indicator {
   background-image: linear-gradient(
     45deg,
     rgba(255, 255, 255, 0.15) 25%,

@@ -4,11 +4,12 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.8);
+  background: var(--overlay);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  backdrop-filter: blur(4px);
 }
 
 .install-mod-panel {
@@ -262,8 +263,8 @@
 }
 
 .install-mod-card__pill.pill-folder {
-  background: rgba(74, 158, 255, 0.15);
-  color: #9ecbff;
+  background: color-mix(in srgb, var(--accent-primary), transparent 85%);
+  color: color-mix(in srgb, var(--accent-primary), white 20%);
 }
 
 .install-mod-card__pill.pill-pak {
@@ -296,11 +297,11 @@
   transition: background 0.2s ease;
 }
 
-.install-toggle .heroui-switch-control {
+.install-toggle .repakx-switch-control {
   margin-right: 0.5rem;
 }
 
-.install-toggle .heroui-switch-label {
+.install-toggle .repakx-switch-label {
   flex: 1;
 }
 
@@ -441,7 +442,7 @@
 
 .btn-install {
   padding: 0.75rem 2rem;
-  background: #4a9eff;
+  background: var(--accent-primary);
   color: white;
   border: none;
   border-radius: 4px;
@@ -452,7 +453,7 @@
 }
 
 .btn-install:hover {
-  background: #3a8eef;
+  background: var(--accent-secondary);
 }
 
 .btn-cancel {
@@ -578,7 +579,7 @@
 
 .imp-section-header svg {
   font-size: 0.9rem;
-  color: var(--accent-primary, #4a9eff);
+  color: var(--accent-primary);
 }
 
 .imp-btn-new-folder {
@@ -590,16 +591,16 @@
   height: 22px;
   padding: 0;
   border-radius: 5px;
-  border: 1px solid rgba(74, 158, 255, 0.4);
-  background: rgba(74, 158, 255, 0.1);
-  color: var(--accent-primary, #4a9eff);
+  border: 1px solid color-mix(in srgb, var(--accent-primary), transparent 60%);
+  background: color-mix(in srgb, var(--accent-primary), transparent 90%);
+  color: var(--accent-primary);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .imp-btn-new-folder:hover:not(:disabled) {
-  background: rgba(74, 158, 255, 0.2);
-  border-color: rgba(74, 158, 255, 0.6);
+  background: color-mix(in srgb, var(--accent-primary), transparent 80%);
+  border-color: color-mix(in srgb, var(--accent-primary), transparent 40%);
 }
 
 .imp-btn-new-folder:disabled {
@@ -644,9 +645,9 @@
 }
 
 .imp-folder-item.selected {
-  background: rgba(74, 158, 255, 0.2);
-  color: var(--accent-primary, #4a9eff);
-  box-shadow: inset 0 0 0 1px rgba(74, 158, 255, 0.4);
+  background: color-mix(in srgb, var(--accent-primary), transparent 80%);
+  color: var(--accent-primary);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-primary), transparent 60%);
 }
 
 .imp-folder-item.virtual {
@@ -664,7 +665,7 @@
 
 .imp-folder-item .folder-icon {
   font-size: 0.9rem;
-  color: var(--accent-primary, #4a9eff);
+  color: var(--accent-primary);
 }
 
 .imp-folder-item .folder-name {
@@ -683,11 +684,11 @@
 .imp-selected-hint {
   margin-top: 0.6rem;
   padding: 0.5rem 0.75rem;
-  background: rgba(74, 158, 255, 0.1);
-  border: 1px solid rgba(74, 158, 255, 0.25);
+  background: color-mix(in srgb, var(--accent-primary), transparent 90%);
+  border: 1px solid color-mix(in srgb, var(--accent-primary), transparent 75%);
   border-radius: 6px;
   font-size: 0.75rem;
-  color: var(--accent-primary, #4a9eff);
+  color: var(--accent-primary);
   text-align: center;
 }
 

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef, useMemo, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MdClearAll } from 'react-icons/md';
 import './ui/Alert.css';
@@ -37,6 +37,13 @@ const Icons = {
             <circle cx="12" cy="12" r="10"></circle>
             <line x1="12" y1="16" x2="12" y2="12"></line>
             <line x1="12" y1="8" x2="12.01" y2="8"></line>
+        </svg>
+    ),
+    crash: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+            <line x1="12" y1="9" x2="12" y2="13"></line>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
         </svg>
     )
 };
@@ -114,6 +121,17 @@ export function AlertProvider({ children, placement = DEFAULT_CONFIG.placement }
         return showAlert({ color: 'primary', title, description, ...options });
     }, [showAlert]);
 
+    const crash = useCallback((title, description, options = {}) => {
+        return showAlert({
+            color: 'danger',
+            icon: Icons.crash,
+            title: title || 'Game Crashed',
+            description,
+            duration: 0, // Persistent by default
+            ...options
+        });
+    }, [showAlert]);
+
     // Promise toast - shows loading state while promise is pending
     const promise = useCallback((promiseOrFn, options = {}) => {
         const {
@@ -164,7 +182,8 @@ export function AlertProvider({ children, placement = DEFAULT_CONFIG.placement }
         return id;
     }, [showAlert, updateToast]);
 
-    const contextValue = {
+    // Memoize context value to prevent unnecessary re-renders
+    const contextValue = useMemo(() => ({
         showAlert,
         dismissAlert,
         dismissAllAlerts,
@@ -173,8 +192,9 @@ export function AlertProvider({ children, placement = DEFAULT_CONFIG.placement }
         error,
         warning,
         info,
+        crash,
         promise
-    };
+    }), [showAlert, dismissAlert, dismissAllAlerts, updateToast, success, error, warning, info, crash, promise]);
 
     return (
         <AlertContext.Provider value={contextValue}>
@@ -189,31 +209,42 @@ export function AlertProvider({ children, placement = DEFAULT_CONFIG.placement }
     );
 }
 
+// Animation variants - extracted as constants to avoid recalculation
+const ANIMATION_VARIANTS = {
+    bottomCenter: {
+        initial: { opacity: 0, y: 50, scale: 0.9 },
+        animate: { opacity: 1, x: 0, y: 0, scale: 1 },
+        exit: { opacity: 0, y: 20, scale: 0.9 }
+    },
+    topCenter: {
+        initial: { opacity: 0, y: -50, scale: 0.9 },
+        animate: { opacity: 1, x: 0, y: 0, scale: 1 },
+        exit: { opacity: 0, y: -20, scale: 0.9 }
+    },
+    left: {
+        initial: { opacity: 0, x: -100, scale: 0.9 },
+        animate: { opacity: 1, x: 0, y: 0, scale: 1 },
+        exit: { opacity: 0, x: -50, scale: 0.9 }
+    },
+    right: {
+        initial: { opacity: 0, x: 100, scale: 0.9 },
+        animate: { opacity: 1, x: 0, y: 0, scale: 1 },
+        exit: { opacity: 0, x: 50, scale: 0.9 }
+    }
+};
+
 // Get animation variants based on placement
 function getAnimationVariants(placement) {
     const isBottom = placement.startsWith('bottom');
     const isCenter = placement.includes('center');
     const isLeft = placement.includes('left');
 
-    let initial = { opacity: 0, scale: 0.9 };
-    let exit = { opacity: 0, scale: 0.9 };
-
     if (isCenter) {
-        initial = { opacity: 0, y: isBottom ? 50 : -50, scale: 0.9 };
-        exit = { opacity: 0, y: isBottom ? 20 : -20, scale: 0.9 };
+        return isBottom ? ANIMATION_VARIANTS.bottomCenter : ANIMATION_VARIANTS.topCenter;
     } else if (isLeft) {
-        initial = { opacity: 0, x: -100, scale: 0.9 };
-        exit = { opacity: 0, x: -50, scale: 0.9 };
-    } else {
-        initial = { opacity: 0, x: 100, scale: 0.9 };
-        exit = { opacity: 0, x: 50, scale: 0.9 };
+        return ANIMATION_VARIANTS.left;
     }
-
-    return {
-        initial,
-        animate: { opacity: 1, x: 0, y: 0, scale: 1 },
-        exit
-    };
+    return ANIMATION_VARIANTS.right;
 }
 
 // Toast Container - renders all active toasts with card stacking
@@ -281,24 +312,34 @@ function ToastContainer({ toasts, onDismiss, onDismissAll, placement }) {
     );
 }
 
-// Individual Toast Item with card stacking effect
-function ToastItem({ toast, onDismiss, index, total, isHovered, placement }) {
+// Individual Toast Item with card stacking effect - memoized to prevent unnecessary re-renders
+const ToastItem = memo(function ToastItem({ toast, onDismiss, index, total, isHovered, placement }) {
     const [progress, setProgress] = useState(100);
     const [isPaused, setIsPaused] = useState(false);
+    const elapsedTimeRef = useRef(0); // Track total elapsed time across pauses
+    const lastStartTimeRef = useRef(Date.now()); // Track when current interval started
 
-    const { id, title, description, color, variant, icon, hideIcon, duration, endContent, isLoading } = toast;
+    const { id, title, description, color, variant, icon, hideIcon, duration, endContent, action, isLoading } = toast;
 
     // Only the front toast (index 0) should auto-dismiss
     const shouldAutoDismiss = index === 0;
 
     // Handle auto-dismiss with progress
     useEffect(() => {
-        if (!shouldAutoDismiss || duration <= 0 || isPaused) return;
+        if (!shouldAutoDismiss || duration <= 0) return;
 
-        const startTime = Date.now();
+        if (isPaused) {
+            // When paused, save the elapsed time
+            return;
+        }
+
+        // When resuming or starting, record the start time
+        lastStartTimeRef.current = Date.now();
+
         const interval = setInterval(() => {
-            const elapsed = Date.now() - startTime;
-            const remaining = Math.max(0, 100 - (elapsed / duration) * 100);
+            const currentElapsed = Date.now() - lastStartTimeRef.current;
+            const totalElapsed = elapsedTimeRef.current + currentElapsed;
+            const remaining = Math.max(0, 100 - (totalElapsed / duration) * 100);
             setProgress(remaining);
 
             if (remaining <= 0) {
@@ -307,7 +348,11 @@ function ToastItem({ toast, onDismiss, index, total, isHovered, placement }) {
             }
         }, 50);
 
-        return () => clearInterval(interval);
+        return () => {
+            clearInterval(interval);
+            // Save elapsed time when cleanup happens (pausing)
+            elapsedTimeRef.current += Date.now() - lastStartTimeRef.current;
+        };
     }, [id, duration, isPaused, onDismiss, shouldAutoDismiss]);
 
     // Get the appropriate icon
@@ -389,6 +434,24 @@ function ToastItem({ toast, onDismiss, index, total, isHovered, placement }) {
                 {description && <div className="toast-description">{description}</div>}
             </div>
 
+            {action && (
+                <div className="toast-end-content">
+                    {action.label && action.onClick ? (
+                        <button
+                            className="toast-action-btn"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                action.onClick(e);
+                            }}
+                        >
+                            {action.label}
+                        </button>
+                    ) : (
+                        action
+                    )}
+                </div>
+            )}
+
             {endContent && (
                 <div className="toast-end-content">
                     {endContent}
@@ -417,6 +480,6 @@ function ToastItem({ toast, onDismiss, index, total, isHovered, placement }) {
             )}
         </motion.div>
     );
-}
+});
 
 export default AlertProvider;

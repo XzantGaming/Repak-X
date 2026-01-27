@@ -2,7 +2,7 @@ import React from 'react'
 import './Switch.css'
 
 /**
- * HeroUI-style Switch component
+ * repakx-style Switch component
  *
  * @param {Object} props
  * @param {boolean} [props.checked] - Controlled on/off state
@@ -48,7 +48,7 @@ const Switch = ({
   }
 
   const classes = [
-    'heroui-switch',
+    'repakx-switch',
     size,
     color,
     currentChecked ? 'checked' : '',
@@ -63,20 +63,21 @@ const Switch = ({
     <label className={classes} data-checked={currentChecked} data-disabled={isDisabled}>
       <button
         type="button"
-        className="heroui-switch-control"
+        className="repakx-switch-control"
         role="switch"
         aria-checked={currentChecked}
         aria-disabled={isDisabled || isLoading}
         onClick={handleToggle}
         disabled={isDisabled || isLoading}
+        title={currentChecked ? 'Disable' : 'Enable'}
         {...props}
       >
-        <span className="heroui-switch-track">
-          <span className="heroui-switch-thumb" />
+        <span className="repakx-switch-track">
+          <span className="repakx-switch-thumb" />
         </span>
-        {isLoading && <span className="heroui-switch-spinner" />}
+        {isLoading && <span className="repakx-switch-spinner" />}
       </button>
-      {children && <span className="heroui-switch-label">{children}</span>}
+      {children && <span className="repakx-switch-label">{children}</span>}
     </label>
   )
 }

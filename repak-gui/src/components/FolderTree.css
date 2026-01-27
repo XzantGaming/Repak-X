@@ -29,7 +29,7 @@
 }
 
 .folder-tree .node-content.selected {
-    background-color: rgba(74, 158, 255, 0.15);
+    background-color: color-mix(in srgb, var(--accent-primary), transparent 85%);
     color: var(--accent-primary);
 }
 

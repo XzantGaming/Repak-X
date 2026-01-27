@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { open } from '@tauri-apps/plugin-dialog'
 import { invoke } from '@tauri-apps/api/core'
 import { AnimatedThemeToggler } from './ui/AnimatedThemeToggler'
@@ -27,6 +27,7 @@ export default function SettingsPanel({ settings, onSave, onClose, theme, setThe
   const [showHeroIcons, setShowHeroIcons] = useState(settings.showHeroIcons || false);
   const [showHeroBg, setShowHeroBg] = useState(settings.showHeroBg || false);
   const [showModType, setShowModType] = useState(settings.showModType || false);
+  const [showExperimental, setShowExperimental] = useState(settings.showExperimental || false);
   const [usmapStatus, setUsmapStatus] = useState('');
   const [showRatMode, setShowRatMode] = useState(false);
 
@@ -56,11 +57,19 @@ export default function SettingsPanel({ settings, onSave, onClose, theme, setThe
       autoOpenDetails,
       showHeroIcons,
       showHeroBg,
-      showModType
+      showModType,
+      showExperimental
     });
     alert.success('Settings Saved', 'Your preferences have been updated.');
     onClose();
   };
+
+  // Sync local state with props when opening/changing
+  useEffect(() => {
+    if (settings.globalUsmap) {
+      setGlobalUsmap(settings.globalUsmap);
+    }
+  }, [settings.globalUsmap]);
 
   const handleBrowseUsmap = async () => {
     try {
@@ -171,7 +180,7 @@ export default function SettingsPanel({ settings, onSave, onClose, theme, setThe
               >
                 <span style={{ paddingLeft: '4px', fontWeight: 'normal', opacity: 0.9 }}>Hide file suffix in mod names</span>
               </Checkbox>
-              <div style={{ marginTop: '0.5rem' }}>
+              <div>
                 <Checkbox
                   checked={autoOpenDetails}
                   onChange={(checked) => setAutoOpenDetails(checked)}
@@ -179,7 +188,7 @@ export default function SettingsPanel({ settings, onSave, onClose, theme, setThe
                   <span style={{ paddingLeft: '4px', fontWeight: 'normal', opacity: 0.9 }}>Auto-open details panel on click</span>
                 </Checkbox>
               </div>
-              <div style={{ marginTop: '0.5rem' }}>
+              <div>
                 <Checkbox
                   checked={showHeroIcons}
                   onChange={(checked) => setShowHeroIcons(checked)}
@@ -187,7 +196,7 @@ export default function SettingsPanel({ settings, onSave, onClose, theme, setThe
                   <span style={{ paddingLeft: '4px', fontWeight: 'normal', opacity: 0.9 }}>Show hero icons on mod cards (experimental)</span>
                 </Checkbox>
               </div>
-              <div style={{ marginTop: '0.5rem' }}>
+              <div>
                 <Checkbox
                   checked={showHeroBg}
                   onChange={(checked) => setShowHeroBg(checked)}
@@ -195,12 +204,20 @@ export default function SettingsPanel({ settings, onSave, onClose, theme, setThe
                   <span style={{ paddingLeft: '4px', fontWeight: 'normal', opacity: 0.9 }}>Show hero background on mod cards (experimental)</span>
                 </Checkbox>
               </div>
-              <div style={{ marginTop: '0.5rem' }}>
+              <div>
                 <Checkbox
                   checked={showModType}
                   onChange={(checked) => setShowModType(checked)}
                 >
                   <span style={{ paddingLeft: '4px', fontWeight: 'normal', opacity: 0.9 }}>Show mod type badge on cards</span>
+                </Checkbox>
+              </div>
+              <div>
+                <Checkbox
+                  checked={showExperimental}
+                  onChange={(checked) => setShowExperimental(checked)}
+                >
+                  <span style={{ paddingLeft: '4px', fontWeight: 'normal', opacity: 0.9 }}>Enables "Compact List" view (experimental)</span>
                 </Checkbox>
               </div>
             </div>

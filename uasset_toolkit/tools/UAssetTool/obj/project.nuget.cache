@@ -1,12 +1,15 @@
 {
   "version": 2,
-  "dgSpecHash": "jVxe1KOb2UE=",
+  "dgSpecHash": "Tmx6jm+xGxQ=",
   "success": true,
-  "projectFilePath": "E:\\WindsurfCoding\\repak_rivals-remastered\\Repak_Gui-Revamped-TauriUpdate\\uasset_toolkit\\tools\\UAssetTool\\UAssetTool.csproj",
+  "projectFilePath": "B:\\MRivalsMods\\Coding\\REPAK-REVAMPED\\Repak-Gui-Revamped\\uasset_toolkit\\tools\\UAssetTool\\UAssetTool.csproj",
   "expectedPackageFiles": [
-    "C:\\Users\\NIkolas\\.nuget\\packages\\microsoft.net.illink.tasks\\8.0.15\\microsoft.net.illink.tasks.8.0.15.nupkg.sha512",
-    "C:\\Users\\NIkolas\\.nuget\\packages\\newtonsoft.json\\13.0.3\\newtonsoft.json.13.0.3.nupkg.sha512",
-    "C:\\Users\\NIkolas\\.nuget\\packages\\zstdsharp.port\\0.8.1\\zstdsharp.port.0.8.1.nupkg.sha512"
+    "C:\\Users\\franc\\.nuget\\packages\\microsoft.net.illink.tasks\\8.0.20\\microsoft.net.illink.tasks.8.0.20.nupkg.sha512",
+    "C:\\Users\\franc\\.nuget\\packages\\newtonsoft.json\\13.0.3\\newtonsoft.json.13.0.3.nupkg.sha512",
+    "C:\\Users\\franc\\.nuget\\packages\\zstdsharp.port\\0.8.1\\zstdsharp.port.0.8.1.nupkg.sha512",
+    "C:\\Users\\franc\\.nuget\\packages\\microsoft.netcore.app.runtime.win-x64\\8.0.20\\microsoft.netcore.app.runtime.win-x64.8.0.20.nupkg.sha512",
+    "C:\\Users\\franc\\.nuget\\packages\\microsoft.windowsdesktop.app.runtime.win-x64\\8.0.20\\microsoft.windowsdesktop.app.runtime.win-x64.8.0.20.nupkg.sha512",
+    "C:\\Users\\franc\\.nuget\\packages\\microsoft.aspnetcore.app.runtime.win-x64\\8.0.20\\microsoft.aspnetcore.app.runtime.win-x64.8.0.20.nupkg.sha512"
   ],
   "logs": []
 }

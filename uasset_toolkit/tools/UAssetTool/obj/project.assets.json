@@ -2,7 +2,7 @@
   "version": 3,
   "targets": {
     "net8.0": {
-      "Microsoft.NET.ILLink.Tasks/8.0.15": {
+      "Microsoft.NET.ILLink.Tasks/8.0.20": {
         "type": "package",
         "build": {
           "build/Microsoft.NET.ILLink.Tasks.props": {}
@@ -46,7 +46,7 @@
       }
     },
     "net8.0/win-x64": {
-      "Microsoft.NET.ILLink.Tasks/8.0.15": {
+      "Microsoft.NET.ILLink.Tasks/8.0.20": {
         "type": "package",
         "build": {
           "build/Microsoft.NET.ILLink.Tasks.props": {}
@@ -91,10 +91,10 @@
     }
   },
   "libraries": {
-    "Microsoft.NET.ILLink.Tasks/8.0.15": {
-      "sha512": "s4eXlcRGyHeCgFUGQnhq0e/SCHBPp0jOHgMqZg3fQ2OCHJSm1aOUhI6RFWuVIcEb9ig2WgI2kWukk8wu72EbUQ==",
+    "Microsoft.NET.ILLink.Tasks/8.0.20": {
+      "sha512": "Rhcto2AjGvTO62+/VTmBpumBOmqIGp7nYEbTbmEXkCq4yPGxV8whju3/HsIA/bKyo2+DggaYk5+/8sxb1AbPTw==",
       "type": "package",
-      "path": "microsoft.net.illink.tasks/8.0.15",
+      "path": "microsoft.net.illink.tasks/8.0.20",
       "hasTools": true,
       "files": [
         ".nupkg.metadata",
@@ -108,7 +108,7 @@
         "build/Microsoft.NET.ILLink.Analyzers.props",
         "build/Microsoft.NET.ILLink.Tasks.props",
         "build/Microsoft.NET.ILLink.targets",
-        "microsoft.net.illink.tasks.8.0.15.nupkg.sha512",
+        "microsoft.net.illink.tasks.8.0.20.nupkg.sha512",
         "microsoft.net.illink.tasks.nuspec",
         "tools/net472/ILLink.Tasks.dll",
         "tools/net472/ILLink.Tasks.dll.config",
@@ -199,29 +199,29 @@
   },
   "projectFileDependencyGroups": {
     "net8.0": [
-      "Microsoft.NET.ILLink.Tasks >= 8.0.15",
+      "Microsoft.NET.ILLink.Tasks >= 8.0.20",
       "Newtonsoft.Json >= 13.0.3",
       "UAssetAPI >= 1.0.2"
     ]
   },
   "packageFolders": {
-    "C:\\Users\\NIkolas\\.nuget\\packages\\": {},
+    "C:\\Users\\franc\\.nuget\\packages\\": {},
     "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "E:\\WindsurfCoding\\repak_rivals-remastered\\Repak_Gui-Revamped-TauriUpdate\\uasset_toolkit\\tools\\UAssetTool\\UAssetTool.csproj",
+      "projectUniqueName": "B:\\MRivalsMods\\Coding\\REPAK-REVAMPED\\Repak-Gui-Revamped\\uasset_toolkit\\tools\\UAssetTool\\UAssetTool.csproj",
       "projectName": "UAssetTool",
-      "projectPath": "E:\\WindsurfCoding\\repak_rivals-remastered\\Repak_Gui-Revamped-TauriUpdate\\uasset_toolkit\\tools\\UAssetTool\\UAssetTool.csproj",
-      "packagesPath": "C:\\Users\\NIkolas\\.nuget\\packages\\",
-      "outputPath": "E:\\WindsurfCoding\\repak_rivals-remastered\\Repak_Gui-Revamped-TauriUpdate\\uasset_toolkit\\tools\\UAssetTool\\obj\\",
+      "projectPath": "B:\\MRivalsMods\\Coding\\REPAK-REVAMPED\\Repak-Gui-Revamped\\uasset_toolkit\\tools\\UAssetTool\\UAssetTool.csproj",
+      "packagesPath": "C:\\Users\\franc\\.nuget\\packages\\",
+      "outputPath": "B:\\MRivalsMods\\Coding\\REPAK-REVAMPED\\Repak-Gui-Revamped\\uasset_toolkit\\tools\\UAssetTool\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
       ],
       "configFilePaths": [
-        "C:\\Users\\NIkolas\\AppData\\Roaming\\NuGet\\NuGet.Config",
+        "C:\\Users\\franc\\AppData\\Roaming\\NuGet\\NuGet.Config",
         "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
         "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
       ],
@@ -229,14 +229,16 @@
         "net8.0"
       ],
       "sources": {
-        "https://api.nuget.org/v3/index.json": {}
+        "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+        "https://api.nuget.org/v3/index.json": {},
+        "https://nuget.bepinex.dev/v3/index.json": {}
       },
       "frameworks": {
         "net8.0": {
           "targetAlias": "net8.0",
           "projectReferences": {
-            "E:\\WindsurfCoding\\repak_rivals-remastered\\Repak_Gui-Revamped-TauriUpdate\\UAssetAPI\\UAssetAPI\\UAssetAPI.csproj": {
-              "projectPath": "E:\\WindsurfCoding\\repak_rivals-remastered\\Repak_Gui-Revamped-TauriUpdate\\UAssetAPI\\UAssetAPI\\UAssetAPI.csproj"
+            "B:\\MRivalsMods\\Coding\\REPAK-REVAMPED\\Repak-Gui-Revamped\\UAssetAPI\\UAssetAPI\\UAssetAPI.csproj": {
+              "projectPath": "B:\\MRivalsMods\\Coding\\REPAK-REVAMPED\\Repak-Gui-Revamped\\UAssetAPI\\UAssetAPI\\UAssetAPI.csproj"
             }
           }
         }
@@ -251,7 +253,7 @@
         "auditLevel": "low",
         "auditMode": "direct"
       },
-      "SdkAnalysisLevel": "9.0.200"
+      "SdkAnalysisLevel": "9.0.300"
     },
     "frameworks": {
       "net8.0": {
@@ -260,7 +262,7 @@
           "Microsoft.NET.ILLink.Tasks": {
             "suppressParent": "All",
             "target": "Package",
-            "version": "[8.0.15, )",
+            "version": "[8.0.20, )",
             "autoReferenced": true
           },
           "Newtonsoft.Json": {
@@ -279,12 +281,26 @@
         ],
         "assetTargetFallback": true,
         "warn": true,
+        "downloadDependencies": [
+          {
+            "name": "Microsoft.AspNetCore.App.Runtime.win-x64",
+            "version": "[8.0.20, 8.0.20]"
+          },
+          {
+            "name": "Microsoft.NETCore.App.Runtime.win-x64",
+            "version": "[8.0.20, 8.0.20]"
+          },
+          {
+            "name": "Microsoft.WindowsDesktop.App.Runtime.win-x64",
+            "version": "[8.0.20, 8.0.20]"
+          }
+        ],
         "frameworkReferences": {
           "Microsoft.NETCore.App": {
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.203/PortableRuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.305/PortableRuntimeIdentifierGraph.json"
       }
     },
     "runtimes": {

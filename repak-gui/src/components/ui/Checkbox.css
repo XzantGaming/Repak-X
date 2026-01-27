@@ -1,4 +1,4 @@
-.heroui-checkbox {
+.repakx-checkbox {
   display: inline-flex;
   align-items: center;
   gap: 0.55rem;
@@ -7,12 +7,12 @@
   cursor: pointer;
 }
 
-.heroui-checkbox.disabled {
+.repakx-checkbox.disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.heroui-checkbox-control {
+.repakx-checkbox-control {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -23,18 +23,18 @@
   cursor: pointer;
 }
 
-.heroui-checkbox-control:focus-visible {
+.repakx-checkbox-control:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 20%);
   outline-offset: 3px;
   border-radius: 4px;
 }
 
-.heroui-checkbox.circle .heroui-checkbox-control:focus-visible {
+.repakx-checkbox.circle .repakx-checkbox-control:focus-visible {
   border-radius: 50%;
 }
 
 /* Box Styles */
-.heroui-checkbox-box {
+.repakx-checkbox-box {
   position: relative;
   display: flex;
   align-items: center;
@@ -50,22 +50,22 @@
     transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.heroui-checkbox.circle .heroui-checkbox-box {
+.repakx-checkbox.circle .repakx-checkbox-box {
   border-radius: 50%;
 }
 
-.heroui-checkbox:not(.disabled):hover .heroui-checkbox-box {
+.repakx-checkbox:not(.disabled):hover .repakx-checkbox-box {
   border-color: var(--accent-primary, #4a9eff);
   transform: scale(1.05);
 }
 
-.heroui-checkbox.disabled .heroui-checkbox-box {
+.repakx-checkbox.disabled .repakx-checkbox-box {
   border-color: var(--panel-border);
   background: var(--bg-dark);
 }
 
 /* Checkmark Icon */
-.heroui-checkbox-icon {
+.repakx-checkbox-icon {
   width: 14px;
   height: 14px;
   color: #ffffff;
@@ -76,93 +76,93 @@
     transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.heroui-checkbox.checked .heroui-checkbox-icon,
-.heroui-checkbox.indeterminate .heroui-checkbox-icon {
+.repakx-checkbox.checked .repakx-checkbox-icon,
+.repakx-checkbox.indeterminate .repakx-checkbox-icon {
   opacity: 1;
   transform: scale(1);
 }
 
 /* Label */
-.heroui-checkbox-label {
+.repakx-checkbox-label {
   font-weight: 500;
   color: var(--text-primary);
   user-select: none;
 }
 
 /* Size Variants */
-.heroui-checkbox.sm .heroui-checkbox-box {
+.repakx-checkbox.sm .repakx-checkbox-box {
   width: 16px;
   height: 16px;
   border-radius: 4px;
 }
 
-.heroui-checkbox.sm.circle .heroui-checkbox-box {
+.repakx-checkbox.sm.circle .repakx-checkbox-box {
   border-radius: 50%;
 }
 
-.heroui-checkbox.sm .heroui-checkbox-icon {
+.repakx-checkbox.sm .repakx-checkbox-icon {
   width: 10px;
   height: 10px;
 }
 
-.heroui-checkbox.lg .heroui-checkbox-box {
+.repakx-checkbox.lg .repakx-checkbox-box {
   width: 24px;
   height: 24px;
   border-radius: 8px;
 }
 
-.heroui-checkbox.lg.circle .heroui-checkbox-box {
+.repakx-checkbox.lg.circle .repakx-checkbox-box {
   border-radius: 50%;
 }
 
-.heroui-checkbox.lg .heroui-checkbox-icon {
+.repakx-checkbox.lg .repakx-checkbox-icon {
   width: 18px;
   height: 18px;
 }
 
 /* Color Variants - Checked State */
-.heroui-checkbox.primary.checked .heroui-checkbox-box,
-.heroui-checkbox.primary.indeterminate .heroui-checkbox-box {
+.repakx-checkbox.primary.checked .repakx-checkbox-box,
+.repakx-checkbox.primary.indeterminate .repakx-checkbox-box {
   background: linear-gradient(135deg,
       var(--accent-primary, #4a9eff),
       color-mix(in srgb, var(--accent-primary, #4a9eff), white 15%));
   border-color: var(--accent-primary, #4a9eff);
 }
 
-.heroui-checkbox.secondary.checked .heroui-checkbox-box,
-.heroui-checkbox.secondary.indeterminate .heroui-checkbox-box {
+.repakx-checkbox.secondary.checked .repakx-checkbox-box,
+.repakx-checkbox.secondary.indeterminate .repakx-checkbox-box {
   background: linear-gradient(135deg,
       var(--accent-secondary, #b245ff),
       color-mix(in srgb, var(--accent-secondary, #b245ff), white 15%));
   border-color: var(--accent-secondary, #b245ff);
 }
 
-.heroui-checkbox.success.checked .heroui-checkbox-box,
-.heroui-checkbox.success.indeterminate .heroui-checkbox-box {
+.repakx-checkbox.success.checked .repakx-checkbox-box,
+.repakx-checkbox.success.indeterminate .repakx-checkbox-box {
   background: linear-gradient(135deg,
       var(--success, #4CAF50),
       color-mix(in srgb, var(--success, #4CAF50), white 15%));
   border-color: var(--success, #4CAF50);
 }
 
-.heroui-checkbox.warning.checked .heroui-checkbox-box,
-.heroui-checkbox.warning.indeterminate .heroui-checkbox-box {
+.repakx-checkbox.warning.checked .repakx-checkbox-box,
+.repakx-checkbox.warning.indeterminate .repakx-checkbox-box {
   background: linear-gradient(135deg,
       var(--warning, #ff9800),
       color-mix(in srgb, var(--warning, #ff9800), white 15%));
   border-color: var(--warning, #ff9800);
 }
 
-.heroui-checkbox.danger.checked .heroui-checkbox-box,
-.heroui-checkbox.danger.indeterminate .heroui-checkbox-box {
+.repakx-checkbox.danger.checked .repakx-checkbox-box,
+.repakx-checkbox.danger.indeterminate .repakx-checkbox-box {
   background: linear-gradient(135deg,
       var(--danger, #ff5252),
       color-mix(in srgb, var(--danger, #ff5252), white 15%));
   border-color: var(--danger, #ff5252);
 }
 
-.heroui-checkbox.default.checked .heroui-checkbox-box,
-.heroui-checkbox.default.indeterminate .heroui-checkbox-box {
+.repakx-checkbox.default.checked .repakx-checkbox-box,
+.repakx-checkbox.default.indeterminate .repakx-checkbox-box {
   background: linear-gradient(135deg,
       var(--text-secondary, #7a7a7a),
       color-mix(in srgb, var(--text-secondary, #7a7a7a), white 20%));
@@ -170,6 +170,6 @@
 }
 
 /* Active/Press Effect */
-.heroui-checkbox:not(.disabled):active .heroui-checkbox-box {
+.repakx-checkbox:not(.disabled):active .repakx-checkbox-box {
   transform: scale(0.95);
 }

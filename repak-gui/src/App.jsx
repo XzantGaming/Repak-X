@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
 import { listen } from '@tauri-apps/api/event'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useDebouncedCallback } from 'use-debounce'
 import { IconButton, Tooltip } from '@mui/material'
 import {
-  Settings as SettingsIcon,
   Refresh as RefreshIcon,
   CreateNewFolder as CreateNewFolderIcon,
   Search as SearchIcon,
@@ -16,22 +16,19 @@ import {
   GridView as GridViewIcon,
   ViewModule as ViewModuleIcon,
   ViewList as ViewListIcon,
-  Wifi as WifiIcon,
+  ViewHeadline as ViewHeadlineIcon,
   ViewSidebar as ViewSidebarIcon,
   PlayArrow as PlayArrowIcon,
-  Check as CheckIcon
+  Check as CheckIcon,
 } from '@mui/icons-material'
 import { RiDeleteBin2Fill } from 'react-icons/ri'
-import { FaTag } from "react-icons/fa6"
-import { FaTools } from "react-icons/fa"
+import { MdDriveFileMoveOutline } from "react-icons/md"
+import { FaTag, FaToolbox } from "react-icons/fa6"
+import { IoMdWifi, IoIosSettings, IoMdWarning } from "react-icons/io"
+import { GrInstall } from "react-icons/gr"
 import Checkbox from './components/ui/Checkbox'
 import ModDetailsPanel from './components/ModDetailsPanel'
 import ModsList from './components/ModsList'
-import InstallModPanel from './components/InstallModPanel'
-import SettingsPanel from './components/SettingsPanel'
-import CreditsPanel from './components/CreditsPanel'
-import ToolsPanel from './components/ToolsPanel'
-import SharingPanel from './components/SharingPanel'
 import FileTree from './components/FileTree'
 import FolderTree from './components/FolderTree'
 import ContextMenu from './components/ContextMenu'
@@ -40,8 +37,10 @@ import DropZoneOverlay from './components/DropZoneOverlay'
 import ExtensionModOverlay from './components/ExtensionModOverlay'
 import QuickOrganizeOverlay from './components/QuickOrganizeOverlay'
 import InputPromptModal from './components/InputPromptModal'
+
 import { AuroraText } from './components/ui/AuroraText'
 import { AlertProvider, useAlert } from './components/AlertHandler'
+import { useGlobalTooltips } from './hooks/useGlobalTooltips'
 import Switch from './components/ui/Switch'
 import NumberInput from './components/ui/NumberInput'
 import characterDataStatic from './data/character_data.json'
@@ -49,78 +48,27 @@ import './App.css'
 import './styles/theme.css'
 import './styles/Badges.css'
 import './styles/Fonts.css'
+import './styles/GlobalTooltips.css'
 import ModularLogo from './components/ui/ModularLogo'
-import ClashPanel from './components/ClashPanel'
 import HeroFilterDropdown from './components/HeroFilterDropdown'
+import CustomDropdown from './components/CustomDropdown'
 import ShortcutsHelpModal from './components/ShortcutsHelpModal'
 
-const toTagArray = (tags) => Array.isArray(tags) ? tags : (tags ? [tags] : [])
+// Utility functions
+import { toTagArray } from './utils/tags'
+import { detectHeroes } from './utils/heroes'
+import { formatFileSize, normalizeModBaseName } from './utils/format'
+import { getAdditionalCategories } from './utils/mods'
 
-function detectHeroes(files) {
-  const heroIds = new Set()
+import TitleBar from './components/TitleBar'
 
-  // Regex patterns matching backend logic
-  const pathRegex = /(?:Characters|Hero_ST|Hero)\/(\d{4})/
-  const filenameRegex = /[_/](10[1-6]\d)(\d{3})/
-
-  files.forEach(file => {
-    // Check path first - primary detection method
-    const pathMatch = file.match(pathRegex)
-    if (pathMatch) {
-      heroIds.add(pathMatch[1])
-      return // Skip filename check to avoid false positives from shared assets
-    }
-
-    // Fallback: Check filename only if path didn't match
-    const filename = file.split('/').pop() || ''
-    if (!filename.toLowerCase().startsWith('mi_')) {
-      const filenameMatch = filename.match(filenameRegex)
-      if (filenameMatch) {
-        heroIds.add(filenameMatch[1])
-      }
-    }
-  })
-
-  // Map IDs to names
-  const heroNames = new Set()
-  heroIds.forEach(id => {
-    const char = characterDataStatic.find(c => c.id === id)
-    if (char) {
-      heroNames.add(char.name)
-    }
-  })
-
-  return Array.from(heroNames)
-}
-
-function getAdditionalCategories(details) {
-  if (!details) return []
-  if (details.additional_categories && details.additional_categories.length > 0) {
-    return details.additional_categories
-  }
-  if (typeof details.mod_type === 'string') {
-    const match = details.mod_type.match(/\[(.*?)\]/)
-    if (match && match[1]) {
-      return match[1].split(',').map(s => s.trim())
-    }
-  }
-  return []
-}
-
-// Generate a normalized mod filename with priority suffix
-// e.g. "My Cool Mod" with minNines=7 -> "My_Cool_Mod_9999999_P"
-function normalizeModBaseName(name, minNines = 7) {
-  // Clean the name: remove existing suffixes and extension
-  let cleanName = name
-    .replace(/\.pak$/i, '')           // Remove .pak extension
-    .replace(/_\d+_P$/gi, '')         // Remove existing priority suffix
-    .replace(/\s+/g, '_')             // Replace spaces with underscores
-    .replace(/[^\w_-]/g, '')          // Remove special characters
-
-  // Generate the priority suffix
-  const nines = '9'.repeat(minNines)
-  return `${cleanName}_${nines}_P`
-}
+// Lazy load heavy panels
+const InstallModPanel = lazy(() => import('./components/InstallModPanel'))
+const SettingsPanel = lazy(() => import('./components/SettingsPanel'))
+const CreditsPanel = lazy(() => import('./components/CreditsPanel'))
+const ToolsPanel = lazy(() => import('./components/ToolsPanel'))
+const SharingPanel = lazy(() => import('./components/SharingPanel'))
+const ClashPanel = lazy(() => import('./components/ClashPanel'))
 
 function App() {
   const [globalUsmap, setGlobalUsmap] = useState('');
@@ -129,13 +77,26 @@ function App() {
   const [showHeroIcons, setShowHeroIcons] = useState(false);
   const [showHeroBg, setShowHeroBg] = useState(false);
   const [showModType, setShowModType] = useState(false);
+  const [showExperimental, setShowExperimental] = useState(false);
 
   const [theme, setTheme] = useState('dark');
   const [accentColor, setAccentColor] = useState('#4a9eff');
-  const [showSettings, setShowSettings] = useState(false);
-  const [showToolsPanel, setShowToolsPanel] = useState(false);
-  const [showSharingPanel, setShowSharingPanel] = useState(false);
-  const [showCredits, setShowCredits] = useState(false);
+
+  // Panel visibility state - grouped for cleaner management
+  const [panels, setPanels] = useState({
+    settings: false,
+    tools: false,
+    sharing: false,
+    credits: false,
+    install: false,
+    clash: false,
+    shortcuts: false
+  });
+
+  // Helper to open/close a specific panel
+  const setPanel = (panelName, isOpen) => {
+    setPanels(prev => ({ ...prev, [panelName]: isOpen }));
+  };
 
   const [gamePath, setGamePath] = useState('')
   const [mods, setMods] = useState([])
@@ -163,9 +124,22 @@ function App() {
   const [availableCategories, setAvailableCategories] = useState([])
   const [showCharacterFilters, setShowCharacterFilters] = useState(false)
   const [showTypeFilters, setShowTypeFilters] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
+
+  // Search state with debounce
+  const [searchQuery, setSearchQuery] = useState('') // Actual filter query (debounced)
+  const [localSearch, setLocalSearch] = useState('') // Input value (immediate)
+
+  const debouncedSetSearch = useDebouncedCallback((value) => {
+    setSearchQuery(value)
+  }, 300)
+
+  const handleSearchChange = (e) => {
+    const value = e.target.value
+    setLocalSearch(value)
+    debouncedSetSearch(value)
+  }
+
   const [expandedFolders, setExpandedFolders] = useState(new Set())
-  const [showInstallPanel, setShowInstallPanel] = useState(false)
   const [modsToInstall, setModsToInstall] = useState([])
   const [installLogs, setInstallLogs] = useState([])
   const [modLoadingProgress, setModLoadingProgress] = useState(0) // 0-100 for progress, -1 for indeterminate
@@ -173,9 +147,9 @@ function App() {
   const [selectedFolderId, setSelectedFolderId] = useState('all')
   const [viewMode, setViewMode] = useState('list') // 'grid', 'compact', 'list'
   const [contextMenu, setContextMenu] = useState(null) // { x, y, mod }
+  const [isLogDrawerOpen, setIsLogDrawerOpen] = useState(false)
 
   const [clashes, setClashes] = useState([])
-  const [showClashPanel, setShowClashPanel] = useState(false)
   const [launchSuccess, setLaunchSuccess] = useState(false)
   const [characterData, setCharacterData] = useState(characterDataStatic)
   const [isDragging, setIsDragging] = useState(false)
@@ -184,84 +158,68 @@ function App() {
   const [extensionModPath, setExtensionModPath] = useState(null) // Path of mod received from browser extension
   const [quickOrganizePaths, setQuickOrganizePaths] = useState(null) // Paths of PAKs to quick-organize (no uassets)
   const [newFolderPrompt, setNewFolderPrompt] = useState(null) // {paths: []} when prompting for new folder name
-  const [showShortcutsHelp, setShowShortcutsHelp] = useState(false)
   const dropTargetFolderRef = useRef(null)
   const searchInputRef = useRef(null)
   const modsGridRef = useRef(null)
   const gameRunningRef = useRef(false)
 
+  // Bulk delete state
+  const [isDeletingBulk, setIsDeletingBulk] = useState(false)
+  const deleteBulkTimeoutRef = useRef(null)
+
   // Alert system hook
   const alert = useAlert();
 
-  // DEV: Sample alerts for testing the Alert component
-  const sampleAlerts = [
-    { color: 'success', title: 'Mod Installed Successfully', description: 'Luna Snow - Ice Empress skin has been added to your mods folder.' },
-    { color: 'success', variant: 'solid', title: 'All Mods Enabled', description: '12 mods have been activated and are ready to use.' },
-    { color: 'danger', title: 'Installation Failed', description: 'Could not extract the mod archive. The file may be corrupted or password-protected.' },
-    { color: 'danger', variant: 'bordered', title: 'Conflict Detected', description: '3 mods are modifying the same game files. Check the Clashes panel for details.' },
-    { color: 'warning', title: 'Game Running', description: 'Cannot modify mods while Marvel Rivals is running. Please close the game first.' },
-    { color: 'warning', variant: 'faded', title: 'Outdated Mod', description: 'Spider-Man - Symbiote skin may not be compatible with the latest game patch.' },
-    { color: 'primary', title: 'Update Available', description: 'Repak X v2.1.0 is now available with new features and bug fixes.' },
-    { color: 'primary', variant: 'solid', title: 'Sync Complete', description: 'Your mod library has been synchronized with the cloud backup.' },
-    { color: 'secondary', title: 'Backup Created', description: 'All 47 mods have been archived to your backup location.' },
-    { color: 'secondary', variant: 'faded', title: 'New Mod Source', description: 'Nexus Mods integration is now available. Connect your account in Settings.' },
-    { color: 'default', title: 'Quick Tip', description: 'Drag and drop PAK files directly onto the app to install them instantly.' },
-    { color: 'success', title: 'Priority Set', description: 'Iron Man - Mark 85 is now set as priority 1 for armor slot.' },
-  ]
-
-  // Sample endContent alerts
-  const endContentAlerts = [
-    {
-      color: 'warning',
-      title: 'Storage Almost Full',
-      description: 'You have used 90% of your mods folder space.',
-      endContent: <button className="toast-action-btn">Clean Up</button>
-    },
-    {
-      color: 'primary',
-      title: 'New Version Available',
-      description: 'Repak X v2.2.0 has been released.',
-      endContent: <button className="toast-action-btn">Update</button>
-    },
-  ]
-
-  const handleTestAlert = () => {
-    const testType = Math.random()
-
-    if (testType < 0.2) {
-      // 20% chance: Promise toast demo
-      alert.promise(
-        new Promise((resolve, reject) => {
-          setTimeout(() => {
-            Math.random() > 0.3 ? resolve() : reject(new Error('Random failure'))
-          }, 2000)
-        }),
-        {
-          loading: { title: 'Processing...', description: 'Installing mod files' },
-          success: { title: 'Installation Complete', description: 'All files have been installed successfully' },
-          error: { title: 'Installation Failed', description: 'An error occurred during installation' }
-        }
-      )
-    } else if (testType < 0.35) {
-      // 15% chance: endContent alert
-      const randomEndContent = endContentAlerts[Math.floor(Math.random() * endContentAlerts.length)]
-      alert.showAlert(randomEndContent)
-    } else {
-      // 65% chance: Regular alert
-      const randomAlert = sampleAlerts[Math.floor(Math.random() * sampleAlerts.length)]
-      alert.showAlert(randomAlert)
-    }
-  }
+  // Global tooltips - replaces native browser tooltips with styled ones
+  useGlobalTooltips();
 
   const handleCheckClashes = async () => {
     try {
       setStatus('Checking for clashes...')
       const result = await invoke('check_mod_clashes')
       setClashes(result)
-      setShowClashPanel(true)
+      setPanel('clash', true)
       setStatus(`Found ${result.length} clashes`)
     } catch (error) {
       setStatus('Error checking clashes: ' + error)
+    }
+  }
+
+  const handleCheckSingleModClashes = async (mod) => {
+    try {
+      setStatus(`Checking conflicts for ${mod.customName || mod.mod_name || 'mod'}...`)
+      const conflicts = await invoke('check_single_mod_conflicts', { modPath: mod.path })
+
+      // Transform SingleModConflict objects to ModClash format for the ClashPanel
+      // Backend SingleModConflict: { conflicting_mod_path, conflicting_mod_name, overlapping_files, ... }
+      // Frontend ModClash expected: { file_path, mod_paths: [path1, path2] }
+
+      const fileMap = new Map() // file_path -> Set(mod_paths)
+
+      if (conflicts && conflicts.length > 0) {
+        conflicts.forEach(conflict => {
+          conflict.overlapping_files.forEach(file => {
+            if (!fileMap.has(file)) {
+              fileMap.set(file, new Set())
+            }
+            // Add both the checked mod and the conflicting mod
+            fileMap.get(file).add(mod.path)
+            fileMap.get(file).add(conflict.conflicting_mod_path)
+          })
+        })
+      }
+
+      const transformedClashes = Array.from(fileMap.entries()).map(([file_path, modPathsSet]) => ({
+        file_path,
+        mod_paths: Array.from(modPathsSet)
+      }))
+
+      setClashes(transformedClashes)
+      setPanel('clash', true)
+      setStatus(`Found ${transformedClashes.length} conflicts for this mod`)
+    } catch (error) {
+      setStatus('Error checking mod conflicts: ' + error)
+      console.error(error)
     }
   }
 
@@ -286,7 +244,7 @@ function App() {
       await loadMods()
 
       // Refresh clash list if panel is open
-      if (showClashPanel) {
+      if (panels.clash) {
         const result = await invoke('check_mod_clashes')
         setClashes(result)
       }
@@ -323,6 +281,70 @@ function App() {
 
   const closeContextMenu = () => {
     setContextMenu(null)
+  }
+
+  // Bulk Delete Handlers
+  const handleBulkDelete = async () => {
+    if (selectedMods.size === 0) return
+
+    try {
+      setStatus(`Deleting ${selectedMods.size} mods...`)
+      setModLoadingProgress(-1)
+      setIsModsLoading(true)
+
+      const modPaths = Array.from(selectedMods)
+      let deletedCount = 0
+      let errors = []
+
+      for (const path of modPaths) {
+        try {
+          // Find mod details to check if it's a folder mod or regular file
+          // If we don't have details, try delete_mod anyway
+          await invoke('delete_mod', { modPath: path })
+          deletedCount++
+        } catch (e) {
+          console.error(`Failed to delete ${path}:`, e)
+          errors.push(path)
+        }
+      }
+
+      if (errors.length > 0) {
+        alert.warning(
+          'Bulk Delete Incomplete',
+          `Deleted ${deletedCount} mods. Failed to delete ${errors.length} mods.`
+        )
+      } else {
+        alert.success('Bulk Delete', `Successfully deleted ${deletedCount} mods.`)
+      }
+
+      setSelectedMods(new Set()) // Clear selection
+      await loadMods()
+      await loadFolders()
+
+    } catch (e) {
+      console.error('Bulk delete failed:', e)
+      setStatus('Bulk delete failed: ' + e)
+    } finally {
+      setIsModsLoading(false)
+      setModLoadingProgress(0)
+    }
+  }
+
+  const handleBulkDeleteDown = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDeletingBulk(true)
+    deleteBulkTimeoutRef.current = setTimeout(() => {
+      handleBulkDelete()
+      setIsDeletingBulk(false)
+    }, 2000)
+  }
+
+  const handleBulkDeleteUp = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDeletingBulk(false)
+    if (deleteBulkTimeoutRef.current) clearTimeout(deleteBulkTimeoutRef.current)
   }
 
   useEffect(() => {
@@ -407,11 +429,27 @@ function App() {
       }
 
       // Show persistent error toast for crashes
-      alert.showAlert({
-        color: 'danger',
-        title: payload.title || 'Game Crashed',
-        description: enhancedDesc,
-        duration: 0 // Persistent - user must dismiss
+      alert.crash(payload.title, enhancedDesc, {
+        action: {
+          label: 'Details',
+          onClick: () => {
+            const report = [
+              '--- CRASH REPORT ---',
+              `Timestamp: ${new Date().toLocaleString()}`,
+              `Type: ${payload.crash_type || 'Unknown'}`,
+              `Error: ${payload.error_message || 'N/A'}`,
+              `Asset: ${payload.asset_path || 'N/A'}`,
+              `Is Mesh Crash: ${payload.is_mesh_crash ? 'Yes' : 'No'}`,
+              '-------------------',
+              'Full Details for dev debugging:',
+              JSON.stringify(payload, null, 2),
+              '-------------------'
+            ]
+            setInstallLogs(report)
+            setIsLogDrawerOpen(true)
+            alert.info('Crash Details', 'Report opened in Log Drawer.')
+          }
+        }
       })
 
       // Log detailed crash info to console for debugging
@@ -546,7 +584,7 @@ function App() {
 
         // Normal drop: show install panel
         setModsToInstall(modsData)
-        setShowInstallPanel(true)
+        setPanel('install', true)
       } catch (error) {
         console.error('Parse error:', error)
         setStatus(`Error parsing dropped items: ${error}`)
@@ -654,6 +692,14 @@ function App() {
         setCharacterData(charData)
       } catch (charErr) {
         console.error('Failed to fetch character data:', charErr)
+      }
+
+      // Fetch stored USMAP path
+      try {
+        const usmapPath = await invoke('get_usmap_path')
+        setGlobalUsmap(usmapPath)
+      } catch (err) {
+        console.error('Failed to fetch usmap path:', err)
       }
 
       await loadMods()
@@ -870,7 +916,7 @@ function App() {
         const paths = Array.isArray(selected) ? selected : [selected]
         const modsData = await invoke('parse_dropped_files', { paths })
         setModsToInstall(modsData)
-        setShowInstallPanel(true)
+        setPanel('install', true)
       }
     } catch (error) {
       setStatus('Error selecting mods: ' + error)
@@ -904,7 +950,7 @@ function App() {
     }
 
     setModsToInstall([getRandomMod(1), getRandomMod(2), getRandomMod(3)])
-    setShowInstallPanel(true)
+    setPanel('install', true)
   }
 
   const handleDeleteMod = async (modPath) => {
@@ -918,7 +964,9 @@ function App() {
     // No confirmation prompt needed here, the hold-to-delete button handles the intent
 
     try {
-      await invoke('delete_mod', { path: modPath })
+      // Strip .bak_repak extension to get base path for proper deletion of all associated files
+      const basePath = modPath.replace(/\.bak_repak$/i, '.pak')
+      await invoke('delete_mod', { path: basePath })
       setStatus('Mod deleted')
 
       // Clear selection if the deleted mod was selected
@@ -969,17 +1017,8 @@ function App() {
     }
   }
 
-  const handleCreateFolder = async () => {
-    const name = prompt('Enter folder name:')
-    if (!name) return
-
-    try {
-      await invoke('create_folder', { name })
-      await loadFolders()
-      setStatus('Folder created')
-    } catch (error) {
-      setStatus('Error creating folder: ' + error)
-    }
+  const handleCreateFolder = () => {
+    setNewFolderPrompt({ paths: [] })
   }
 
   // Create a folder and return its ID (for use by overlay components)
@@ -998,18 +1037,26 @@ function App() {
     }
   }
 
-  // Handle new folder prompt confirmation (from drop zone)
+  // Handle new folder prompt confirmation (from drop zone or manual creation)
   const handleNewFolderConfirm = async (folderName) => {
-    if (!newFolderPrompt || !newFolderPrompt.paths) return
+    if (!newFolderPrompt) return
 
-    const paths = newFolderPrompt.paths
+    const paths = newFolderPrompt.paths || []
     const pathCount = paths.length
     const pathsCopy = [...paths]
+
+    // Check specific to quick organize flow
+    const isQuickOrganize = pathCount > 0
+
     setNewFolderPrompt(null) // Close the modal
 
     // Start progress bar (indeterminate)
-    setIsModsLoading(true)
-    setModLoadingProgress(-1)
+    // Only show full loading UI if we are doing a quick organize (installing files)
+    // For simple folder creation, we can just use the status bar, or a lighter loader
+    if (isQuickOrganize) {
+      setIsModsLoading(true)
+      setModLoadingProgress(-1)
+    }
 
     // Use promise toast for loading state and result
     alert.promise(
@@ -1019,22 +1066,18 @@ function App() {
           await invoke('create_folder', { name: folderName })
           await loadFolders()
 
-          // Then quick organize to the new folder
-          await invoke('quick_organize', { paths: pathsCopy, targetFolder: folderName })
-          await loadMods()
-          await loadFolders()
-          setStatus(`Installed ${pathCount} item(s) to "${folderName}"!`)
+          if (isQuickOrganize) {
+            // Then quick organize to the new folder
+            await invoke('quick_organize', { paths: pathsCopy, targetFolder: folderName })
+            await loadMods()
+            await loadFolders()
+            setStatus(`Installed ${pathCount} item(s) to "${folderName}"!`)
 
-          // Show warning after success if game is running
-          if (gameRunning) {
-            alert.warning(
-              'Game Running',
-              'Mods installed, but changes will only take effect after restarting the game.',
-              { duration: 8000 }
-            )
+            return { count: pathCount, folder: folderName, isInstall: true }
+          } else {
+            setStatus(`Folder "${folderName}" created`)
+            return { folder: folderName, isInstall: false }
           }
-
-          return { count: pathCount, folder: folderName }
         } finally {
           setIsModsLoading(false)
           setModLoadingProgress(0)
@@ -1042,15 +1085,19 @@ function App() {
       })(),
       {
         loading: {
-          title: 'Creating Folder & Installing',
-          description: `Creating "${folderName}" and copying ${pathCount} file${pathCount > 1 ? 's' : ''}...`
+          title: isQuickOrganize ? 'Creating Folder & Installing' : 'Creating Folder',
+          description: isQuickOrganize
+            ? `Creating "${folderName}" and copying ${pathCount} file${pathCount > 1 ? 's' : ''}...`
+            : `Creating folder "${folderName}"...`
         },
         success: (result) => ({
-          title: 'Installation Complete',
-          description: `Created folder and installed ${result.count} mod${result.count > 1 ? 's' : ''}`
+          title: result.isInstall ? 'Installation Complete' : 'Folder Created',
+          description: result.isInstall
+            ? `Created folder and installed ${result.count} mod${result.count > 1 ? 's' : ''}`
+            : `Successfully created "${result.folder}"`
         }),
         error: (err) => ({
-          title: 'Installation Failed',
+          title: 'Operation Failed',
           description: String(err)
         })
       }
@@ -1062,6 +1109,10 @@ function App() {
 
     try {
       await invoke('delete_folder', { id: folderId })
+      if (selectedFolderId === folderId) {
+        setSelectedFolderId('all')
+      }
+
       await loadFolders()
       await loadMods()
       setStatus('Folder deleted')
@@ -1383,14 +1434,6 @@ function App() {
     }
   }, [isResizing])
 
-  const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 B'
-    const k = 1024
-    const sizes = ['B', 'KB', 'MB', 'GB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
-  }
-
   // Compute base filtered mods (excluding folder filter)
   const baseFilteredMods = mods.filter(mod => {
     // Hide LODs_Disabler mods from the list - they are controlled via Tools panel
@@ -1470,29 +1513,41 @@ function App() {
       const isInputActive = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA'
       if (isInputActive && key !== 'escape' && !(ctrl && key === 'f')) return
 
+      // F5 - Disable browser refresh
+      if (key === 'f5') {
+        e.preventDefault()
+        return
+      }
+      // Ctrl+R - Full app reload (reset all states)
+      else if (ctrl && key === 'r' && !shift) {
+        e.preventDefault()
+        alert.info('App Reloaded', 'Refreshed all data and resetted states.')
+        loadInitialData()
+      }
       // Ctrl+F - Focus search
-      if (ctrl && key === 'f') {
+      else if (ctrl && key === 'f') {
         e.preventDefault()
         searchInputRef.current?.focus()
       }
-      // Ctrl+Shift+R - Refresh mods
+      // Ctrl+Shift+R - Refresh mods only
       else if (ctrl && shift && key === 'r') {
         e.preventDefault()
+        alert.info('Mods Refreshed', 'Refreshed mods list.')
         loadMods()
       }
       // Ctrl+, - Settings
       else if (ctrl && key === ',') {
         e.preventDefault()
-        setShowSettings(true)
+        setPanel('settings', true)
       }
       // Escape - Close panels or deselect
       else if (key === 'escape') {
-        if (showShortcutsHelp) setShowShortcutsHelp(false)
-        else if (showSettings) setShowSettings(false)
-        else if (showToolsPanel) setShowToolsPanel(false)
-        else if (showSharingPanel) setShowSharingPanel(false)
-        else if (showInstallPanel) setShowInstallPanel(false)
-        else if (showClashPanel) setShowClashPanel(false)
+        if (panels.shortcuts) setPanel('shortcuts', false)
+        else if (panels.settings) setPanel('settings', false)
+        else if (panels.tools) setPanel('tools', false)
+        else if (panels.sharing) setPanel('sharing', false)
+        else if (panels.install) setPanel('install', false)
+        else if (panels.clash) setPanel('clash', false)
         else if (selectedMod) setSelectedMod(null)
       }
       // Ctrl+E - Toggle mod enabled/disabled
@@ -1529,7 +1584,7 @@ function App() {
 
         let newIndex = currentIndex
 
-        if (viewMode === 'list') {
+        if (viewMode === 'list' || viewMode === 'list-compact') {
           // List view: only up/down
           if (key === 'arrowup') newIndex = Math.max(0, currentIndex - 1)
           else if (key === 'arrowdown') newIndex = Math.min(filteredMods.length - 1, currentIndex + 1)
@@ -1566,15 +1621,14 @@ function App() {
       // F1 - Show shortcuts help
       else if (key === 'f1') {
         e.preventDefault()
-        setShowShortcutsHelp(true)
+        setPanel('shortcuts', true)
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [
-    selectedMod, showSettings, showToolsPanel, showSharingPanel,
-    showInstallPanel, showClashPanel, showShortcutsHelp, viewMode,
+    selectedMod, panels, viewMode,
     filteredMods, isRightPanelOpen, lastPanelWidth
   ])
 
@@ -1596,7 +1650,7 @@ function App() {
   }
 
   const handleInstallMods = async (modsWithSettings) => {
-    setShowInstallPanel(false)
+    setPanel('install', false)
     setInstallLogs([])
 
     const modCount = modsWithSettings.length
@@ -1714,13 +1768,21 @@ function App() {
     setShowHeroIcons(settings.showHeroIcons || false)
     setShowHeroBg(settings.showHeroBg || false)
     setShowModType(settings.showModType || false)
+    setShowExperimental(settings.showExperimental || false)
 
     // Save to localStorage for persistence
     localStorage.setItem('hideSuffix', JSON.stringify(settings.hideSuffix || false))
     localStorage.setItem('autoOpenDetails', JSON.stringify(settings.autoOpenDetails || false))
     localStorage.setItem('showHeroIcons', JSON.stringify(settings.showHeroIcons || false))
     localStorage.setItem('showHeroBg', JSON.stringify(settings.showHeroBg || false))
+    localStorage.setItem('showHeroBg', JSON.stringify(settings.showHeroBg || false))
     localStorage.setItem('showModType', JSON.stringify(settings.showModType || false))
+    localStorage.setItem('showExperimental', JSON.stringify(settings.showExperimental || false))
+
+    // Revert to normal list view if disabling experimental features while in compact list
+    if (settings.showExperimental === false && viewMode === 'list-compact') {
+      handleViewModeChange('list')
+    }
 
     setStatus('Settings saved')
   }
@@ -1737,6 +1799,7 @@ function App() {
     const savedShowHeroIcons = JSON.parse(localStorage.getItem('showHeroIcons') || 'false');
     const savedShowHeroBg = JSON.parse(localStorage.getItem('showHeroBg') || 'false');
     const savedShowModType = JSON.parse(localStorage.getItem('showModType') || 'false');
+    const savedShowExperimental = JSON.parse(localStorage.getItem('showExperimental') || 'false');
 
     handleThemeChange(savedTheme);
     handleAccentChange(savedAccent);
@@ -1746,6 +1809,7 @@ function App() {
     setShowHeroIcons(savedShowHeroIcons);
     setShowHeroBg(savedShowHeroBg);
     setShowModType(savedShowModType);
+    setShowExperimental(savedShowExperimental);
   }, []);
 
   // Add these handlers
@@ -1783,68 +1847,81 @@ function App() {
     localStorage.setItem('viewMode', newMode);
   };
 
+  // Remove static splash screen
+  useEffect(() => {
+    const splash = document.getElementById('splash-screen');
+    if (splash) {
+      splash.style.transition = 'opacity 0.4s ease-out';
+      splash.style.opacity = '0';
+      setTimeout(() => splash.remove(), 400);
+    }
+  }, []);
+
   return (
     <div className="app">
-      {showInstallPanel && (
-        <InstallModPanel
-          mods={modsToInstall}
-          allTags={allTags}
-          folders={folders}
-          onCreateTag={registerTagFromInstallPanel}
-          onCreateFolder={handleCreateFolderAndReturn}
-          onInstall={handleInstallMods}
-          onCancel={() => setShowInstallPanel(false)}
-        />
-      )}
+      <TitleBar />
+      <Suspense fallback={null}>
+        {panels.install && (
+          <InstallModPanel
+            mods={modsToInstall}
+            allTags={allTags}
+            folders={folders}
+            onCreateTag={registerTagFromInstallPanel}
+            onCreateFolder={handleCreateFolderAndReturn}
+            onInstall={handleInstallMods}
+            onCancel={() => setPanel('install', false)}
+          />
+        )}
 
-      {showClashPanel && (
-        <ClashPanel
-          clashes={clashes}
-          mods={mods}
-          onSetPriority={handleSetPriority}
-          onClose={() => setShowClashPanel(false)}
-        />
-      )}
+        {panels.clash && (
+          <ClashPanel
+            clashes={clashes}
+            mods={mods}
+            onSetPriority={handleSetPriority}
+            onClose={() => setPanel('clash', false)}
+          />
+        )}
 
-      {showSettings && (
-        <SettingsPanel
-          settings={{ globalUsmap, hideSuffix, autoOpenDetails, showHeroIcons, showHeroBg, showModType }}
-          onSave={handleSaveSettings}
-          onClose={() => setShowSettings(false)}
-          theme={theme}
-          setTheme={handleThemeChange}
-          accentColor={accentColor}
-          setAccentColor={handleAccentChange}
-          gamePath={gamePath}
-          onAutoDetectGamePath={handleAutoDetect}
-          onBrowseGamePath={handleBrowseGamePath}
-          isGamePathLoading={loading}
-        />
-      )}
+        {panels.settings && (
+          <SettingsPanel
+            settings={{ globalUsmap, hideSuffix, autoOpenDetails, showHeroIcons, showHeroBg, showModType, showExperimental }}
+            onSave={handleSaveSettings}
+            onClose={() => setPanel('settings', false)}
+            theme={theme}
+            setTheme={handleThemeChange}
+            accentColor={accentColor}
+            setAccentColor={handleAccentChange}
+            gamePath={gamePath}
+            onAutoDetectGamePath={handleAutoDetect}
+            onBrowseGamePath={handleBrowseGamePath}
+            isGamePathLoading={loading}
+          />
+        )}
 
-      {showCredits && (
-        <CreditsPanel
-          onClose={() => setShowCredits(false)}
-          version={version}
-        />
-      )}
+        {panels.credits && (
+          <CreditsPanel
+            onClose={() => setPanel('credits', false)}
+            version={version}
+          />
+        )}
 
-      {showToolsPanel && (
-        <ToolsPanel
-          onClose={() => setShowToolsPanel(false)}
-          mods={mods}
-          onToggleMod={handleToggleMod}
-        />
-      )}
+        {panels.tools && (
+          <ToolsPanel
+            onClose={() => setPanel('tools', false)}
+            mods={mods}
+            onToggleMod={handleToggleMod}
+          />
+        )}
 
-      {showSharingPanel && (
-        <SharingPanel
-          onClose={() => setShowSharingPanel(false)}
-          gamePath={gamePath}
-          installedMods={mods}
-          selectedMods={selectedMods}
-        />
-      )}
+        {panels.sharing && (
+          <SharingPanel
+            onClose={() => setPanel('sharing', false)}
+            gamePath={gamePath}
+            installedMods={mods}
+            selectedMods={selectedMods}
+          />
+        )}
+      </Suspense>
 
       {/* Drop Zone Overlay */}
       <DropZoneOverlay
@@ -1889,9 +1966,9 @@ function App() {
       {/* New Folder Prompt Modal - for creating folders during drop */}
       <InputPromptModal
         isOpen={!!newFolderPrompt}
-        title="Create New Folder"
+        title={newFolderPrompt?.paths?.length > 0 ? "Create Folder & Install" : "Create New Folder"}
         placeholder="Enter folder name..."
-        confirmText="Create & Install"
+        confirmText={newFolderPrompt?.paths?.length > 0 ? "Create & Install" : "Create"}
         onConfirm={handleNewFolderConfirm}
         onCancel={() => {
           setNewFolderPrompt(null)
@@ -1900,32 +1977,19 @@ function App() {
       />
 
 
-      <header className="header" style={{ display: 'flex', alignItems: 'center' }}>
+      <header className="header">
         <div
           className="header-branding"
-          onClick={() => setShowCredits(true)}
+          onClick={() => setPanel('credits', true)}
           title="View Credits"
         >
-          <ModularLogo size={50} className="repak-icon" style={{ marginRight: '10px' }} />
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem' }}>
-            <h1 className="font-bbh-bartle" style={{ margin: 0 }}>Repak <AuroraText className="font-bbh-bartle">X</AuroraText> </h1> <h4 style={{ margin: 0 }}>[DEV]</h4>
-            <span className="version" style={{ fontSize: '0.9rem', opacity: 0.7 }}>v{version}</span>
+          <ModularLogo size={50} className="repak-icon" />
+          <div className="header-title-group">
+            <h1 className="font-logo">Repak <AuroraText className="font-logo">X</AuroraText> </h1> <h4>[DEV]</h4>
+            <span className="version">v{version}</span>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginLeft: 'auto' }}>
-          <button
-            onClick={handleTestAlert}
-            className="btn-settings"
-            title="DEV: Test Alert"
-            style={{
-              background: 'rgba(255, 165, 0, 0.1)',
-              color: 'orange',
-              border: '1px solid rgba(255, 165, 0, 0.3)',
-              minHeight: '42px'
-            }}
-          >
-            DEV: Test Alert
-          </button>
+        <div className="header-actions-right">
           <button
             className="btn-settings"
             title={gameRunning ? "Game is currently running" : "Launch Rivals"}
@@ -1945,14 +2009,6 @@ function App() {
                 : launchSuccess
                   ? '1px solid rgba(76, 175, 80, 0.5)'
                   : '1px solid rgba(74, 158, 255, 0.3)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              fontWeight: 600,
-              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              padding: '6px 16px',
-              minWidth: '130px',
-              justifyContent: 'center',
               cursor: gameRunning ? 'default' : 'pointer'
             }}
             onClick={async () => {
@@ -1971,30 +2027,30 @@ function App() {
               {gameRunning ? (
                 <motion.span
                   key="running"
+                  className="launch-button-content"
                   initial={{ opacity: 0, scale: 0.5 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.5 }}
-                  style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
                 >
-                  <span className="blink-icon" style={{ fontSize: '1rem' }}>⚠️</span> Game Running
+                  <span className="blink-icon">⚠️</span> Game Running
                 </motion.span>
               ) : launchSuccess ? (
                 <motion.span
                   key="success"
+                  className="launch-button-content"
                   initial={{ opacity: 0, scale: 0.5 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.5 }}
-                  style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
                 >
                   <CheckIcon fontSize="small" /> Launched
                 </motion.span>
               ) : (
                 <motion.span
                   key="play"
+                  className="launch-button-content"
                   initial={{ opacity: 0, scale: 0.5 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.5 }}
-                  style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
                 >
                   <PlayArrowIcon fontSize="small" /> Launch Game
                 </motion.span>
@@ -2002,53 +2058,25 @@ function App() {
             </AnimatePresence>
           </button>
 
-          {false && (
-            <>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', background: 'rgba(255,0,0,0.1)', padding: '4px 8px', borderRadius: '4px', border: '1px solid rgba(255,0,0,0.3)' }}>
-                <input
-                  type="checkbox"
-                  checked={gameRunning}
-                  onChange={(e) => setGameRunning(e.target.checked)}
-                />
-                <span style={{ fontSize: '0.8rem', color: '#ff6b6b', fontWeight: 'bold' }}>DEV: Game Running</span>
-              </label>
-              <button
-                onClick={handleDevInstallPanel}
-                style={{
-                  background: 'rgba(255, 165, 0, 0.1)',
-                  color: 'orange',
-                  border: '1px solid rgba(255, 165, 0, 0.3)',
-                  padding: '4px 8px',
-                  borderRadius: '4px',
-                  fontSize: '0.8rem',
-                  fontWeight: 'bold',
-                  cursor: 'pointer'
-                }}
-              >
-                DEV: Install Panel
-              </button>
-            </>
-          )}
           <button
-            onClick={() => setShowSharingPanel(true)}
+            onClick={() => setPanel('sharing', true)}
             className="btn-settings"
             title="Share Mods"
           >
-            <WifiIcon /> Share
+            <IoMdWifi size={20} /> Share
           </button>
           <button
-            onClick={() => setShowToolsPanel(true)}
+            onClick={() => setPanel('tools', true)}
             className="btn-settings"
             title="Tools"
-            style={{ minHeight: '42px' }}
           >
-            <FaTools size={18} /> Tools
+            <FaToolbox size={20} /> Tools
           </button>
           <button
-            onClick={() => setShowSettings(true)}
+            onClick={() => setPanel('settings', true)}
             className="btn-settings"
           >
-            <SettingsIcon /> Settings
+            <IoIosSettings size={20} /> Settings
           </button>
         </div>
       </header>
@@ -2062,31 +2090,37 @@ function App() {
               ref={searchInputRef}
               type="text"
               placeholder="Search installed mods..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              value={localSearch}
+              onChange={handleSearchChange}
               className="main-search-input"
             />
-            {searchQuery && (
-              <button onClick={() => setSearchQuery('')} className="btn-icon-clear">
-                <ClearIcon />
-              </button>
+            {localSearch && (
+              <IconButton
+                size="small"
+                className="clear-search-btn"
+                onClick={() => {
+                  setLocalSearch('')
+                  debouncedSetSearch('') // Clear immediately
+                  setSearchQuery('')
+                  searchInputRef.current?.focus()
+                }}
+              >
+                <ClearIcon fontSize="small" />
+              </IconButton>
             )}
           </div>
 
           <div className="action-controls">
-            <select
+            <CustomDropdown
+              options={[{ value: '', label: 'View All' }, ...allTags]}
               value={filterTag}
-              onChange={(e) => setFilterTag(e.target.value)}
-              className="filter-select-large"
-            >
-              <option value="">All Tags</option>
-              {allTags.map(tag => (
-                <option key={tag} value={tag}>{tag}</option>
-              ))}
-            </select>
+              onChange={setFilterTag}
+              placeholder="All Tags"
+              icon={<FaTag style={{ fontSize: '1.2rem', opacity: 1, color: 'var(--accent-primary)' }} />}
+            />
 
             <button onClick={handleInstallModClick} className="btn-install-large">
-              <span className="install-icon">+</span>
+              <GrInstall className="install-icon" />
               <span className="install-text">Install Mod</span>
             </button>
           </div>
@@ -2094,7 +2128,7 @@ function App() {
 
         {!gamePath && (
           <div className="config-warning">
-            ⚠️ Game path not configured. <button onClick={() => setShowSettings(true)} className="btn-link-warning">Configure in Settings</button>
+            ⚠️ Game path not configured. <button onClick={() => setPanel('settings', true)} className="btn-link-warning">Configure in Settings</button>
           </div>
         )}
 
@@ -2105,15 +2139,15 @@ function App() {
             className="content-wrapper"
             animate={{ width: `${leftPanelWidth}%` }}
             transition={isResizing ? { duration: 0 } : { type: "tween", ease: "circOut", duration: 0.35 }}
-            style={{ display: 'flex', height: '100%' }}
+
           >
             {/* Left Sidebar - Folders */}
             <div className="left-sidebar">
               {/* Filters Section */}
-              <div className="sidebar-filters" style={{ padding: '0.5rem 0.6rem', borderBottom: '1px solid var(--panel-border)' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              <div className="sidebar-filters">
+                <div className="sidebar-filters-inner">
                   <div className="filter-title-row">
-                    <div style={{ fontSize: '0.75rem', opacity: 0.7, fontWeight: 600 }}>FILTERS</div>
+                    <div className="filter-label">FILTERS</div>
                     {(selectedCharacters.size > 0 || selectedCategories.size > 0) && (
                       <button
                         className="btn-ghost-mini"
@@ -2129,19 +2163,33 @@ function App() {
                   <div
                     className="filter-section-header"
                     onClick={() => setShowCharacterFilters(v => !v)}
-                    style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
                   >
-                    <div style={{ fontSize: '0.75rem', opacity: 0.6 }}>Characters {selectedCharacters.size > 0 && `(${selectedCharacters.size})`}</div>
-                    <span style={{ fontSize: '0.7rem', opacity: 0.5 }}>{showCharacterFilters ? '\u25bc' : '\u25b6'}</span>
+                    <div className="filter-label-secondary">Characters {selectedCharacters.size > 0 && `(${selectedCharacters.size})`}</div>
+                    <span className="filter-chevron">{showCharacterFilters ? '\u25bc' : '\u25b6'}</span>
                   </div>
                   {showCharacterFilters && (
                     <HeroFilterDropdown
                       availableCharacters={availableCharacters}
                       selectedCharacters={selectedCharacters}
                       modDetails={modDetails}
-                      onToggle={(char) => setSelectedCharacters(prev => {
+                      onToggle={(target) => setSelectedCharacters(prev => {
                         const next = new Set(prev);
-                        next.has(char) ? next.delete(char) : next.add(char);
+
+                        if (Array.isArray(target)) {
+                          // Bulk toggle logic
+                          const allSelected = target.every(t => next.has(t));
+                          if (allSelected) {
+                            // If all are selected, deselect all
+                            target.forEach(t => next.delete(t));
+                          } else {
+                            // Otherwise, select all (add missing ones)
+                            target.forEach(t => next.add(t));
+                          }
+                        } else {
+                          // Single toggle logic
+                          next.has(target) ? next.delete(target) : next.add(target);
+                        }
+
                         return next;
                       })}
                     />
@@ -2149,12 +2197,11 @@ function App() {
 
                   {/* Category Chips */}
                   <div
-                    className="filter-section-header"
+                    className="filter-section-header with-margin"
                     onClick={() => setShowTypeFilters(v => !v)}
-                    style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.25rem' }}
                   >
-                    <div style={{ fontSize: '0.75rem', opacity: 0.6 }}>Types {selectedCategories.size > 0 && `(${selectedCategories.size})`}</div>
-                    <span style={{ fontSize: '0.7rem', opacity: 0.5 }}>{showTypeFilters ? '\u25bc' : '\u25b6'}</span>
+                    <div className="filter-label-secondary">Types {selectedCategories.size > 0 && `(${selectedCategories.size})`}</div>
+                    <span className="filter-chevron">{showTypeFilters ? '\u25bc' : '\u25b6'}</span>
                   </div>
                   {showTypeFilters && (
                     <div className="filter-chips-scroll">
@@ -2177,7 +2224,7 @@ function App() {
               </div>
               <div className="sidebar-header">
                 <h3>Folders</h3>
-                <div style={{ display: 'flex', gap: '4px' }}>
+                <div className="sidebar-header-actions">
                   <button onClick={handleCreateFolder} className="btn-icon" title="New Folder">
                     <CreateNewFolderIcon fontSize="small" />
                   </button>
@@ -2203,21 +2250,22 @@ function App() {
             </div>
 
             {/* Center Panel - Mod List */}
-            <div className="center-panel" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div className="center-panel">
               <div className="center-header">
                 <div className="header-title">
                   <h2>
                     {selectedFolderId === 'all' ? 'All Mods' :
                       folders.find(f => f.id === selectedFolderId)?.name || 'Unknown Folder'}
-                    <span className="mod-count" style={{ marginLeft: '0.75rem', opacity: 0.5, fontSize: '0.65em', fontWeight: 'normal' }}>
+                    <span className="mod-count">
                       ({filteredMods.filter(m => m.enabled).length} / {filteredMods.length} Enabled)
                     </span>
                   </h2>
                 </div>
                 <div className="header-actions">
-                  <button onClick={handleCheckClashes} className="btn-ghost" title="Check for conflicts" style={{ marginRight: '0.5rem', fontSize: '0.8rem' }}>
-                    ⚠️ Check Conflicts
+                  <button onClick={handleCheckClashes} className="btn-ghost btn-check-conflicts" title="Check for conflicts">
+                    <IoMdWarning className="warning-icon" style={{ color: 'var(--accent-primary)', width: '18px', height: '18px' }} /> Check Conflicts
                   </button>
+                  <div className="divider-vertical" />
                   <div className="view-switcher">
                     <button
                       onClick={() => handleViewModeChange('grid')}
@@ -2229,7 +2277,7 @@ function App() {
                     <button
                       onClick={() => handleViewModeChange('compact')}
                       className={`btn-icon-small ${viewMode === 'compact' ? 'active' : ''}`}
-                      title="Compact View"
+                      title="Compact Grid View"
                     >
                       <ViewModuleIcon fontSize="small" />
                     </button>
@@ -2240,6 +2288,15 @@ function App() {
                     >
                       <ViewListIcon fontSize="small" />
                     </button>
+                    {showExperimental && (
+                      <button
+                        onClick={() => handleViewModeChange('list-compact')}
+                        className={`btn-icon-small ${viewMode === 'list-compact' ? 'active' : ''}`}
+                        title="Compact List View (Experimental)"
+                      >
+                        <ViewHeadlineIcon fontSize="small" />
+                      </button>
+                    )}
                   </div>
                   <div className="divider-vertical" />
                   <button
@@ -2250,7 +2307,7 @@ function App() {
                     <ViewSidebarIcon fontSize="small" style={{ transform: isRightPanelOpen ? 'none' : 'rotate(180deg)' }} />
                   </button>
                   <div className="divider-vertical" />
-                  <button onClick={loadMods} className="btn-ghost">
+                  <button onClick={loadMods} className="btn-ghost" title="Refresh list">
                     <RefreshIcon fontSize="small" />
                   </button>
                 </div>
@@ -2258,27 +2315,47 @@ function App() {
 
               {/* Bulk Actions Toolbar */}
               <div className={`bulk-actions-toolbar ${selectedMods.size === 0 ? 'inactive' : ''}`}>
-                <div className="selection-info">
-                  {selectedMods.size} selected
-                  <button onClick={handleDeselectAll} className="btn-link">Clear</button>
+                <div className="selection-info" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span>{selectedMods.size} selected</span>
+                  <button onClick={() => {
+                    const allPaths = filteredMods.map(m => m.path)
+                    setSelectedMods(new Set(allPaths))
+                  }} className="btn-ghost" style={{ padding: '4px 12px', height: '32px' }}>Select All</button>
+                  <button onClick={handleDeselectAll} className="btn-ghost" style={{ padding: '4px 12px', height: '32px' }}>Clear</button>
                 </div>
                 <div className="bulk-controls">
-                  <select
-                    className="toolbar-select"
-                    disabled={selectedMods.size === 0}
-                    defaultValue=""
-                    onChange={(e) => {
-                      const folderId = e.target.value
-                      if (!folderId) return
-                      handleAssignToFolder(folderId)
-                      e.target.value = ''
-                    }}
+                  <div style={{ width: '200px', height: '40px' }}>
+                    <CustomDropdown
+                      icon={<MdDriveFileMoveOutline style={{ fontSize: '1.2rem', opacity: 0.7 }} />}
+                      options={[
+                        { value: 'root', label: 'Root (~mods)' }, // Option to move back to root
+                        ...folders.filter(f => f.name !== '~mods').map(f => ({ value: f.id, label: f.name }))
+                      ]}
+                      value="" // Always reset after selection locally handled by onChange logic below
+                      onChange={(val) => {
+                        if (!val) return
+                        if (val === 'root') handleAssignToFolder(null) // Handle move to root
+                        else handleAssignToFolder(val)
+                      }}
+                      placeholder="Move to..."
+                      disabled={selectedMods.size === 0}
+                    />
+                  </div>
+
+                  <div
+                    className={`btn-ghost danger ${isDeletingBulk ? 'holding' : ''}`}
+                    onMouseDown={handleBulkDeleteDown}
+                    onMouseUp={handleBulkDeleteUp}
+                    onMouseLeave={handleBulkDeleteUp}
+                    style={{ marginLeft: '1rem', height: '40px' }}
+                    title="Hold 2s to delete selected mods"
                   >
-                    <option value="">Move to...</option>
-                    {folders.map(f => (
-                      <option key={f.id} value={f.id}>{f.name}</option>
-                    ))}
-                  </select>
+                    <div className="danger-bg" />
+                    <span style={{ position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <RiDeleteBin2Fill />
+                      {`Delete (${selectedMods.size})`}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -2294,7 +2371,6 @@ function App() {
                 onRemoveTag={handleRemoveTag}
                 onSetPriority={handleSetPriority}
                 onContextMenu={handleContextMenu}
-                formatFileSize={formatFileSize}
                 hideSuffix={hideSuffix}
                 showHeroIcons={showHeroIcons}
                 showHeroBg={showHeroBg}
@@ -2302,6 +2378,7 @@ function App() {
                 modDetails={modDetails}
                 characterData={characterData}
                 onRename={handleRenameMod}
+                onCheckConflicts={handleCheckSingleModClashes}
                 renamingModPath={renamingModPath}
                 onClearRenaming={() => setRenamingModPath(null)}
                 gridRef={modsGridRef}
@@ -2331,11 +2408,10 @@ function App() {
             className="right-panel"
             animate={{ width: `${100 - leftPanelWidth}%` }}
             transition={isResizing ? { duration: 0 } : { type: "tween", ease: "circOut", duration: 0.35 }}
-            style={{ display: 'flex' }}
           >
             {selectedMod ? (
-              <div className="mod-details-and-contents" style={{ display: 'flex', gap: '1rem', height: '100%', overflow: 'hidden' }}>
-                <div style={{ flex: 1, minWidth: '200px', height: '100%' }}>
+              <div className="mod-details-and-contents">
+                <div className="mod-details-wrapper">
                   <ModDetailsPanel
                     mod={selectedMod}
                     initialDetails={modDetails[selectedMod.path]}
@@ -2344,8 +2420,8 @@ function App() {
                   />
                 </div>
 
-                <div className="selected-mod-contents" style={{ width: '360px', maxWidth: '45%', minWidth: '200px', height: '100%', overflow: 'auto' }}>
-                  <h3 style={{ marginTop: 0 }}>Contents</h3>
+                <div className="selected-mod-contents">
+                  <h3>Contents</h3>
                   <FileTree files={selectedMod.file_contents || selectedMod.files || selectedMod.file_list || []} />
                 </div>
               </div>
@@ -2364,6 +2440,8 @@ function App() {
         onClear={() => setInstallLogs([])}
         progress={modLoadingProgress}
         isLoading={isModsLoading}
+        isOpen={isLogDrawerOpen}
+        onToggle={() => setIsLogDrawerOpen(v => !v)}
       />
 
       {
@@ -2398,6 +2476,7 @@ function App() {
                 setRenamingModPath(contextMenu.mod.path)
               }
             }}
+            onCheckConflicts={() => contextMenu.mod && handleCheckSingleModClashes(contextMenu.mod)}
             allTags={allTags}
             gamePath={gamePath}
           />
@@ -2405,8 +2484,8 @@ function App() {
       }
 
       <ShortcutsHelpModal
-        isOpen={showShortcutsHelp}
-        onClose={() => setShowShortcutsHelp(false)}
+        isOpen={panels.shortcuts}
+        onClose={() => setPanel('shortcuts', false)}
       />
     </div >
   )

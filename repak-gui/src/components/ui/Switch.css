@@ -1,4 +1,4 @@
-.heroui-switch {
+.repakx-switch {
   display: inline-flex;
   align-items: center;
   gap: 0.55rem;
@@ -6,12 +6,12 @@
   color: var(--text-primary);
 }
 
-.heroui-switch.disabled {
+.repakx-switch.disabled {
   opacity: 0.8;
   cursor: not-allowed;
 }
 
-.heroui-switch-control {
+.repakx-switch-control {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -22,13 +22,13 @@
   cursor: pointer;
 }
 
-.heroui-switch-control:focus-visible {
+.repakx-switch-control:focus-visible {
   outline: 2px solid rgba(74, 158, 255, 0.8);
   outline-offset: 3px;
   border-radius: 999px;
 }
 
-.heroui-switch-track {
+.repakx-switch-track {
   position: relative;
   width: 46px;
   height: 26px;
@@ -38,7 +38,7 @@
     box-shadow 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.heroui-switch-thumb {
+.repakx-switch-thumb {
   position: absolute;
   top: 3px;
   left: 3px;
@@ -52,21 +52,21 @@
     box-shadow 0.32s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.heroui-switch.disabled .heroui-switch-track {
+.repakx-switch.disabled .repakx-switch-track {
   background: color-mix(in srgb, var(--panel-border, rgba(255, 255, 255, 0.1)), white 10%);
 }
 
-.heroui-switch.disabled .heroui-switch-thumb {
+.repakx-switch.disabled .repakx-switch-thumb {
   background: color-mix(in srgb, var(--bg-lighter, #ffffff), var(--bg-darkest, #0b0f19) 25%);
   box-shadow: none;
 }
 
-.heroui-switch.checked .heroui-switch-thumb {
+.repakx-switch.checked .repakx-switch-thumb {
   transform: translateX(20px);
   box-shadow: 0 3px 16px rgba(0, 0, 0, 0.4);
 }
 
-.heroui-switch-label {
+.repakx-switch-label {
   font-weight: 500;
   color: var(--text-primary);
   display: inline-flex;
@@ -74,39 +74,39 @@
   gap: 0.15rem;
 }
 
-.heroui-switch.sm .heroui-switch-track {
+.repakx-switch.sm .repakx-switch-track {
   width: 38px;
   height: 22px;
 }
 
-.heroui-switch.sm .heroui-switch-thumb {
+.repakx-switch.sm .repakx-switch-thumb {
   width: 16px;
   height: 16px;
   top: 3px;
   left: 3px;
 }
 
-.heroui-switch.sm.checked .heroui-switch-thumb {
+.repakx-switch.sm.checked .repakx-switch-thumb {
   transform: translateX(16px);
 }
 
-.heroui-switch.lg .heroui-switch-track {
+.repakx-switch.lg .repakx-switch-track {
   width: 56px;
   height: 32px;
 }
 
-.heroui-switch.lg .heroui-switch-thumb {
+.repakx-switch.lg .repakx-switch-thumb {
   width: 24px;
   height: 24px;
   top: 4px;
   left: 4px;
 }
 
-.heroui-switch.lg.checked .heroui-switch-thumb {
+.repakx-switch.lg.checked .repakx-switch-thumb {
   transform: translateX(24px);
 }
 
-.heroui-switch.primary.checked .heroui-switch-track {
+.repakx-switch.primary.checked .repakx-switch-track {
   background: linear-gradient(
     120deg,
     var(--accent-primary, #4a9eff),
@@ -114,7 +114,7 @@
   );
 }
 
-.heroui-switch.secondary.checked .heroui-switch-track {
+.repakx-switch.secondary.checked .repakx-switch-track {
   background: linear-gradient(
     120deg,
     var(--accent-secondary, #b245ff),
@@ -122,7 +122,7 @@
   );
 }
 
-.heroui-switch.success.checked .heroui-switch-track {
+.repakx-switch.success.checked .repakx-switch-track {
   background: linear-gradient(
     120deg,
     var(--success, #00c795),
@@ -130,7 +130,7 @@
   );
 }
 
-.heroui-switch.warning.checked .heroui-switch-track {
+.repakx-switch.warning.checked .repakx-switch-track {
   background: linear-gradient(
     120deg,
     var(--warning, #ff8f2f),
@@ -138,7 +138,7 @@
   );
 }
 
-.heroui-switch.danger.checked .heroui-switch-track {
+.repakx-switch.danger.checked .repakx-switch-track {
   background: linear-gradient(
     120deg,
     var(--danger, #ff5f6d),
@@ -146,7 +146,7 @@
   );
 }
 
-.heroui-switch.default.checked .heroui-switch-track {
+.repakx-switch.default.checked .repakx-switch-track {
   background: linear-gradient(
     120deg,
     var(--text-secondary, #7a7a7a),
@@ -154,21 +154,21 @@
   );
 }
 
-.heroui-switch.loading .heroui-switch-thumb {
+.repakx-switch.loading .repakx-switch-thumb {
   opacity: 0.45;
 }
 
-.heroui-switch-spinner {
+.repakx-switch-spinner {
   position: absolute;
   width: 12px;
   height: 12px;
   border-radius: 50%;
   border: 2px solid transparent;
   border-top-color: var(--switch-spinner, color-mix(in srgb, var(--accent-primary, #4a9eff), white 40%));
-  animation: heroui-switch-spin 0.85s linear infinite;
+  animation: repakx-switch-spin 0.85s linear infinite;
 }
 
-@keyframes heroui-switch-spin {
+@keyframes repakx-switch-spin {
   from {
     transform: rotate(0deg);
   }

@@ -3,6 +3,8 @@ import { invoke } from '@tauri-apps/api/core'
 import { Tooltip } from '@mui/material'
 import { FaTag } from "react-icons/fa6"
 import FileTree from './FileTree'
+import { formatFileSize } from '../utils/format'
+import { detectHeroesWithData } from '../utils/heroes'
 import './ModDetailsPanel.css'
 
 const heroImages = import.meta.glob('../assets/hero/*.png', { eager: true })
@@ -65,7 +67,7 @@ export default function ModDetailsPanel({ mod, initialDetails, onClose, characte
 
   const heroesList = useMemo(() => {
     if (details && details.files && characterData.length > 0) {
-      return detectHeroes(details.files, characterData)
+      return detectHeroesWithData(details.files, characterData)
     }
     return []
   }, [details, characterData])
@@ -261,51 +263,6 @@ function getFileIcon(filename) {
   if (filename.endsWith('.wem') || filename.endsWith('.bnk')) return '🔊'
   if (filename.endsWith('.png') || filename.endsWith('.jpg')) return '🖼️'
   return '📄'
-}
-
-function formatFileSize(bytes) {
-  if (bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
-}
-
-function detectHeroes(files, characterData) {
-  const heroIds = new Set()
-
-  // Regex patterns matching backend logic
-  const pathRegex = /(?:Characters|Hero_ST|Hero)\/(\d{4})/
-  const filenameRegex = /[_/](10[1-6]\d)(\d{3})/
-
-  files.forEach(file => {
-    // Check path first - primary detection method
-    const pathMatch = file.match(pathRegex)
-    if (pathMatch) {
-      heroIds.add(pathMatch[1])
-      return // Skip filename check to avoid false positives from shared assets
-    }
-
-    // Fallback: Check filename only if path didn't match
-    const filename = file.split('/').pop() || ''
-    if (!filename.toLowerCase().startsWith('mi_')) {
-      const filenameMatch = filename.match(filenameRegex)
-      if (filenameMatch) {
-        heroIds.add(filenameMatch[1])
-      }
-    }
-  })
-
-  // Map IDs to names
-  const heroNames = new Set()
-  heroIds.forEach(id => {
-    const char = characterData.find(c => c.id === id)
-    if (char) {
-      heroNames.add(char.name)
-    }
-  })
-
-  return Array.from(heroNames).sort()
 }
 
 function getHeroImage(heroName, characterData) {

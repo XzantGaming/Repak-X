@@ -33,12 +33,12 @@
 }
 
 .credits-app-name-repak {
-    font-family: var(--font-bbh-bartle), sans-serif;
+    font-family: var(--font-logo), sans-serif;
     color: var(--text-primary);
 }
 
 .credits-app-name-x {
-    font-family: var(--font-bbh-bartle), sans-serif;
+    font-family: var(--font-logo), sans-serif;
     font-size: 2rem;
 }
 

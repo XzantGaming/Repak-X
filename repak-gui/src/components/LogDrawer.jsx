@@ -26,9 +26,10 @@ export default function LogDrawer({
   minHeight = 160,
   maxHeightPercent = 0.85,
   progress = 0,
-  isLoading = false
+  isLoading = false,
+  isOpen,
+  onToggle
 }) {
-  const [isOpen, setIsOpen] = useState(false)
   const [drawerHeight, setDrawerHeight] = useState(defaultHeight)
   const [copyFeedback, setCopyFeedback] = useState(null) // { id: number | 'all', text: string }
   const resizingRef = useRef(false)
@@ -102,7 +103,7 @@ export default function LogDrawer({
     >
       <div
         className={`log-drawer-header ${isLoading ? 'is-loading' : ''}`}
-        onClick={() => setIsOpen(v => !v)}
+        onClick={onToggle}
       >
         {/* Progress bar as background */}
         {isLoading && (
@@ -126,7 +127,7 @@ export default function LogDrawer({
         >
           <button
             className="log-drawer-btn"
-            onClick={() => setIsOpen(v => !v)}
+            onClick={onToggle}
           >
             {isOpen ? 'Hide ▼' : 'Show ▲'}
           </button>

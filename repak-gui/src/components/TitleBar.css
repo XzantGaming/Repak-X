@@ -1,0 +1,89 @@
+.titlebar {
+    height: 32px;
+    background: var(--header-bg);
+    /* Use existing header background variable */
+    user-select: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    /* position: fixed; removed to allow flex flow */
+    width: 100%;
+    flex-shrink: 0;
+    /* Prevent shrinking */
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 9999;
+    overflow: hidden;
+    border-bottom: 1px solid var(--header-border);
+    transition: background 0.2s ease;
+}
+
+.titlebar-drag-region {
+    flex: 1;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    padding-left: 12px;
+    -webkit-app-region: drag;
+    /* Electron/Tauri drag property */
+}
+
+/* Branding in titlebar */
+.titlebar-icon {
+    width: 24px;
+    height: 24px;
+    margin-right: 8px;
+    opacity: 0.8;
+}
+
+.titlebar-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    letter-spacing: 0.5px;
+}
+
+/* Window Controls */
+.titlebar-controls {
+    display: flex;
+    height: 100%;
+    -webkit-app-region: no-drag;
+    /* Ensure buttons are clickable */
+}
+
+.titlebar-button {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    width: 46px;
+    height: 100%;
+    padding: 0;
+    margin: 0;
+    min-height: 0;
+    border-radius: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+    font-size: 10px;
+    /* Icon size */
+}
+
+.titlebar-button:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+}
+
+.titlebar-button.close:hover {
+    background: #e81123;
+    color: white;
+}
+
+/* SVG Icon styles */
+.titlebar-button svg {
+    width: 16px;
+    height: 16px;
+    fill: currentColor;
+}

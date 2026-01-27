@@ -30,11 +30,11 @@
 }
 
 @keyframes aurora-text-flow {
-  0% {
+  from {
     background-position: 0% center;
   }
 
-  100% {
-    background-position: -200% center;
+  to {
+    background-position: -400% center;
   }
 }

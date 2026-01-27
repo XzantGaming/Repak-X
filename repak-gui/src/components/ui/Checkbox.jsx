@@ -2,7 +2,7 @@ import React from 'react'
 import './Checkbox.css'
 
 /**
- * HeroUI-style Checkbox component
+ * repakx-style Checkbox component
  *
  * @param {Object} props
  * @param {boolean} [props.checked] - Controlled checked state
@@ -50,7 +50,7 @@ const Checkbox = ({
   }
 
   const classes = [
-    'heroui-checkbox',
+    'repakx-checkbox',
     size,
     color,
     radius,
@@ -66,7 +66,7 @@ const Checkbox = ({
     <label className={classes} data-checked={currentChecked} data-disabled={isDisabled}>
       <button
         type="button"
-        className="heroui-checkbox-control"
+        className="repakx-checkbox-control"
         role="checkbox"
         aria-checked={isIndeterminate ? 'mixed' : currentChecked}
         aria-disabled={isDisabled}
@@ -74,19 +74,19 @@ const Checkbox = ({
         disabled={isDisabled}
         {...props}
       >
-        <span className="heroui-checkbox-box">
+        <span className="repakx-checkbox-box">
           {isIndeterminate ? (
-            <svg className="heroui-checkbox-icon" viewBox="0 0 24 24" fill="none">
+            <svg className="repakx-checkbox-icon" viewBox="0 0 24 24" fill="none">
               <line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
             </svg>
           ) : (
-            <svg className="heroui-checkbox-icon" viewBox="0 0 24 24" fill="none">
+            <svg className="repakx-checkbox-icon" viewBox="0 0 24 24" fill="none">
               <polyline points="4 12 9 17 20 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           )}
         </span>
       </button>
-      {children && <span className="heroui-checkbox-label">{children}</span>}
+      {children && <span className="repakx-checkbox-label">{children}</span>}
     </label>
   )
 }

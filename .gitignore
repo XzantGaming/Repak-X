@@ -4,6 +4,10 @@ dist/
 repak-gui/node_modules/
 repak-gui/target/
 repak-gui/dist/
+repak-gui/.agent/
+repak-gui/.agents/
+repak-gui/.windsurf/
+docs/
 
 # Ignored build artifacts (keep these)
 repak-gui/package-lock.json

@@ -64,17 +64,17 @@
 .copy-paths-btn {
   padding: 0.35rem 0.65rem;
   font-size: 0.75rem;
-  background: rgba(74, 158, 255, 0.1);
-  border: 1px solid rgba(74, 158, 255, 0.3);
-  color: var(--accent-primary, #4a9eff);
+  background: var(--bg-light);
+  border: 1px solid var(--panel-border);
+  color: var(--text-primary);
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .copy-paths-btn:hover {
-  background: rgba(74, 158, 255, 0.2);
-  border-color: rgba(74, 158, 255, 0.5);
+  background: var(--bg-lighter);
+  border-color: var(--text-secondary);
 }
 
 .detail-item {

@@ -3,6 +3,7 @@ import './ShortcutsHelpModal.css'
 
 const shortcuts = [
     { keys: ['Ctrl', 'F'], action: 'Focus search' },
+    { keys: ['Ctrl', 'R'], action: 'Full app reload' },
     { keys: ['Ctrl', 'Shift', 'R'], action: 'Refresh mod list' },
     { keys: ['Ctrl', ','], action: 'Open Settings' },
     { keys: ['Esc'], action: 'Close panel / Deselect' },

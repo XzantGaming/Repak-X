@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import './Tooltip.css';
 
 /**
- * HeroUI-style Tooltip component
+ * repakx-style Tooltip component
  * 
  * @param {Object} props
  * @param {React.ReactNode} props.children - The trigger element
@@ -66,11 +66,41 @@ const Tooltip = ({
     };
   }, []);
 
-  // Animation variants
-  const variants = {
-    initial: { opacity: 0, scale: 0.95 },
-    animate: { opacity: 1, scale: 1 },
-    exit: { opacity: 0, scale: 0.95 }
+  // Animation variants with directional slide
+  const getAnimationVariants = () => {
+    const slideDistance = 8;
+    switch (placement) {
+      case 'top':
+        return {
+          initial: { opacity: 0, scale: 0.92, y: slideDistance },
+          animate: { opacity: 1, scale: 1, y: 0 },
+          exit: { opacity: 0, scale: 0.92, y: slideDistance / 2 }
+        };
+      case 'bottom':
+        return {
+          initial: { opacity: 0, scale: 0.92, y: -slideDistance },
+          animate: { opacity: 1, scale: 1, y: 0 },
+          exit: { opacity: 0, scale: 0.92, y: -slideDistance / 2 }
+        };
+      case 'left':
+        return {
+          initial: { opacity: 0, scale: 0.92, x: slideDistance },
+          animate: { opacity: 1, scale: 1, x: 0 },
+          exit: { opacity: 0, scale: 0.92, x: slideDistance / 2 }
+        };
+      case 'right':
+        return {
+          initial: { opacity: 0, scale: 0.92, x: -slideDistance },
+          animate: { opacity: 1, scale: 1, x: 0 },
+          exit: { opacity: 0, scale: 0.92, x: -slideDistance / 2 }
+        };
+      default:
+        return {
+          initial: { opacity: 0, scale: 0.92 },
+          animate: { opacity: 1, scale: 1 },
+          exit: { opacity: 0, scale: 0.92 }
+        };
+    }
   };
 
   // Adjust transform origin based on placement for better animation
@@ -86,7 +116,7 @@ const Tooltip = ({
 
   return (
     <div 
-      className="heroui-tooltip-trigger"
+      className="repakx-tooltip-trigger"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onFocus={handleMouseEnter}
@@ -96,7 +126,7 @@ const Tooltip = ({
       <AnimatePresence>
         {isVisible && content && (
           <motion.div
-            className={`heroui-tooltip-content ${color} ${size} radius-${radius} ${className}`}
+            className={`repakx-tooltip-content ${color} ${size} radius-${radius} ${className}`}
             data-placement={placement}
             style={{ 
               '--tooltip-offset': `${offset}px`,
@@ -105,11 +135,16 @@ const Tooltip = ({
             initial="initial"
             animate="animate"
             exit="exit"
-            variants={variants}
-            transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+            variants={getAnimationVariants()}
+            transition={{ 
+              type: 'spring',
+              damping: 20,
+              stiffness: 300,
+              mass: 0.8
+            }}
             {...props}
           >
-            {showArrow && <div className="heroui-tooltip-arrow" />}
+            {showArrow && <div className="repakx-tooltip-arrow" />}
             {content}
           </motion.div>
         )}

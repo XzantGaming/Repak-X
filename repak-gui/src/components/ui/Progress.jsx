@@ -2,7 +2,7 @@ import React from 'react';
 import './Progress.css';
 
 /**
- * HeroUI-style Progress component
+ * repakx-style Progress component
  * 
  * @param {Object} props
  * @param {number} [props.value=0] - Current value (0-100)
@@ -33,7 +33,7 @@ const Progress = ({
   const percentage = Math.min(Math.max(((value - minValue) / (maxValue - minValue)) * 100, 0), 100);
   
   const classes = [
-    'heroui-progress',
+    'repakx-progress',
     size,
     color,
     isIndeterminate ? 'indeterminate' : '',
@@ -52,17 +52,17 @@ const Progress = ({
       {...props}
     >
       {(label || showValueLabel) && (
-        <div className="heroui-progress-header">
-          {label && <span className="heroui-progress-label">{label}</span>}
+        <div className="repakx-progress-header">
+          {label && <span className="repakx-progress-label">{label}</span>}
           {showValueLabel && !isIndeterminate && (
-            <span className="heroui-progress-value">{Math.round(percentage)}%</span>
+            <span className="repakx-progress-value">{Math.round(percentage)}%</span>
           )}
         </div>
       )}
       
-      <div className="heroui-progress-track">
+      <div className="repakx-progress-track">
         <div 
-          className="heroui-progress-indicator" 
+          className="repakx-progress-indicator" 
           style={{ width: isIndeterminate ? undefined : `${percentage}%` }}
         />
       </div>

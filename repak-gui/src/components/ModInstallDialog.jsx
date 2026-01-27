@@ -2,11 +2,11 @@ import { useState } from 'react'
 
 function parseModType(modType) {
   if (!modType) return { category: 'Unknown', additional: [] }
-  
+
   const bracketMatch = modType.match(/\[(.*?)\]/)
   const additional = bracketMatch ? bracketMatch[1].split(',').map(s => s.trim()) : []
   let category = modType.replace(/\[.*?\]/, '').trim()
-  
+
   return { category, additional }
 }
 
@@ -44,7 +44,7 @@ export default function ModInstallDialog({ mods, onInstall, onCancel }) {
           <h2>Install Mods</h2>
           <button className="modal-close" onClick={onCancel}>×</button>
         </div>
-        
+
         <div className="modal-body">
           <div className="mods-to-install">
             {modConfigs.map((mod, idx) => (
@@ -76,7 +76,7 @@ export default function ModInstallDialog({ mods, onInstall, onCancel }) {
                     </div>
                   </div>
                 </div>
-                
+
                 {mod.enabled && (
                   <div className="install-mod-options">
                     <div className="option-group">
@@ -89,7 +89,7 @@ export default function ModInstallDialog({ mods, onInstall, onCancel }) {
                         />
                         Repack to PAK
                       </label>
-                      
+
                       <label>
                         <input
                           type="checkbox"
@@ -98,7 +98,7 @@ export default function ModInstallDialog({ mods, onInstall, onCancel }) {
                         />
                         Fix Mesh Files
                       </label>
-                      
+
                       <label>
                         <input
                           type="checkbox"
@@ -107,17 +107,17 @@ export default function ModInstallDialog({ mods, onInstall, onCancel }) {
                         />
                         Fix Textures (NoMipmaps)
                       </label>
-                      
-                      <label>
+
+                      <label style={{ opacity: 0.5, cursor: 'not-allowed' }} title="Temporarily unavailable">
                         <input
                           type="checkbox"
-                          checked={mod.fix_serialsize_header}
-                          onChange={(e) => handleConfigChange(idx, 'fix_serialsize_header', e.target.checked)}
+                          checked={false}
+                          disabled
                         />
-                        Fix Static Mesh SerializeSize
+                        Fix Static Mesh SerializeSize (Unavailable)
                       </label>
                     </div>
-                    
+
                     <div className="option-group">
                       <label>
                         Mount Point:
@@ -128,7 +128,7 @@ export default function ModInstallDialog({ mods, onInstall, onCancel }) {
                           placeholder="../../../"
                         />
                       </label>
-                      
+
                       <label>
                         Path Hash Seed:
                         <input
@@ -138,7 +138,7 @@ export default function ModInstallDialog({ mods, onInstall, onCancel }) {
                           placeholder="00000000"
                         />
                       </label>
-                      
+
                       <label>
                         Compression:
                         <select
@@ -152,7 +152,7 @@ export default function ModInstallDialog({ mods, onInstall, onCancel }) {
                           <option value="LZ4">LZ4</option>
                         </select>
                       </label>
-                      
+
                       <label>
                         USmap File:
                         <input
@@ -169,7 +169,7 @@ export default function ModInstallDialog({ mods, onInstall, onCancel }) {
             ))}
           </div>
         </div>
-        
+
         <div className="modal-footer">
           <button onClick={onCancel} className="btn-secondary">
             Cancel
