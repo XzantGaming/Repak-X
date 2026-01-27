@@ -736,7 +736,7 @@ async fn parse_dropped_files(
                                         let files: Vec<String> = if is_iostore {
                                             use crate::utoc_utils::read_utoc;
                                             let _ = window.emit("install_log", "[Detection] Reading IoStore .utoc file for accurate file list");
-                                            read_utoc(&utoc_path, &pak, entry_path)
+                                            read_utoc(&utoc_path)
                                                 .iter()
                                                 .map(|entry| entry.file_path.clone())
                                                 .collect()
@@ -958,7 +958,7 @@ async fn parse_dropped_files(
                             let files: Vec<String> = if is_iostore {
                                 use crate::utoc_utils::read_utoc;
                                 let _ = window.emit("install_log", "[Detection] Reading IoStore .utoc file for accurate file list");
-                                read_utoc(&utoc_path, &pak, &path)
+                                read_utoc(&utoc_path)
                                     .iter()
                                     .map(|entry| entry.file_path.clone())
                                     .collect()
@@ -1138,8 +1138,6 @@ fn copy_iostore_with_compression_check(
     output_dir: &Path,
     window: &Window,
 ) -> Result<u32, String> {
-    use std::sync::Arc;
-    
     let utoc_name = utoc_src.file_name().unwrap();
     let ucas_src = utoc_src.with_extension("ucas");
     let utoc_dest = output_dir.join(utoc_name);
@@ -1176,7 +1174,7 @@ fn copy_iostore_with_compression_check(
     }
     
     // Check if the IoStore is compressed
-    let is_compressed = match retoc::is_iostore_compressed(utoc_src) {
+    let is_compressed = match uasset_toolkit::is_iostore_compressed(&utoc_src.to_string_lossy()) {
         Ok(compressed) => compressed,
         Err(e) => {
             warn!("[QuickOrganize] Failed to check IoStore compression for {}: {}", utoc_name.to_string_lossy(), e);
@@ -1210,8 +1208,7 @@ fn copy_iostore_with_compression_check(
         file_count += 2; // Copied utoc + ucas
         
         // Now recompress in place
-        let config = Arc::new(retoc::Config::default());
-        match retoc::recompress_iostore(&utoc_dest, config) {
+        match uasset_toolkit::recompress_iostore(&utoc_dest.to_string_lossy()) {
             Ok(_) => {
                 info!("[QuickOrganize] Successfully recompressed IoStore: {}", utoc_name.to_string_lossy());
                 let _ = window.emit("install_log", format!("[QuickOrganize] ✓ Recompressed: {}", utoc_name.to_string_lossy()));
@@ -2624,9 +2621,6 @@ async fn cleanup_ubulk_for_inline_textures(output_dir: &PathBuf) {
 /// Number of files extracted
 #[tauri::command]
 async fn extract_mod_assets(mod_path: String, dest_path: String) -> Result<usize, String> {
-    use std::sync::Arc;
-    use std::str::FromStr;
-    
     let mut path = PathBuf::from(&mod_path);
     if !path.exists() {
         return Err(format!("File not found: {}", mod_path));
@@ -2686,16 +2680,12 @@ async fn extract_mod_assets(mod_path: String, dest_path: String) -> Result<usize
     
     match extension.as_str() {
         "utoc" => {
-            // IoStore extraction
-            let mut config = retoc::Config::default();
-            let aes_key = retoc::AesKey::from_str("0C263D8C22DCB085894899C3A3796383E9BF9DE0CBFB08C9BF2DEF2E84F29D74")
-                .map_err(|e| format!("Invalid AES key: {:?}", e))?;
-            config.aes_keys.insert(retoc::FGuid::default(), aes_key);
-
-            // Legacy conversion now uses directory backend to resolve imports from base bundles.
-            // No ScriptObjects.bin override needed.
-            let file_count = retoc::extract_iostore(&path, &output_dir, Arc::new(config))
-                .map_err(|e| format!("Failed to extract IoStore: {}", e))?;
+            // IoStore extraction using UAssetTool
+            let file_count = uasset_toolkit::extract_iostore(
+                &path.to_string_lossy(),
+                &output_dir.to_string_lossy(),
+                None, // Use default AES key
+            ).map_err(|e| format!("Failed to extract IoStore: {}", e))?;
             
             log::info!("Extracted {} files from IoStore to {:?}", file_count, output_dir);
             
@@ -2800,33 +2790,13 @@ async fn extract_mod_assets(mod_path: String, dest_path: String) -> Result<usize
 /// Size of the extracted ScriptObjects file in bytes
 #[tauri::command]
 async fn extract_script_objects(paks_path: String, output_path: String) -> Result<usize, String> {
-    use std::sync::Arc;
-    
     log::info!("Extracting ScriptObjects from: {}", paks_path);
     
-    // Create retoc config with AES key
-    let config = Arc::new(retoc::Config::default_with_aes(
-        "0C263D8C22DCB085894899C3A3796383E9BF9DE0CBFB08C9BF2DEF2E84F29D74"
-    ));
-    
-    // Use retoc's extract_script_objects function
-    let data = retoc::extract_script_objects(&paks_path, config)
+    // Use UAssetTool to extract ScriptObjects
+    let size = uasset_toolkit::extract_script_objects(&paks_path, &output_path)
         .map_err(|e| format!("Failed to extract ScriptObjects: {}", e))?;
     
-    let size = data.len();
     log::info!("Found ScriptObjects! Size: {} bytes ({:.2} MB)", size, size as f64 / 1024.0 / 1024.0);
-    
-    // Ensure output directory exists
-    let output = std::path::PathBuf::from(&output_path);
-    if let Some(parent) = output.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("Failed to create output directory: {}", e))?;
-    }
-    
-    // Write the ScriptObjects data
-    std::fs::write(&output, &data)
-        .map_err(|e| format!("Failed to write ScriptObjects: {}", e))?;
-    
     log::info!("ScriptObjects extracted to: {}", output_path);
     Ok(size)
 }
@@ -3316,7 +3286,7 @@ async fn recompress_mods(
             let ucas_size = std::fs::metadata(&ucas_path).map(|m| m.len()).unwrap_or(0);
             
             // Check if IoStore is already compressed
-            let is_compressed = match retoc::is_iostore_compressed(&utoc_path) {
+            let is_compressed = match uasset_toolkit::is_iostore_compressed(&utoc_path.to_string_lossy()) {
                 Ok(compressed) => compressed,
                 Err(e) => {
                     warn!("Failed to check IoStore compression for {}: {}", mod_name, e);
@@ -3353,8 +3323,7 @@ async fn recompress_mods(
                     "status": format!("Recompressing IoStore: {}", mod_name)
                 }));
                 
-                let config = std::sync::Arc::new(retoc::Config::default());
-                match retoc::recompress_iostore(&utoc_path, config) {
+                match uasset_toolkit::recompress_iostore(&utoc_path.to_string_lossy()) {
                     Ok(_) => {
                         let new_ucas_size = std::fs::metadata(&ucas_path).map(|m| m.len()).unwrap_or(0);
                         info!("Successfully recompressed IoStore: {} ({} -> {} bytes)", mod_name, ucas_size, new_ucas_size);
@@ -3573,7 +3542,7 @@ async fn check_for_updates() -> Result<Option<UpdateInfo>, String> {
     let url = "https://api.github.com/repos/XzantGaming/Repak-Gui-Revamped/releases/latest";
     
     let res = client.get(url)
-        .header("User-Agent", "Repak-Gui-Revamped")
+        .header("User-Agent", "RepakX")
         .send()
         .await
         .map_err(|e| format!("Request failed: {}", e))?;
@@ -3988,7 +3957,7 @@ fn load_state() -> AppState {
 fn setup_logging() {
     // Try exe-relative Logs folder first
     let log_dir = log_dir();
-    let log_file = log_dir.join("repak-gui.log");
+    let log_file = log_dir.join("repakx.log");
     
     // Attempt to create the log directory
     let log_file_result = std::fs::create_dir_all(&log_dir)
@@ -4003,7 +3972,7 @@ fn setup_logging() {
         Err(e) => {
             // Fallback to temp directory if exe-relative fails
             eprintln!("Failed to create log at {}: {}", log_file.display(), e);
-            let temp_log = std::env::temp_dir().join("repak-gui.log");
+            let temp_log = std::env::temp_dir().join("repakx.log");
             eprintln!("Fallback logging to: {}", temp_log.display());
             File::create(&temp_log).expect("Failed to create log file even in temp directory")
         }
@@ -4076,7 +4045,7 @@ async fn get_mod_details(mod_path: String, _detect_blueprint: Option<bool>) -> R
     let files: Vec<String> = if is_iostore {
         // For IoStore, read from utoc
         use crate::utoc_utils::read_utoc;
-        read_utoc(&utoc_path, &pak, &path)
+        read_utoc(&utoc_path)
             .iter()
             .map(|entry| entry.file_path.clone())
             .collect()
@@ -4268,7 +4237,7 @@ async fn check_mod_clashes(state: State<'_, Arc<Mutex<AppState>>>) -> Result<Vec
         // Get file list
         let files: Vec<String> = if is_iostore {
             use crate::utoc_utils::read_utoc;
-            read_utoc(&utoc_path, &pak, &path)
+            read_utoc(&utoc_path)
                 .iter()
                 .map(|entry| entry.file_path.clone())
                 .collect()
@@ -4446,7 +4415,7 @@ async fn check_single_mod_conflicts(
         
         if utoc_path.exists() {
             use crate::utoc_utils::read_utoc;
-            Ok(read_utoc(&utoc_path, &pak, path)
+            Ok(read_utoc(&utoc_path)
                 .iter()
                 .map(|entry| entry.file_path.clone())
                 .collect())
@@ -4768,7 +4737,7 @@ fn main() {
             } else {
                 let startup_log = log_dir.join("startup.log");
                 let _ = std::fs::write(&startup_log, format!(
-                    "Repak-Gui (Tauri) startup at {:?}\n",
+                    "RepakX (Tauri) startup at {:?}\n",
                     std::time::SystemTime::now()
                 ));
             }
@@ -4776,7 +4745,7 @@ fn main() {
     }
 
     setup_logging();
-    info!("Starting Repak Gui Revamped v{}", env!("CARGO_PKG_VERSION"));
+    info!("Starting RepakX v{}", env!("CARGO_PKG_VERSION"));
     
     // Register protocol handler for portable app support (self-healing registry)
     if let Err(e) = register_protocol_handler() {

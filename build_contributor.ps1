@@ -86,9 +86,9 @@ try {
     # ============================================
     Write-Step "[2/4] Building C# Projects"
 
-    # Build UAssetTool (unified asset tool - replaces UAssetBridge and UAssetMeshFixer)
-    Write-Info "Building UAssetTool.exe..."
-    $toolProject = Join-Path $workspaceRoot "uasset_toolkit\tools\UAssetTool\UAssetTool.csproj"
+    # Build UAssetTool from UassetToolRivals submodule
+    Write-Info "Building UAssetTool.exe from submodule..."
+    $toolProject = Join-Path $workspaceRoot "UassetToolRivals\src\UAssetTool\UAssetTool.csproj"
     if (Test-Path $toolProject) {
         $toolOutput = Join-Path $workspaceRoot "target\uassettool"
         New-Item -ItemType Directory -Force -Path $toolOutput | Out-Null
@@ -114,6 +114,7 @@ try {
             exit 1
         }
         
+        # NOTE: hash_helper.exe is no longer needed - CityHash64 is now implemented natively in C#
         # NOTE: UE4-DDS-Tools (Python) is no longer needed
         # Texture conversion now uses native C# UAssetTool (TEXTURE_IMPLEMENTATION = "csharp")
     }

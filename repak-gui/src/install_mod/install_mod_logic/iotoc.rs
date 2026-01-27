@@ -1,22 +1,13 @@
 #![allow(dead_code)]
 use crate::install_mod::install_mod_logic::pak_files::repak_dir;
 use crate::install_mod::install_mod_logic::patch_meshes;
-use crate::install_mod::{InstallableMod, AES_KEY};
+use crate::install_mod::InstallableMod;
 use crate::uasset_api_integration::batch_convert_textures_to_inline;
 use crate::utils::collect_files;
-use rayon::iter::IntoParallelRefIterator;
-use rayon::iter::ParallelIterator;
-use repak::Version;
-use std::io::BufWriter;
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 use std::sync::atomic::AtomicI32;
-use retoc::*;
-use std::sync::Arc;
 use log::{debug, error, warn, info};
-use std::fs::File;
 use std::process::Command;
-use path_slash::PathExt;
 use serde::{Deserialize, Serialize};
 
 // Windows-specific: Hide CMD windows when spawning processes
@@ -202,23 +193,6 @@ pub fn convert_to_iostore_directory(
         }
     }
 
-    let action = ActionToZen::new(
-        to_pak_dir.clone(),
-        mod_dir.join(utoc_name.clone()),
-        EngineVersion::UE5_3,
-    );
-    let mut config = Config {
-        container_header_version_override: None,
-        ..Default::default()
-    };
-
-    let aes_toc =
-        retoc::AesKey::from_str("0C263D8C22DCB085894899C3A3796383E9BF9DE0CBFB08C9BF2DEF2E84F29D74")
-            .unwrap();
-
-    config.aes_keys.insert(FGuid::default(), aes_toc.clone());
-    let config = Arc::new(config);
-
     // Log file sizes before IoStore conversion
     if !processed_textures.is_empty() {
         info!("Checking converted texture files before IoStore conversion:");
@@ -235,62 +209,50 @@ pub fn convert_to_iostore_directory(
         }
     }
     
-    action_to_zen(action, config).expect("Failed to convert to zen");
+    // Use UAssetTool to convert legacy assets to Zen format and create IoStore bundle
+    // This replaces retoc's action_to_zen function
+    let output_base = mod_dir.join(&pak.mod_name);
     
-    // Log IoStore output
-    let ucas_path = mod_dir.join(pak.mod_name.clone()).with_extension("ucas");
-    let utoc_path = mod_dir.join(utoc_name);
-    if ucas_path.exists() && utoc_path.exists() {
-        let ucas_size = std::fs::metadata(&ucas_path).map(|m| m.len()).unwrap_or(0);
-        let utoc_size = std::fs::metadata(&utoc_path).map(|m| m.len()).unwrap_or(0);
-        info!("IoStore conversion complete - ucas: {} bytes, utoc: {} bytes", ucas_size, utoc_size);
-    }
+    // Get usmap path if available
+    let usmap_full_path = if !pak.usmap_path.is_empty() {
+        let usmap_dir = dirs::config_dir()
+            .unwrap_or_else(|| std::path::PathBuf::from("."))
+            .join("RepakGuiRevamped")
+            .join("Usmap");
+        let usmap_file = usmap_dir.join(&pak.usmap_path);
+        if usmap_file.exists() {
+            Some(usmap_file.to_string_lossy().to_string())
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+    
+    info!("Converting to IoStore using UAssetTool...");
+    info!("  Input directory: {}", to_pak_dir.display());
+    info!("  Output base: {}", output_base.display());
+    
+    let result = uasset_toolkit::create_mod_iostore(
+        &output_base.to_string_lossy(),
+        &to_pak_dir.to_string_lossy(),
+        usmap_full_path.as_deref(),
+        Some(&pak.mount_point),
+        true, // Enable compression
+        None, // Use default AES key
+    ).map_err(|e| repak::Error::Io(std::io::Error::new(
+        std::io::ErrorKind::Other,
+        format!("IoStore conversion failed: {}", e),
+    )))?;
+    
+    info!("IoStore conversion complete:");
+    info!("  UTOC: {}", result.utoc_path);
+    info!("  UCAS: {}", result.ucas_path);
+    info!("  PAK:  {}", result.pak_path);
+    info!("  Converted {} assets ({} files)", result.converted_count, result.file_count);
 
-    // NOW WE CREATE THE FAKE PAK FILE WITH THE CONTENTS BEING A TEXT FILE LISTING ALL CHUNKNAMES
-
-    let output_file = File::create(mod_dir.join(pak_name))?;
-
-    let rel_paths = paths
-        .par_iter()
-        .map(|p| {
-            let rel = &p
-                .strip_prefix(to_pak_dir.clone())
-                .expect("file not in input directory")
-                .to_slash()
-                .expect("failed to convert to slash path");
-            rel.to_string()
-        })
-        .collect::<Vec<_>>();
-
-    // Build the tiny companion PAK uncompressed on purpose.
-    // Rationale: Only UCAS should be compressed; the small PAK is only a mount aid (chunknames)
-    // and keeping it uncompressed improves compatibility.
-    // To revert: add `.compression(vec![pak.compression])` back below and set build_entry to true.
-    let builder = repak::PakBuilder::new()
-        .key(AES_KEY.clone().0);
-
-    let mut pak_writer = builder.writer(
-        BufWriter::new(output_file),
-        Version::V11,
-        pak.mount_point.clone(),
-        Some(pak.path_hash_seed.parse().unwrap()),
-    );
-    let entry_builder = pak_writer.entry_builder();
-
-    let rel_paths_bytes: Vec<u8> = rel_paths.join("\n").into_bytes();
-    // Write the chunknames entry without compression
-    let entry = entry_builder
-        .build_entry(false, rel_paths_bytes, "chunknames")
-        .expect("Failed to build entry");
-
-    pak_writer.write_entry("chunknames".to_string(), entry)?;
-    pak_writer.write_index()?;
-
-    log::info!("Wrote pak file successfully");
     packed_files_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     Ok(())
-
-    // now generate the fake pak file
 }
 
 /// Process texture files for NoMipmaps fix.
@@ -359,7 +321,7 @@ fn find_uasset_tool() -> Result<PathBuf, Box<dyn std::error::Error>> {
         // From workspace root
         "Repak_Gui-Revamped-TauriUpdate/uasset_toolkit/tools/UAssetTool/bin/Release/net8.0/win-x64/publish/UAssetTool.exe",
         "Repak_Gui-Revamped-TauriUpdate/uasset_toolkit/tools/UAssetTool/bin/Release/net8.0/win-x64/UAssetTool.exe",
-        // From repak-gui directory
+        // From RepakX directory
         "../uasset_toolkit/tools/UAssetTool/bin/Release/net8.0/win-x64/publish/UAssetTool.exe",
         "../uasset_toolkit/tools/UAssetTool/bin/Release/net8.0/win-x64/UAssetTool.exe",
     ];

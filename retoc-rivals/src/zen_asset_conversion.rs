@@ -15,6 +15,15 @@ use crate::iostore_writer::IoStoreWriter;
 use crate::logging::{log, Log};
 use crate::ser::{ReadExt, WriteExt};
 
+// ============================================================================
+// FEATURE FLAG: Recalculate serial_size from actual export data
+// Set to false to revert to original behavior (trust header serial_size)
+// NOTE: If UAssetTool is working correctly, this should be FALSE because
+// UAssetTool already fixes the header to match actual data size.
+// Only set to TRUE if there's a mismatch between header and actual data.
+// ============================================================================
+const RECALCULATE_EXPORT_SERIAL_SIZE: bool = true;
+
 /// NOTE: assumes leading slash is already stripped
 fn get_public_export_hash(package_relative_export_path: &str) -> u64 {
     cityhasher::hash(
@@ -265,7 +274,7 @@ fn remap_package_index_reference(builder: &mut ZenPackageBuilder, package_index:
     FPackageObjectIndex::create_null()
 }
 
-fn build_zen_export_map(builder: &mut ZenPackageBuilder) -> anyhow::Result<()> {
+fn build_zen_export_map(builder: &mut ZenPackageBuilder, exports_buffer: &[u8]) -> anyhow::Result<()> {
 
     builder.zen_package.export_map.reserve(builder.legacy_package.exports.len());
 
@@ -307,9 +316,32 @@ fn build_zen_export_map(builder: &mut ZenPackageBuilder) -> anyhow::Result<()> {
         // Store the debug mapping of the ID of this import to the full name of it
         builder.debug_full_package_object_names.insert(FPackageIndex::create_export(export_index as u32), full_export_name.clone());
 
+        // Calculate actual serial_size from export data if feature flag is enabled
+        let cooked_serial_size = if RECALCULATE_EXPORT_SERIAL_SIZE {
+            // Calculate actual size from exports buffer
+            let export_start = cooked_serial_offset as usize;
+            let export_end = if export_index < builder.legacy_package.exports.len() - 1 {
+                // Next export's offset (minus header size)
+                (builder.legacy_package.exports[export_index + 1].serial_offset as u64 - total_header_size) as usize
+            } else {
+                // Last export: use buffer length minus PACKAGE_FILE_TAG (4 bytes)
+                if exports_buffer.len() >= 4 {
+                    exports_buffer.len() - 4
+                } else {
+                    exports_buffer.len()
+                }
+            };
+            
+            let actual_size = export_end.saturating_sub(export_start) as u64;
+            actual_size
+        } else {
+            // Original behavior: trust header serial_size
+            object_export.serial_size as u64
+        };
+
         let zen_export = FExportMapEntry{
             cooked_serial_offset,
-            cooked_serial_size: object_export.serial_size as u64,
+            cooked_serial_size,
             object_name: mapped_object_name,
             object_flags: object_export.object_flags,
             outer_index, class_index, super_index, template_index,
@@ -1034,7 +1066,7 @@ fn build_zen_asset_internal(legacy_asset: &FSerializedAssetBundle, container_hea
     // Build zen asset data
     setup_zen_package_summary(&mut builder)?;
     build_zen_import_map(&mut builder)?;
-    build_zen_export_map(&mut builder)?;
+    build_zen_export_map(&mut builder, &legacy_asset.exports_file_buffer)?;
     build_zen_preload_dependencies(&mut builder)?;
 
     Ok(builder)

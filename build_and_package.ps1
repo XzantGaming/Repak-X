@@ -278,6 +278,7 @@ See LICENSE-MIT and LICENSE-APACHE for details.
     $components = @(
         @{Name="Main Application"; Path="repak-gui.exe"},
         @{Name="UAssetTool"; Path="uassettool\UAssetTool.exe"}
+        # Note: hash_helper.exe is no longer needed - CityHash64 is now implemented natively in UAssetTool
         # Note: Oodle DLL is downloaded on-demand by the app, not bundled
     )
     

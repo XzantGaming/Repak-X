@@ -131,7 +131,7 @@ fn find_mods_from_archive(path: &str) -> Vec<InstallableMod> {
                     .reader(&mut BufReader::new(File::open(&file_path).unwrap()));
 
                 if let Ok(builder) = builder {
-                    let files = read_utoc(&utoc_path, &builder, &file_path);
+                    let files = read_utoc(&utoc_path);
                     let files = files
                         .iter()
                         .map(|x| x.file_path.clone())
@@ -388,7 +388,7 @@ fn map_to_mods_internal(paths: &[PathBuf]) -> Vec<InstallableMod> {
                         // For IoStore packages, read from .utoc file
                         let files = if is_iostore {
                             let utoc_path = path.with_extension("utoc");
-                            let utoc_files = read_utoc(&utoc_path, &builder, path);
+                            let utoc_files = read_utoc(&utoc_path);
                             len = utoc_files.len();
                             utoc_files.iter().map(|f| f.file_path.clone()).collect()
                         } else {

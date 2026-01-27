@@ -11,7 +11,9 @@ fn main() {
     // Get the workspace root (two levels up from uasset_app: uasset_app -> uasset_toolkit -> workspace root)
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let workspace_root = manifest_dir.parent().unwrap().parent().unwrap();
-    let tool_project_dir = workspace_root.join("uasset_toolkit").join("tools").join("UAssetTool");
+    
+    // Use UAssetTool from UassetToolRivals submodule
+    let tool_project_dir = workspace_root.join("UassetToolRivals").join("src").join("UAssetTool");
 
     // Watch all C# source files for changes
     let program_cs = tool_project_dir.join("Program.cs");
@@ -23,8 +25,8 @@ fn main() {
         println!("cargo:rerun-if-changed={}", csproj.display());
     }
     
-    // Watch UAssetAPI source directory for changes
-    let uasset_api_dir = workspace_root.join("UAssetAPI").join("UAssetAPI");
+    // Watch UAssetAPI source directory for changes (now in submodule)
+    let uasset_api_dir = workspace_root.join("UassetToolRivals").join("src").join("UAssetAPI");
     if uasset_api_dir.exists() {
         println!("cargo:rerun-if-changed={}", uasset_api_dir.display());
     }
@@ -102,7 +104,7 @@ fn main() {
         }
 
         if !copied {
-            panic!("UAssetTool.exe is required but was not produced. Ensure .NET SDK is installed or precompile via: 'dotnet publish uasset_toolkit/tools/UAssetTool -c Release -r win-x64 --self-contained true'");
+            panic!("UAssetTool.exe is required but was not produced. Ensure .NET SDK is installed or precompile via: 'dotnet publish UassetToolRivals/src/UAssetTool -c Release -r win-x64 --self-contained true'");
         }
     }
 }

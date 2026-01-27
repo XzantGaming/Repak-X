@@ -164,6 +164,34 @@ pub enum UAssetRequest {
     // Batch check for inline texture data - returns list of files with inline data
     #[serde(rename = "batch_has_inline_texture_data")]
     BatchHasInlineTextureData { file_paths: Vec<String>, usmap_path: Option<String> },
+    
+    // PAK operations
+    #[serde(rename = "list_pak_files")]
+    ListPakFiles { file_path: String, aes_key: Option<String> },
+    #[serde(rename = "extract_pak_file")]
+    ExtractPakFile { file_path: String, internal_path: String, output_path: String, aes_key: Option<String> },
+    #[serde(rename = "extract_pak_all")]
+    ExtractPakAll { file_path: String, output_path: String, aes_key: Option<String> },
+    #[serde(rename = "create_pak")]
+    CreatePak { output_path: String, file_paths: Vec<String>, mount_point: Option<String>, path_hash_seed: Option<u64>, aes_key: Option<String> },
+    #[serde(rename = "create_companion_pak")]
+    CreateCompanionPak { output_path: String, file_paths: Vec<String>, mount_point: Option<String>, path_hash_seed: Option<u64>, aes_key: Option<String> },
+    
+    // IoStore operations
+    #[serde(rename = "list_iostore_files")]
+    ListIoStoreFiles { file_path: String, aes_key: Option<String> },
+    #[serde(rename = "create_iostore")]
+    CreateIoStore { output_path: String, input_dir: String, usmap_path: Option<String>, compress: Option<bool>, aes_key: Option<String> },
+    #[serde(rename = "is_iostore_compressed")]
+    IsIoStoreCompressed { file_path: String },
+    #[serde(rename = "recompress_iostore")]
+    RecompressIoStore { file_path: String },
+    #[serde(rename = "extract_iostore")]
+    ExtractIoStore { file_path: String, output_path: String, aes_key: Option<String> },
+    #[serde(rename = "extract_script_objects")]
+    ExtractScriptObjects { file_path: String, output_path: String },
+    #[serde(rename = "create_mod_iostore")]
+    CreateModIoStore { output_path: String, input_dir: String, usmap_path: Option<String>, mount_point: Option<String>, compress: Option<bool>, aes_key: Option<String> },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -870,4 +898,323 @@ pub fn strip_mipmaps_native(file_path: &str, usmap_path: Option<&str>) -> Result
 pub fn batch_strip_mipmaps_native(file_paths: &[String], usmap_path: Option<&str>) -> Result<(usize, usize, usize, Vec<String>)> {
     let toolkit = get_global_toolkit()?;
     run_on_global(toolkit.batch_strip_mipmaps_native(file_paths, usmap_path))
+}
+
+// ============================================================================
+// PAK/IOSTORE OPERATIONS - Using UAssetTool instead of repak/retoc crates
+// ============================================================================
+
+/// PAK file info returned from list_pak_files
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PakFileInfo {
+    pub path: String,
+    pub size: u64,
+    pub compressed_size: u64,
+}
+
+/// PAK listing result
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PakListResult {
+    pub file_count: usize,
+    pub mount_point: String,
+    pub version: i32,
+    pub encrypted_index: bool,
+    pub files: Vec<PakFileInfo>,
+}
+
+/// IoStore listing result
+#[derive(Debug, Serialize, Deserialize)]
+pub struct IoStoreListResult {
+    pub package_count: usize,
+    pub container_name: String,
+    pub files: Vec<String>,
+}
+
+/// List all files in a PAK file (using global singleton)
+pub fn list_pak_files(pak_path: &str, aes_key: Option<&str>) -> Result<PakListResult> {
+    let toolkit = get_global_toolkit()?;
+    run_on_global(async {
+        let request = UAssetRequest::ListPakFiles {
+            file_path: pak_path.to_string(),
+            aes_key: aes_key.map(|s| s.to_string()),
+        };
+        let response = toolkit.send_request(request).await?;
+        if !response.success {
+            anyhow::bail!("list_pak_files failed: {}", response.message);
+        }
+        let data = response.data.ok_or_else(|| anyhow::anyhow!("No data in response"))?;
+        
+        // Parse the response data
+        let file_count = data.get("file_count").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+        let mount_point = data.get("mount_point").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let version = data.get("version").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+        let encrypted_index = data.get("encrypted_index").and_then(|v| v.as_bool()).unwrap_or(false);
+        
+        let files = if let Some(files_arr) = data.get("files").and_then(|v| v.as_array()) {
+            files_arr.iter().map(|f| PakFileInfo {
+                path: f.get("path").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                size: f.get("size").and_then(|v| v.as_u64()).unwrap_or(0),
+                compressed_size: f.get("compressed_size").and_then(|v| v.as_u64()).unwrap_or(0),
+            }).collect()
+        } else {
+            Vec::new()
+        };
+        
+        Ok(PakListResult { file_count, mount_point, version, encrypted_index, files })
+    })
+}
+
+/// Extract a single file from a PAK (using global singleton)
+pub fn extract_pak_file(pak_path: &str, internal_path: &str, output_path: &str, aes_key: Option<&str>) -> Result<()> {
+    let toolkit = get_global_toolkit()?;
+    run_on_global(async {
+        let request = UAssetRequest::ExtractPakFile {
+            file_path: pak_path.to_string(),
+            internal_path: internal_path.to_string(),
+            output_path: output_path.to_string(),
+            aes_key: aes_key.map(|s| s.to_string()),
+        };
+        let response = toolkit.send_request(request).await?;
+        if !response.success {
+            anyhow::bail!("extract_pak_file failed: {}", response.message);
+        }
+        Ok(())
+    })
+}
+
+/// Extract all files from a PAK to a directory (using global singleton)
+pub fn extract_pak_all(pak_path: &str, output_dir: &str, aes_key: Option<&str>) -> Result<Vec<String>> {
+    let toolkit = get_global_toolkit()?;
+    run_on_global(async {
+        let request = UAssetRequest::ExtractPakAll {
+            file_path: pak_path.to_string(),
+            output_path: output_dir.to_string(),
+            aes_key: aes_key.map(|s| s.to_string()),
+        };
+        let response = toolkit.send_request(request).await?;
+        if !response.success {
+            anyhow::bail!("extract_pak_all failed: {}", response.message);
+        }
+        
+        // Return list of extracted files
+        let files = response.data
+            .and_then(|d| d.get("files").cloned())
+            .and_then(|v| serde_json::from_value::<Vec<String>>(v).ok())
+            .unwrap_or_default();
+        Ok(files)
+    })
+}
+
+/// Create a PAK file from a list of files (using global singleton)
+pub fn create_pak(output_path: &str, file_paths: &[String], mount_point: Option<&str>, path_hash_seed: Option<u64>, aes_key: Option<&str>) -> Result<()> {
+    let toolkit = get_global_toolkit()?;
+    run_on_global(async {
+        let request = UAssetRequest::CreatePak {
+            output_path: output_path.to_string(),
+            file_paths: file_paths.to_vec(),
+            mount_point: mount_point.map(|s| s.to_string()),
+            path_hash_seed,
+            aes_key: aes_key.map(|s| s.to_string()),
+        };
+        let response = toolkit.send_request(request).await?;
+        if !response.success {
+            anyhow::bail!("create_pak failed: {}", response.message);
+        }
+        Ok(())
+    })
+}
+
+/// Create a companion PAK file for IoStore bundles (using global singleton)
+pub fn create_companion_pak(output_path: &str, file_paths: &[String], mount_point: Option<&str>, path_hash_seed: Option<u64>, aes_key: Option<&str>) -> Result<()> {
+    let toolkit = get_global_toolkit()?;
+    run_on_global(async {
+        let request = UAssetRequest::CreateCompanionPak {
+            output_path: output_path.to_string(),
+            file_paths: file_paths.to_vec(),
+            mount_point: mount_point.map(|s| s.to_string()),
+            path_hash_seed,
+            aes_key: aes_key.map(|s| s.to_string()),
+        };
+        let response = toolkit.send_request(request).await?;
+        if !response.success {
+            anyhow::bail!("create_companion_pak failed: {}", response.message);
+        }
+        Ok(())
+    })
+}
+
+/// List all packages in an IoStore container (using global singleton)
+pub fn list_iostore_files(utoc_path: &str, aes_key: Option<&str>) -> Result<IoStoreListResult> {
+    let toolkit = get_global_toolkit()?;
+    run_on_global(async {
+        let request = UAssetRequest::ListIoStoreFiles {
+            file_path: utoc_path.to_string(),
+            aes_key: aes_key.map(|s| s.to_string()),
+        };
+        let response = toolkit.send_request(request).await?;
+        if !response.success {
+            anyhow::bail!("list_iostore_files failed: {}", response.message);
+        }
+        let data = response.data.ok_or_else(|| anyhow::anyhow!("No data in response"))?;
+        
+        let package_count = data.get("package_count").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+        let container_name = data.get("container_name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let files = data.get("files")
+            .and_then(|v| serde_json::from_value::<Vec<String>>(v.clone()).ok())
+            .unwrap_or_default();
+        
+        Ok(IoStoreListResult { package_count, container_name, files })
+    })
+}
+
+/// Create an IoStore bundle from a directory of legacy assets (using global singleton)
+pub fn create_iostore(output_path: &str, input_dir: &str, usmap_path: Option<&str>, compress: bool, aes_key: Option<&str>) -> Result<Vec<String>> {
+    let toolkit = get_global_toolkit()?;
+    run_on_global(async {
+        let request = UAssetRequest::CreateIoStore {
+            output_path: output_path.to_string(),
+            input_dir: input_dir.to_string(),
+            usmap_path: usmap_path.map(|s| s.to_string()),
+            compress: Some(compress),
+            aes_key: aes_key.map(|s| s.to_string()),
+        };
+        let response = toolkit.send_request(request).await?;
+        if !response.success {
+            anyhow::bail!("create_iostore failed: {}", response.message);
+        }
+        
+        // Return list of converted files
+        let files = response.data
+            .and_then(|d| d.get("files").cloned())
+            .and_then(|v| serde_json::from_value::<Vec<String>>(v).ok())
+            .unwrap_or_default();
+        Ok(files)
+    })
+}
+
+/// Check if an IoStore container is compressed (using global singleton)
+pub fn is_iostore_compressed(utoc_path: &str) -> Result<bool> {
+    let toolkit = get_global_toolkit()?;
+    run_on_global(async {
+        let request = UAssetRequest::IsIoStoreCompressed {
+            file_path: utoc_path.to_string(),
+        };
+        let response = toolkit.send_request(request).await?;
+        if !response.success {
+            anyhow::bail!("is_iostore_compressed failed: {}", response.message);
+        }
+        
+        let compressed = response.data
+            .and_then(|d| d.get("compressed").and_then(|v| v.as_bool()))
+            .unwrap_or(false);
+        Ok(compressed)
+    })
+}
+
+/// Recompress an IoStore container with Oodle (using global singleton)
+pub fn recompress_iostore(utoc_path: &str) -> Result<String> {
+    let toolkit = get_global_toolkit()?;
+    run_on_global(async {
+        let request = UAssetRequest::RecompressIoStore {
+            file_path: utoc_path.to_string(),
+        };
+        let response = toolkit.send_request(request).await?;
+        if !response.success {
+            anyhow::bail!("recompress_iostore failed: {}", response.message);
+        }
+        
+        let output_path = response.data
+            .and_then(|d| d.get("output_path").and_then(|v| v.as_str()).map(|s| s.to_string()))
+            .unwrap_or_else(|| utoc_path.to_string());
+        Ok(output_path)
+    })
+}
+
+/// Extract IoStore to legacy format (using global singleton)
+pub fn extract_iostore(utoc_path: &str, output_dir: &str, aes_key: Option<&str>) -> Result<usize> {
+    let toolkit = get_global_toolkit()?;
+    run_on_global(async {
+        let request = UAssetRequest::ExtractIoStore {
+            file_path: utoc_path.to_string(),
+            output_path: output_dir.to_string(),
+            aes_key: aes_key.map(|s| s.to_string()),
+        };
+        let response = toolkit.send_request(request).await?;
+        if !response.success {
+            anyhow::bail!("extract_iostore failed: {}", response.message);
+        }
+        
+        let count = response.data
+            .and_then(|d| d.get("extracted_count").and_then(|v| v.as_u64()))
+            .unwrap_or(0) as usize;
+        Ok(count)
+    })
+}
+
+/// Extract ScriptObjects.bin from game paks (using global singleton)
+pub fn extract_script_objects(paks_path: &str, output_path: &str) -> Result<usize> {
+    let toolkit = get_global_toolkit()?;
+    run_on_global(async {
+        let request = UAssetRequest::ExtractScriptObjects {
+            file_path: paks_path.to_string(),
+            output_path: output_path.to_string(),
+        };
+        let response = toolkit.send_request(request).await?;
+        if !response.success {
+            anyhow::bail!("extract_script_objects failed: {}", response.message);
+        }
+        
+        let size = response.data
+            .and_then(|d| d.get("size").and_then(|v| v.as_u64()))
+            .unwrap_or(0) as usize;
+        Ok(size)
+    })
+}
+
+/// Create mod IoStore result
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreateModIoStoreResult {
+    pub utoc_path: String,
+    pub ucas_path: String,
+    pub pak_path: String,
+    pub converted_count: usize,
+    pub file_count: usize,
+}
+
+/// Create a mod IoStore bundle from a directory of legacy assets (using global singleton)
+/// This is the replacement for retoc's action_to_zen function.
+/// Converts .uasset/.uexp files to Zen format and creates .utoc/.ucas/.pak bundle.
+pub fn create_mod_iostore(
+    output_path: &str,
+    input_dir: &str,
+    usmap_path: Option<&str>,
+    mount_point: Option<&str>,
+    compress: bool,
+    aes_key: Option<&str>,
+) -> Result<CreateModIoStoreResult> {
+    let toolkit = get_global_toolkit()?;
+    run_on_global(async {
+        let request = UAssetRequest::CreateModIoStore {
+            output_path: output_path.to_string(),
+            input_dir: input_dir.to_string(),
+            usmap_path: usmap_path.map(|s| s.to_string()),
+            mount_point: mount_point.map(|s| s.to_string()),
+            compress: Some(compress),
+            aes_key: aes_key.map(|s| s.to_string()),
+        };
+        let response = toolkit.send_request(request).await?;
+        if !response.success {
+            anyhow::bail!("create_mod_iostore failed: {}", response.message);
+        }
+        
+        let data = response.data.ok_or_else(|| anyhow::anyhow!("No data in response"))?;
+        
+        Ok(CreateModIoStoreResult {
+            utoc_path: data.get("utoc_path").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            ucas_path: data.get("ucas_path").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            pak_path: data.get("pak_path").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            converted_count: data.get("converted_count").and_then(|v| v.as_u64()).unwrap_or(0) as usize,
+            file_count: data.get("file_count").and_then(|v| v.as_u64()).unwrap_or(0) as usize,
+        })
+    })
 }

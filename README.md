@@ -1,10 +1,10 @@
-# Repak GUI (Marvel Rivals)
+# RepakX (Marvel Rivals)
 
-Repak GUI is a Windows application for installing and repacking Marvel Rivals mods. It automates UE IOStore packaging, applies mesh fixes during repack, and intelligently handles compression so your installed mods load and stay small.
+RepakX is a Windows application for installing and repacking Marvel Rivals mods. It automates UE IOStore packaging, applies mesh fixes during repack, and intelligently handles compression so your installed mods load and stay small.
  
 ## Overview
 
-Repak GUI focuses on one job: taking Marvel Rivals `.pak` mods and turning them into game-ready IOStore assets with minimal manual work.
+RepakX focuses on one job: taking Marvel Rivals `.pak` mods and turning them into game-ready IOStore assets with minimal manual work.
 
 At a high level it:
 - Extracts the original `.pak` mod.
@@ -15,7 +15,7 @@ At a high level it:
 ## Main Components
 
 - **Tauri desktop app (Rust + React GUI)**  
-  The main application you run as `repak-gui.exe`. Provides the drag-and-drop interface and orchestrates all work.
+  The main application you run as `RepakX.exe`. Provides the drag-and-drop interface and orchestrates all work.
 
 - **Rust backend**  
   Handles pak unpacking/packing, IOStore building, and communication with UAsset tools.
@@ -39,7 +39,7 @@ End users normally interact only with the GUI; the backend and helper tools run 
 
 1. Download a prebuilt ZIP from the **Releases** page.
 2. Extract it to any writable folder (avoid `Program Files` to keep permissions simple).
-3. Run `repak-gui.exe`.
+3. Run `RepakX.exe`.
 
 ## Basic Usage
 
@@ -66,7 +66,7 @@ Use the `_9999999_P` (The App will autocomplete it for you if its missing but if
 ## Troubleshooting
 
 - **Textures look wrong or warnings mention `UAssetBridge.exe`**  
-  Add `uassetbridge/UAssetBridge.exe` next to `repak-gui.exe` to enable the full texture pipeline.(Experimental. Being worked on proper function)
+  Add `uassetbridge/UAssetBridge.exe` next to `RepakX.exe` to enable the full texture pipeline.(Experimental. Being worked on proper function)
 
 - **Mod not loading or game issues**  
   Double-check that the output files are in the correct `Paks/~mods` folder and use the `_9999999_P` suffix.  

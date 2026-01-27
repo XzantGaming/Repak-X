@@ -139,6 +139,21 @@ struct ActionGet {
     strip_prefix: String,
 }
 
+#[derive(Parser, Debug)]
+struct ActionExtractIoStore {
+    /// Input .utoc path or directory containing IoStore bundles
+    #[arg(index = 1)]
+    input: String,
+
+    /// Output directory for extracted legacy assets
+    #[arg(index = 2)]
+    output: String,
+
+    /// Filter to specific package path (e.g., /Game/Marvel/...)
+    #[arg(short, long)]
+    package: Option<String>,
+}
+
 #[derive(Subcommand, Debug)]
 enum Action {
     /// Print .pak info
@@ -153,6 +168,8 @@ enum Action {
     Pack(ActionPack),
     /// Reads a single file to stdout
     Get(ActionGet),
+    /// Extract IoStore (.utoc/.ucas) to legacy .uasset/.uexp files
+    ExtractIoStore(ActionExtractIoStore),
 }
 
 #[derive(Parser, Debug)]
@@ -177,6 +194,7 @@ fn main() -> Result<(), repak::Error> {
         Action::Unpack(action) => unpack(aes_key, action),
         Action::Pack(action) => pack(aes_key, action),
         Action::Get(action) => get(aes_key, action),
+        Action::ExtractIoStore(action) => extract_iostore(action),
     }
 }
 
@@ -729,4 +747,28 @@ fn get(aes_key: Option<aes::Aes256>, args: ActionGet) -> Result<(), repak::Error
     use std::io::Write;
     std::io::stdout().write_all(&pak.get(&file.to_slash_lossy(), &mut reader)?)?;
     Ok(())
+}
+
+fn extract_iostore(args: ActionExtractIoStore) -> Result<(), repak::Error> {
+    use std::sync::Arc;
+    
+    let input_path = PathBuf::from(&args.input);
+    let output_path = PathBuf::from(&args.output);
+    
+    // Create retoc config
+    let config = Arc::new(retoc::Config::default());
+    
+    println!("Extracting IoStore: {}", input_path.display());
+    println!("Output directory: {}", output_path.display());
+    
+    match retoc::extract_iostore(&input_path, &output_path, config) {
+        Ok(count) => {
+            println!("{} Extracted {} packages as legacy .uasset/.uexp files", "SUCCESS:".green(), count);
+            Ok(())
+        }
+        Err(e) => {
+            eprintln!("{} Failed to extract IoStore: {:#}", "ERROR:".red(), e);
+            Err(repak::Error::Other(format!("IoStore extraction failed: {}", e)))
+        }
+    }
 }

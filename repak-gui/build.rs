@@ -14,7 +14,7 @@ fn main() {
         //     println!("cargo:warning=winres: failed to compile resources: {}", e);
         // }
 
-        // 2) Ensure UAssetTool.exe is placed next to the built repak-gui.exe under
+        // 2) Ensure UAssetTool.exe is placed next to the built RepakX.exe under
         //    target/<profile>/uassettool/UAssetTool.exe so runtime lookup succeeds.
         //    Primary source: target/uassettool/UAssetTool.exe (produced by uasset_app build.rs)
         //    Fallback: tools/UAssetTool/bin/{Release,Debug}/net8.0/win-x64/UAssetTool.exe
@@ -37,10 +37,10 @@ fn main() {
         // Source candidates
         let primary_src = target_dir.join("uassettool").join("UAssetTool.exe");
 
-        // Workspace root: …/Repak_Gui-Revamped/repak-gui -> parent is workspace root
+        // Workspace root: …/RepakX -> parent is workspace root
         let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).parent().unwrap().to_path_buf();
-        // Update path to match actual location: uasset_toolkit/tools/UAssetTool
-        let tools_dir = workspace_root.join("uasset_toolkit").join("tools").join("UAssetTool");
+        // Use UAssetTool from UassetToolRivals submodule
+        let tools_dir = workspace_root.join("UassetToolRivals").join("src").join("UAssetTool");
         let fallback_release_publish = tools_dir.join("bin").join("Release").join("net8.0").join("win-x64").join("publish").join("UAssetTool.exe");
         let fallback_release = tools_dir.join("bin").join("Release").join("net8.0").join("win-x64").join("UAssetTool.exe");
         let fallback_debug = tools_dir.join("bin").join("Debug").join("net8.0").join("win-x64").join("UAssetTool.exe");
@@ -110,48 +110,14 @@ fn main() {
                 }
             }
         } else {
-            println!("cargo:warning=UAssetTool.exe not found. To enable asset pipeline, build it via: 'dotnet publish uasset_toolkit/tools/UAssetTool -c Release -r win-x64 --self-contained false'");
+            println!("cargo:warning=UAssetTool.exe not found. To enable asset pipeline, build it via: 'dotnet publish UassetToolRivals/src/UAssetTool -c Release -r win-x64 --self-contained true'");
         }
 
         // 3) Oodle DLL (oo2core_9_win64.dll) is now downloaded on-demand by oodle_loader
         //    No need to copy it during build - the app will download it automatically if missing/invalid
         //    This avoids issues with corrupted DLLs being bundled in releases
-
-        // 4) Copy UE4-DDS-Tools for texture conversion
-        //    Required for convert_texture action in UAssetTool
-        let dds_tools_src = workspace_root.join("uasset_toolkit").join("tools").join("UE4-DDS-Tools");
-        let dds_tools_dest = dest_dir.join("ue4-dds-tools");
         
-        if dds_tools_src.exists() {
-            // Copy the entire UE4-DDS-Tools directory
-            fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
-                if !dst.exists() {
-                    fs::create_dir_all(dst)?;
-                }
-                for entry in fs::read_dir(src)? {
-                    let entry = entry?;
-                    let src_path = entry.path();
-                    let dst_path = dst.join(entry.file_name());
-                    if src_path.is_dir() {
-                        copy_dir_recursive(&src_path, &dst_path)?;
-                    } else {
-                        fs::copy(&src_path, &dst_path)?;
-                    }
-                }
-                Ok(())
-            }
-            
-            match copy_dir_recursive(&dds_tools_src, &dds_tools_dest) {
-                Ok(_) => {
-                    println!("cargo:warning=UE4-DDS-Tools copied to {}", dds_tools_dest.display());
-                }
-                Err(e) => {
-                    println!("cargo:warning=failed to copy UE4-DDS-Tools: {}", e);
-                }
-            }
-        } else {
-            println!("cargo:warning=UE4-DDS-Tools not found at {} - texture conversion will be disabled", dds_tools_src.display());
-        }
+        // Note: UE4-DDS-Tools is no longer needed - native C# UAssetTool handles texture mipmap stripping
 
         // 5) Copy character_data.json to data folder next to the executable
         //    Required for runtime character data lookup
