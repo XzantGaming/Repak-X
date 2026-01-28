@@ -27,6 +27,7 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
+          submodules: recursive
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -94,7 +95,7 @@ jobs:
           sccache --start-server
           sccache --show-stats
 
-      - name: Auto-Increment Version
+      - name: Auto-Increment Version (Local)
         id: version
         shell: pwsh
         run: |
@@ -132,19 +133,6 @@ jobs:
           $packageContent = $packageContent -replace '"version":\s*"[^"]+"', "`"version`": `"$newVersion`""
           Set-Content -Path $packagePath -Value $packageContent -NoNewline
           
-          # Configure git
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # Commit version bump
-          git add Cargo.toml repak-gui/tauri.conf.json repak-gui/package.json
-          git commit -m "chore: bump version to $newVersion [skip ci]"
-          
-          # Create and push tag
-          git tag "v$newVersion"
-          git push origin HEAD:main
-          git push origin "v$newVersion"
-          
           # Set outputs
           echo "VERSION=$newVersion" >> $env:GITHUB_OUTPUT
           echo "OLD_VERSION=$currentVersion" >> $env:GITHUB_OUTPUT
@@ -168,6 +156,24 @@ jobs:
             Write-Host "ERROR: ZIP file not found!" -ForegroundColor Red
             exit 1
           }
+
+      - name: Commit and Push Version Bump
+        shell: pwsh
+        run: |
+          $newVersion = "${{ steps.version.outputs.VERSION }}"
+          
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Commit version bump
+          git add Cargo.toml repak-gui/tauri.conf.json repak-gui/package.json
+          git commit -m "chore: bump version to $newVersion [skip ci]"
+          
+          # Create and push tag
+          git tag "v$newVersion"
+          git push origin HEAD:main
+          git push origin "v$newVersion"
 
       - name: Upload ZIP to Cloudflare R2
         id: r2_upload

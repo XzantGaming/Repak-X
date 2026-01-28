@@ -39,6 +39,15 @@ function Write-Info {
     Write-Host "-> $Message" -ForegroundColor Yellow
 }
 
+function Kill-Process-Safe {
+    param([string]$Name)
+    $procs = Get-Process -Name $Name -ErrorAction SilentlyContinue
+    if ($procs) {
+        Write-Info "Stopping $Name process(es) to release file locks..."
+        $procs | Stop-Process -Force -ErrorAction SilentlyContinue
+    }
+}
+
 # Get workspace root
 $workspaceRoot = Split-Path -Parent $PSCommandPath
 Push-Location $workspaceRoot
@@ -48,6 +57,26 @@ try {
     Write-Info "Configuration: $Configuration"
     Write-Info "Workspace: $workspaceRoot"
     Write-Host ""
+    
+    # ============================================
+    # Step 0: Ensure Submodules
+    # ============================================
+    Write-Step "[0/4] Checking Submodules"
+    Write-Info "Ensuring UAssetToolRivals submodule is initialized..."
+    
+    $initScript = Join-Path $workspaceRoot "scripts\Init-Submodule.ps1"
+    if (Test-Path $initScript) {
+        & $initScript -NonInteractive
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warning "Submodule init script returned error code $LASTEXITCODE"
+        }
+        else {
+            Write-Success "Submodule initialized"
+        }
+    }
+    else {
+        Write-Warning "Init-Submodule.ps1 not found at $initScript"
+    }
 
     # ============================================
     # Step 1: Check Prerequisites
@@ -88,6 +117,10 @@ try {
 
     # Build UAssetTool from UassetToolRivals submodule
     Write-Info "Building UAssetTool.exe from submodule..."
+    
+    # Ensure no previous instances are running and locking files
+    Kill-Process-Safe "UAssetTool"
+    
     $toolProject = Join-Path $workspaceRoot "UassetToolRivals\src\UAssetTool\UAssetTool.csproj"
     if (Test-Path $toolProject) {
         $toolOutput = Join-Path $workspaceRoot "target\uassettool"
@@ -96,7 +129,9 @@ try {
         & dotnet publish $toolProject `
             -c Release `
             -r win-x64 `
-            --self-contained false `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
             -o $toolOutput
         
         if ($LASTEXITCODE -ne 0) {
@@ -162,9 +197,29 @@ try {
     if ($Configuration -eq "debug") {
         $tauriArgs += "--debug"
     }
+    
+    # Copy UAssetTool to the target specific directory so build.rs finds it and can skip rebuilding
+    $profileDir = if ($Configuration -eq "release") { "release" } else { "debug" }
+    $targetToolDir = Join-Path $workspaceRoot "target\$profileDir\uassettool"
+    
+    if (-not (Test-Path $targetToolDir)) {
+        New-Item -ItemType Directory -Force -Path $targetToolDir | Out-Null
+    }
+    
+    $srcTool = Join-Path $workspaceRoot "target\uassettool\UAssetTool.exe"
+    if (Test-Path $srcTool) {
+        Copy-Item -Path $srcTool -Destination (Join-Path $targetToolDir "UAssetTool.exe") -Force
+        Write-Info "Pre-seeded UAssetTool.exe for rust build"
+    }
+    
+    # Tell build.rs to skip building UAssetTool
+    $env:SKIP_UASSET_TOOL_BUILD = "1"
 
     & npx tauri $tauriArgs
     $tauriExitCode = $LASTEXITCODE
+
+    # Clean up env var
+    Remove-Item Env:\SKIP_UASSET_TOOL_BUILD
 
     Pop-Location
 
@@ -180,8 +235,8 @@ try {
     Write-Step "Build Complete!"
     
     $profileDir = if ($Configuration -eq "release") { "release" } else { "debug" }
-    $exePath = Join-Path $workspaceRoot "target\$profileDir\repak-gui.exe"
-    $toolPath = Join-Path $workspaceRoot "target\$profileDir\uassettool\UAssetTool.exe"
+    $exePath = Join-Path $workspaceRoot "target\$profileDir\REPAK-X.exe"
+    $toolPath = Join-Path $workspaceRoot "target\uassettool\UAssetTool.exe"
     
     Write-Host ""
     Write-Host "Built Artifacts:" -ForegroundColor Cyan
@@ -203,7 +258,7 @@ try {
     
     Write-Host ""
     Write-Host "To run the application:" -ForegroundColor Yellow
-    Write-Host "  .\target\$profileDir\repak-gui.exe" -ForegroundColor White
+    Write-Host "  .\target\$profileDir\REPAK-X.exe" -ForegroundColor White
     Write-Host ""
     Write-Host "To create a distribution package:" -ForegroundColor Yellow
     Write-Host "  .\package_release.ps1 -Configuration $Configuration" -ForegroundColor White

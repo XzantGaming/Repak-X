@@ -101,12 +101,13 @@ try {
     # Copy Main Application
     # ============================================
     Write-Info "Copying main application..."
-    $exePath = Join-Path $targetDir "repak-gui.exe"
+    $exePath = Join-Path $targetDir "REPAK-X.exe"
     if (Test-Path $exePath) {
-        Copy-Item -LiteralPath $exePath -Destination (Join-Path $distDir "repak-gui.exe") -Force
-        Write-Success "Copied repak-gui.exe"
-    } else {
-        Write-Error-Custom "repak-gui.exe not found at $exePath"
+        Copy-Item -LiteralPath $exePath -Destination (Join-Path $distDir "REPAK-X.exe") -Force
+        Write-Success "Copied REPAK-X.exe"
+    }
+    else {
+        Write-Error-Custom "REPAK-X.exe not found at $exePath"
         exit 1
     }
     
@@ -114,13 +115,14 @@ try {
     # Copy UAssetTool (unified asset tool)
     # ============================================
     Write-Info "Copying UAssetTool..."
-    $toolDir = Join-Path $targetDir "uassettool"
+    $toolDir = Join-Path $workspaceRoot "target\uassettool"
     if (Test-Path $toolDir) {
         $destToolDir = Join-Path $distDir "uassettool"
         New-Item -ItemType Directory -Force -Path $destToolDir | Out-Null
-        Copy-Item -Path (Join-Path $toolDir "*") -Destination $destToolDir -Recurse -Force
+        Copy-Item -Path (Join-Path $toolDir "*") -Destination $destToolDir -Recurse -Force -Exclude "*.pdb"
         Write-Success "Copied UAssetTool"
-    } else {
+    }
+    else {
         Write-Warning "UAssetTool not found at $toolDir - asset pipeline will be disabled"
     }
     
@@ -185,7 +187,7 @@ try {
 ## Installation
 
 1. Extract all files to a folder of your choice
-2. Run ``repak-gui.exe``
+2. Run ``REPAK-X.exe``
 
 ## Requirements
 
@@ -195,14 +197,14 @@ try {
 
 ## What's Included
 
-- ``repak-gui.exe`` - Main application
+- ``REPAK-X.exe`` - Main application
 - ``uassetbridge/`` - Texture processing tools (optional)
 - ``tools/`` - Additional utilities
 - Oodle compression library (downloaded automatically on first use)
 
 ## Usage
 
-1. Launch ``repak-gui.exe``
+1. Launch ``REPAK-X.exe``
 2. Drag and drop PAK mod files into the application
 3. Configure settings as needed
 4. Click "Install" to process and install mods
@@ -276,8 +278,8 @@ See LICENSE-MIT and LICENSE-APACHE for details.
     Write-Host "Main Components:" -ForegroundColor Yellow
     
     $components = @(
-        @{Name="Main Application"; Path="repak-gui.exe"},
-        @{Name="UAssetTool"; Path="uassettool\UAssetTool.exe"}
+        @{Name = "Main Application"; Path = "REPAK-X.exe" },
+        @{Name = "UAssetTool"; Path = "uassettool\UAssetTool.exe" }
         # Note: hash_helper.exe is no longer needed - CityHash64 is now implemented natively in UAssetTool
         # Note: Oodle DLL is downloaded on-demand by the app, not bundled
     )
@@ -287,7 +289,8 @@ See LICENSE-MIT and LICENSE-APACHE for details.
         if (Test-Path $componentPath) {
             $size = [math]::Round((Get-Item $componentPath).Length / 1MB, 2)
             Write-Host "  [OK] $($component.Name) ($size MB)" -ForegroundColor Green
-        } else {
+        }
+        else {
             Write-Host "  [MISSING] $($component.Name)" -ForegroundColor Yellow
         }
     }
@@ -298,15 +301,18 @@ See LICENSE-MIT and LICENSE-APACHE for details.
     Write-Host "To share this package:" -ForegroundColor Yellow
     if ($Zip) {
         Write-Host "  1. Upload the ZIP file: $appFolderName.zip" -ForegroundColor White
-    } else {
+    }
+    else {
         Write-Host "  1. Create a ZIP: .\build_and_package.ps1 -Zip" -ForegroundColor White
         Write-Host "  2. Or share the folder: $distDir" -ForegroundColor White
     }
     Write-Host ""
 
-} catch {
+}
+catch {
     Write-Error-Custom "Packaging failed with error: $_"
     exit 1
-} finally {
+}
+finally {
     Pop-Location
 }

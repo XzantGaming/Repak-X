@@ -29,7 +29,7 @@ function Get-Version {
 $root = Get-WorkspaceRoot
 $targetDir = Join-Path $root "target"
 $profileDir = Join-Path $targetDir $Configuration
-$exePath = Join-Path $profileDir "repak-gui.exe"
+$exePath = Join-Path $profileDir "REPAK-X.exe"
 $bridgeDir = Join-Path $profileDir "uassetbridge"
 $bridgeExe = Join-Path $bridgeDir "UAssetBridge.exe"
 
@@ -78,7 +78,8 @@ if (Test-Path $assetTypeCliDir) {
         New-Item -ItemType Directory -Force -Path $destAssetTypeCli | Out-Null
         Copy-Item -Path (Join-Path $assetTypeCliDist "AssetTypeCli.exe") -Destination $destAssetTypeCli -Force
         Write-Host "AssetTypeCli built successfully" -ForegroundColor Green
-    } else {
+    }
+    else {
         Write-Warning "AssetTypeCli build failed"
     }
 }
@@ -94,7 +95,8 @@ if (Test-Path $exportMapCliDir) {
         New-Item -ItemType Directory -Force -Path $destExportMapCli | Out-Null
         Copy-Item -Path (Join-Path $exportMapCliDist "ExportMapCli.exe") -Destination $destExportMapCli -Force
         Write-Host "ExportMapCli built successfully" -ForegroundColor Green
-    } else {
+    }
+    else {
         Write-Warning "ExportMapCli build failed"
     }
 }

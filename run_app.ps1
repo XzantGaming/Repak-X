@@ -4,14 +4,14 @@
 $scriptRoot = Split-Path -Parent $PSCommandPath
 $workspaceRoot = $scriptRoot
 
-$relativePaths = @(
-    "target\release\repak-gui.exe",
+$targetExe = @(
+    "target\release\REPAK-X.exe",
     "repak-gui\target\release\repak-gui.exe",
     "target\debug\repak-gui.exe"
 )
 
 $exePath = $null
-foreach ($rel in $relativePaths) {
+foreach ($rel in $targetExe) {
     $candidate = Join-Path -Path $workspaceRoot -ChildPath $rel
     if (Test-Path $candidate) {
         $exePath = $candidate
@@ -25,7 +25,8 @@ if ($exePath) {
     
     Write-Host "Launching Repak Gui Revamped..." -ForegroundColor Green
     Start-Process -FilePath $exePath
-} else {
+}
+else {
     Write-Host "Error: Application not built yet!" -ForegroundColor Red
     Write-Host ""
     Write-Host "Please run build_app.ps1 first:" -ForegroundColor Yellow

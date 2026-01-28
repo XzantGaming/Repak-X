@@ -8,7 +8,7 @@ keywords.workspace = true
 version.workspace = true
 
 [[bin]]
-name = "repak-gui"
+name = "REPAK-X"
 path = "src/main_tauri.rs"
 
 [package.metadata.wix]

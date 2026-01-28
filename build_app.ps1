@@ -7,6 +7,12 @@ Write-Host "Building Repak Gui Revamped" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
+# Ensure UAssetToolRivals submodule is initialized (needed for build.rs)
+$initScript = Join-Path $PSScriptRoot "scripts\Init-Submodule.ps1"
+if (Test-Path $initScript) {
+    & $initScript -NonInteractive
+}
+
 # Build Tauri app (includes frontend build via beforeBuildCommand)
 Write-Host "Building Tauri application (frontend + backend)..." -ForegroundColor Yellow
 Set-Location repak-gui
@@ -26,8 +32,8 @@ Write-Host "Build Complete!" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Executable location:" -ForegroundColor Yellow
-Write-Host "  target\release\repak-gui.exe" -ForegroundColor White
+Write-Host "  target\release\REPAK-X.exe" -ForegroundColor White
 Write-Host ""
 Write-Host "To run the app:" -ForegroundColor Yellow
-Write-Host "  .\target\release\repak-gui.exe" -ForegroundColor White
+Write-Host "  .\target\release\REPAK-X.exe" -ForegroundColor White
 Write-Host ""
