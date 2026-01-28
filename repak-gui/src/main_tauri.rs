@@ -18,6 +18,7 @@ mod p2p_stream;
 mod p2p_protocol;
 mod ip_obfuscation;
 mod toast_events;
+mod discord_presence;
 
 use uasset_detection::{detect_mesh_files_async, detect_texture_files_async, detect_static_mesh_files_async};
 use log::{info, warn, error};
@@ -51,6 +52,11 @@ struct P2PState {
 struct CrashMonitorState {
     game_start_time: Mutex<Option<std::time::SystemTime>>,
     last_checked_crash: Mutex<Option<std::time::SystemTime>>,
+}
+
+/// Discord Rich Presence state
+struct DiscordState {
+    manager: discord_presence::SharedDiscordPresence,
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -1753,6 +1759,305 @@ async fn delete_mod(path: String, window: Window) -> Result<(), String> {
     }
     
     Ok(())
+}
+
+/// Result of an update_mod operation
+#[derive(Clone, Serialize, Deserialize)]
+struct UpdateModResult {
+    /// Path to the newly installed mod
+    new_mod_path: String,
+    /// Whether the old mod was successfully deleted
+    old_mod_deleted: bool,
+    /// The preserved metadata that was applied
+    preserved_enabled_state: bool,
+    preserved_folder: Option<String>,
+}
+
+/// Update (replace) an existing mod with new mod files.
+/// This preserves the mod's metadata (folder location, enabled state, custom name, tags)
+/// and replaces the old mod files with the new ones.
+/// 
+/// # Arguments
+/// * `old_mod_path` - Path to the existing mod to be replaced
+/// * `new_mod_source` - Path to the new mod files (can be .pak, .zip, .rar, .7z, or directory)
+/// * `preserve_name` - If true, keeps the old mod's name; if false, uses the new mod's name
+/// * `window` - Tauri window for emitting events
+/// * `state` - Application state
+#[tauri::command]
+async fn update_mod(
+    old_mod_path: String,
+    new_mod_source: String,
+    preserve_name: bool,
+    window: Window,
+    state: State<'_, Arc<Mutex<AppState>>>,
+) -> Result<UpdateModResult, String> {
+    info!("update_mod called: old={}, new={}, preserve_name={}", old_mod_path, new_mod_source, preserve_name);
+    
+    let old_path = PathBuf::from(&old_mod_path);
+    let new_source = PathBuf::from(&new_mod_source);
+    
+    // Validate new source exists
+    if !new_source.exists() {
+        let err = format!("New mod source does not exist: {}", new_mod_source);
+        toast_events::emit_installation_failed(&window, &err);
+        return Err(err);
+    }
+    
+    // ========================================================================
+    // Step 1: Gather metadata from the old mod
+    // ========================================================================
+    
+    // Determine the actual old mod path (handle .pak vs .bak_repak)
+    let (actual_old_path, was_disabled) = if old_path.exists() {
+        (old_path.clone(), old_mod_path.ends_with(".bak_repak") || old_mod_path.ends_with(".pak_disabled"))
+    } else if old_mod_path.ends_with(".pak") {
+        // Check for disabled versions
+        let bak_repak_path = PathBuf::from(format!("{}.bak_repak", old_mod_path.trim_end_matches(".pak")));
+        let pak_disabled_path = PathBuf::from(format!("{}_disabled", old_mod_path.trim_end_matches(".pak")));
+        if bak_repak_path.exists() {
+            (bak_repak_path, true)
+        } else if pak_disabled_path.exists() {
+            (pak_disabled_path, true)
+        } else {
+            return Err(format!("Old mod not found: {}", old_mod_path));
+        }
+    } else {
+        return Err(format!("Old mod not found: {}", old_mod_path));
+    };
+    
+    info!("Actual old mod path: {:?}, was_disabled: {}", actual_old_path, was_disabled);
+    
+    // Get the old mod's folder (subfolder within mods directory)
+    let game_path = {
+        let state_guard = state.lock().unwrap();
+        state_guard.game_path.clone()
+    };
+    
+    let install_subfolder = if let Some(parent) = actual_old_path.parent() {
+        if parent == game_path {
+            String::new() // Root folder
+        } else {
+            parent.strip_prefix(&game_path)
+                .map(|p| p.to_string_lossy().replace('\\', "/"))
+                .unwrap_or_default()
+        }
+    } else {
+        String::new()
+    };
+    
+    info!("Preserved install subfolder: {}", install_subfolder);
+    
+    // Get the old mod's custom name and tags from metadata
+    let (old_custom_name, old_custom_tags, old_folder_id) = {
+        let state_guard = state.lock().unwrap();
+        let metadata = state_guard.mod_metadata.iter()
+            .find(|m| {
+                m.path == actual_old_path || 
+                m.path.with_extension("pak") == actual_old_path ||
+                m.path.with_extension("bak_repak") == actual_old_path ||
+                m.path.with_extension("pak_disabled") == actual_old_path
+            });
+        
+        match metadata {
+            Some(m) => (m.custom_name.clone(), m.custom_tags.clone(), m.folder_id.clone()),
+            None => (None, Vec::new(), None),
+        }
+    };
+    
+    info!("Preserved metadata - custom_name: {:?}, tags: {:?}, folder_id: {:?}", 
+          old_custom_name, old_custom_tags, old_folder_id);
+    
+    // Get the old mod's base name (for naming the new mod if preserve_name is true)
+    let old_mod_name = actual_old_path.file_stem()
+        .and_then(|s| s.to_str())
+        .map(|s| {
+            // Strip .bak_repak or _disabled suffix if present
+            s.trim_end_matches(".bak_repak")
+             .trim_end_matches("_disabled")
+             .to_string()
+        })
+        .unwrap_or_else(|| "Unknown".to_string());
+    
+    // ========================================================================
+    // Step 2: Delete the old mod files
+    // ========================================================================
+    
+    info!("Deleting old mod files...");
+    
+    // Delete main file
+    let mut old_deleted = false;
+    if actual_old_path.exists() {
+        if let Err(e) = std::fs::remove_file(&actual_old_path) {
+            warn!("Failed to delete old mod file: {}", e);
+        } else {
+            old_deleted = true;
+            info!("Deleted old mod file: {:?}", actual_old_path);
+        }
+    }
+    
+    // Delete associated IoStore files (.ucas and .utoc)
+    // Base path is always the .pak version
+    let base_pak_path = if was_disabled {
+        let path_str = actual_old_path.to_string_lossy();
+        let clean = path_str
+            .trim_end_matches(".bak_repak")
+            .trim_end_matches("_disabled");
+        if clean.ends_with(".pak") {
+            PathBuf::from(clean)
+        } else {
+            PathBuf::from(format!("{}.pak", clean))
+        }
+    } else {
+        actual_old_path.clone()
+    };
+    
+    for ext in &["ucas", "utoc"] {
+        let companion_path = base_pak_path.with_extension(ext);
+        if companion_path.exists() {
+            if let Err(e) = std::fs::remove_file(&companion_path) {
+                warn!("Failed to delete .{} file: {}", ext, e);
+            } else {
+                info!("Deleted associated .{} file: {:?}", ext, companion_path);
+            }
+        }
+    }
+    
+    // ========================================================================
+    // Step 3: Install the new mod
+    // ========================================================================
+    
+    info!("Installing new mod from: {:?}", new_source);
+    
+    // Determine the mod name to use
+    let mod_name = if preserve_name {
+        old_custom_name.clone().unwrap_or(old_mod_name.clone())
+    } else {
+        new_source.file_stem()
+            .and_then(|s| s.to_str())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "NewMod".to_string())
+    };
+    
+    // Use the existing install_mods logic
+    use std::sync::atomic::{AtomicI32, AtomicBool};
+    use std::sync::Arc as StdArc;
+    use crate::install_mod::map_paths_to_mods;
+    
+    let state_guard = state.lock().unwrap();
+    let mod_directory = state_guard.game_path.clone();
+    let usmap_filename = state_guard.usmap_path.clone();
+    drop(state_guard);
+    
+    // Set USMAP path
+    if !usmap_filename.is_empty() {
+        if let Some(usmap_full_path) = get_usmap_full_path(&usmap_filename) {
+            std::env::set_var("USMAP_PATH", &usmap_full_path);
+        }
+    }
+    
+    let paths = vec![new_source.clone()];
+    let mut installable_mods = map_paths_to_mods(&paths);
+    
+    if installable_mods.is_empty() {
+        let err = "Failed to parse new mod source - no valid mods found";
+        toast_events::emit_installation_failed(&window, err);
+        return Err(err.to_string());
+    }
+    
+    // Apply settings to the installable mod
+    if let Some(installable) = installable_mods.get_mut(0) {
+        installable.mod_name = mod_name.clone();
+        installable.install_subfolder = install_subfolder.clone();
+        installable.usmap_path = usmap_filename;
+    }
+    
+    // Install synchronously for update operation (we need to know the result)
+    let installed_counter = StdArc::new(AtomicI32::new(0));
+    let stop_flag = StdArc::new(AtomicBool::new(false));
+    
+    let window_clone = window.clone();
+    window_clone.emit("install_log", format!("[Update] Replacing mod: {}", old_mod_name)).ok();
+    window_clone.emit("install_log", format!("[Update] New source: {}", new_mod_source)).ok();
+    
+    use crate::install_mod::install_mod_logic::install_mods_in_viewport;
+    
+    install_mods_in_viewport(
+        &mut installable_mods,
+        &mod_directory,
+        &installed_counter,
+        &stop_flag,
+    );
+    
+    // ========================================================================
+    // Step 4: Apply preserved metadata to the new mod
+    // ========================================================================
+    
+    // Determine the new mod's path
+    let new_mod_filename = format!("{}_9999999_P.pak", mod_name);
+    let new_mod_path = if install_subfolder.is_empty() {
+        mod_directory.join(&new_mod_filename)
+    } else {
+        mod_directory.join(&install_subfolder).join(&new_mod_filename)
+    };
+    
+    info!("Expected new mod path: {:?}", new_mod_path);
+    
+    // If the old mod was disabled, disable the new one too
+    if was_disabled && new_mod_path.exists() {
+        let disabled_path = PathBuf::from(format!("{}.bak_repak", 
+            new_mod_path.to_string_lossy().trim_end_matches(".pak")));
+        if let Err(e) = std::fs::rename(&new_mod_path, &disabled_path) {
+            warn!("Failed to disable new mod to match old state: {}", e);
+        } else {
+            info!("Disabled new mod to match old mod's state");
+        }
+    }
+    
+    // Update metadata with preserved tags and folder assignment
+    if !old_custom_tags.is_empty() || old_folder_id.is_some() || old_custom_name.is_some() {
+        let mut state_guard = state.lock().unwrap();
+        
+        // Find or create metadata entry for the new mod
+        let new_path_for_metadata = if was_disabled {
+            PathBuf::from(format!("{}.bak_repak", 
+                new_mod_path.to_string_lossy().trim_end_matches(".pak")))
+        } else {
+            new_mod_path.clone()
+        };
+        
+        // Remove old metadata entry if it exists
+        state_guard.mod_metadata.retain(|m| {
+            m.path != actual_old_path && 
+            m.path != old_path &&
+            m.path.with_extension("pak") != actual_old_path
+        });
+        
+        // Add new metadata entry with preserved data
+        state_guard.mod_metadata.push(ModMetadata {
+            path: new_path_for_metadata.clone(),
+            custom_name: if preserve_name { old_custom_name } else { Some(mod_name.clone()) },
+            folder_id: old_folder_id,
+            custom_tags: old_custom_tags,
+        });
+        
+        // Save state
+        if let Err(e) = save_state(&state_guard) {
+            warn!("Failed to save state after update: {}", e);
+        }
+    }
+    
+    // Emit success event
+    toast_events::emit_success(&window, "Mod Updated", format!("Successfully replaced mod: {}", mod_name));
+    window.emit("install_complete", ()).ok();
+    
+    info!("update_mod completed successfully");
+    
+    Ok(UpdateModResult {
+        new_mod_path: new_mod_path.to_string_lossy().to_string(),
+        old_mod_deleted: old_deleted,
+        preserved_enabled_state: was_disabled,
+        preserved_folder: if install_subfolder.is_empty() { None } else { Some(install_subfolder) },
+    })
 }
 
 #[tauri::command]
@@ -3634,12 +3939,362 @@ async fn check_for_updates() -> Result<Option<UpdateInfo>, String> {
     Ok(None)
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 struct UpdateInfo {
     latest: String,
     url: String,
     asset_url: Option<String>,
     asset_name: Option<String>,
+}
+
+/// Progress information for update download
+#[derive(Clone, Serialize, Deserialize)]
+struct UpdateDownloadProgress {
+    downloaded_bytes: u64,
+    total_bytes: Option<u64>,
+    percentage: f32,
+    status: String, // "downloading", "extracting", "ready", "error"
+}
+
+/// Download an update from the given URL
+/// Returns the path to the downloaded file
+#[tauri::command]
+async fn download_update(
+    asset_url: String,
+    asset_name: String,
+    window: Window,
+) -> Result<String, String> {
+    use tokio::io::AsyncWriteExt;
+    
+    info!("Starting update download from: {}", asset_url);
+    
+    // Create temp directory for the update
+    let temp_dir = std::env::temp_dir().join("repakx_update");
+    if temp_dir.exists() {
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+    std::fs::create_dir_all(&temp_dir)
+        .map_err(|e| format!("Failed to create temp directory: {}", e))?;
+    
+    let download_path = temp_dir.join(&asset_name);
+    
+    // Download the file with progress reporting
+    let client = reqwest::Client::new();
+    let response = client.get(&asset_url)
+        .header("User-Agent", "RepakX")
+        .send()
+        .await
+        .map_err(|e| format!("Download request failed: {}", e))?;
+    
+    if !response.status().is_success() {
+        return Err(format!("Download failed with status: {}", response.status()));
+    }
+    
+    let total_size = response.content_length();
+    let mut downloaded: u64 = 0;
+    
+    // Create file and stream the download
+    let mut file = tokio::fs::File::create(&download_path)
+        .await
+        .map_err(|e| format!("Failed to create download file: {}", e))?;
+    
+    let mut stream = response.bytes_stream();
+    use futures::StreamExt;
+    
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| format!("Download stream error: {}", e))?;
+        file.write_all(&chunk)
+            .await
+            .map_err(|e| format!("Failed to write chunk: {}", e))?;
+        
+        downloaded += chunk.len() as u64;
+        
+        let percentage = if let Some(total) = total_size {
+            (downloaded as f32 / total as f32) * 100.0
+        } else {
+            -1.0 // Indeterminate
+        };
+        
+        // Emit progress event
+        let progress = UpdateDownloadProgress {
+            downloaded_bytes: downloaded,
+            total_bytes: total_size,
+            percentage,
+            status: "downloading".to_string(),
+        };
+        let _ = window.emit("update_download_progress", &progress);
+    }
+    
+    file.flush().await.map_err(|e| format!("Failed to flush file: {}", e))?;
+    drop(file);
+    
+    info!("Update downloaded to: {:?}", download_path);
+    
+    // Emit completion
+    let progress = UpdateDownloadProgress {
+        downloaded_bytes: downloaded,
+        total_bytes: total_size,
+        percentage: 100.0,
+        status: "ready".to_string(),
+    };
+    let _ = window.emit("update_download_progress", &progress);
+    
+    Ok(download_path.to_string_lossy().to_string())
+}
+
+/// Apply a downloaded update
+/// This creates an updater script and schedules it to run after the app closes
+#[tauri::command]
+async fn apply_update(
+    downloaded_path: String,
+    window: Window,
+) -> Result<(), String> {
+    info!("Applying update from: {}", downloaded_path);
+    
+    let download_path = PathBuf::from(&downloaded_path);
+    if !download_path.exists() {
+        return Err("Downloaded update file not found".to_string());
+    }
+    
+    // Get the current exe directory
+    let exe_path = std::env::current_exe()
+        .map_err(|e| format!("Failed to get current exe path: {}", e))?;
+    let app_dir = exe_path.parent()
+        .ok_or("Failed to get app directory")?;
+    
+    // Determine if this is a ZIP file that needs extraction
+    let is_zip = downloaded_path.to_lowercase().ends_with(".zip");
+    
+    // Create the updater script
+    let updater_script_path = std::env::temp_dir().join("repakx_updater.bat");
+    
+    let script_content = if is_zip {
+        // For ZIP files: extract and replace
+        format!(r#"@echo off
+title RepakX Updater
+echo Waiting for RepakX to close...
+timeout /t 2 /nobreak >nul
+
+:waitloop
+tasklist /FI "IMAGENAME eq REPAK-X.exe" 2>NUL | find /I /N "REPAK-X.exe">NUL
+if "%ERRORLEVEL%"=="0" (
+    timeout /t 1 /nobreak >nul
+    goto waitloop
+)
+
+echo Extracting update...
+cd /d "{temp_dir}"
+
+:: Use PowerShell to extract the ZIP
+powershell -Command "Expand-Archive -Path '{zip_path}' -DestinationPath '{temp_dir}\extracted' -Force"
+
+:: Find the extracted folder (might be nested)
+for /d %%i in ("{temp_dir}\extracted\*") do set "EXTRACTED_DIR=%%i"
+
+:: If no subfolder, use extracted directly
+if not defined EXTRACTED_DIR set "EXTRACTED_DIR={temp_dir}\extracted"
+
+echo Copying new files...
+xcopy /E /Y /I "%EXTRACTED_DIR%\*" "{app_dir}\"
+
+echo Cleaning up...
+rd /s /q "{temp_dir}"
+
+echo Update complete! Launching RepakX...
+start "" "{exe_path}"
+
+del "%~f0"
+"#,
+            temp_dir = download_path.parent().unwrap_or(&std::env::temp_dir()).to_string_lossy().replace('/', "\\"),
+            zip_path = download_path.to_string_lossy().replace('/', "\\"),
+            app_dir = app_dir.to_string_lossy().replace('/', "\\"),
+            exe_path = exe_path.to_string_lossy().replace('/', "\\"),
+        )
+    } else {
+        // For EXE files: just run the installer
+        format!(r#"@echo off
+title RepakX Updater
+echo Waiting for RepakX to close...
+timeout /t 2 /nobreak >nul
+
+:waitloop
+tasklist /FI "IMAGENAME eq REPAK-X.exe" 2>NUL | find /I /N "REPAK-X.exe">NUL
+if "%ERRORLEVEL%"=="0" (
+    timeout /t 1 /nobreak >nul
+    goto waitloop
+)
+
+echo Running installer...
+start /wait "" "{installer_path}"
+
+echo Cleaning up...
+del "{installer_path}"
+
+del "%~f0"
+"#,
+            installer_path = download_path.to_string_lossy().replace('/', "\\"),
+        )
+    };
+    
+    std::fs::write(&updater_script_path, script_content)
+        .map_err(|e| format!("Failed to write updater script: {}", e))?;
+    
+    info!("Created updater script at: {:?}", updater_script_path);
+    
+    // Launch the updater script (it will wait for the app to close)
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "/MIN", "", &updater_script_path.to_string_lossy()])
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
+            .map_err(|e| format!("Failed to launch updater: {}", e))?;
+    }
+    
+    info!("Updater script launched, app will update on close");
+    
+    // Emit event to notify frontend that update is ready
+    let _ = window.emit("update_ready_to_apply", ());
+    
+    Ok(())
+}
+
+/// Get auto-update preference from settings
+#[tauri::command]
+async fn get_auto_update_enabled(state: State<'_, Arc<Mutex<AppState>>>) -> Result<bool, String> {
+    let state = state.lock().unwrap();
+    Ok(state.auto_check_updates)
+}
+
+/// Set auto-update preference
+#[tauri::command]
+async fn set_auto_update_enabled(
+    enabled: bool,
+    state: State<'_, Arc<Mutex<AppState>>>,
+) -> Result<(), String> {
+    let mut state = state.lock().unwrap();
+    state.auto_check_updates = enabled;
+    save_state(&state).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Cancel an ongoing update download (cleanup temp files)
+#[tauri::command]
+async fn cancel_update_download() -> Result<(), String> {
+    let temp_dir = std::env::temp_dir().join("repakx_update");
+    if temp_dir.exists() {
+        std::fs::remove_dir_all(&temp_dir)
+            .map_err(|e| format!("Failed to cleanup temp directory: {}", e))?;
+    }
+    Ok(())
+}
+
+// ============================================================================
+// DISCORD RICH PRESENCE COMMANDS
+// ============================================================================
+
+/// Enable Discord Rich Presence
+#[tauri::command]
+async fn discord_connect(discord_state: State<'_, DiscordState>) -> Result<(), String> {
+    discord_state.manager.connect()
+}
+
+/// Disable Discord Rich Presence
+#[tauri::command]
+async fn discord_disconnect(discord_state: State<'_, DiscordState>) -> Result<(), String> {
+    discord_state.manager.disconnect()
+}
+
+/// Check if Discord is connected
+#[tauri::command]
+async fn discord_is_connected(discord_state: State<'_, DiscordState>) -> Result<bool, String> {
+    Ok(discord_state.manager.is_connected())
+}
+
+/// Set Discord activity to idle state
+#[tauri::command]
+async fn discord_set_idle(discord_state: State<'_, DiscordState>) -> Result<(), String> {
+    if discord_state.manager.is_connected() {
+        discord_state.manager.set_idle()
+    } else {
+        Ok(())
+    }
+}
+
+/// Set Discord activity to show mod count
+#[tauri::command]
+async fn discord_set_managing_mods(
+    mod_count: usize,
+    discord_state: State<'_, DiscordState>,
+) -> Result<(), String> {
+    if discord_state.manager.is_connected() {
+        discord_state.manager.set_managing_mods(mod_count)
+    } else {
+        Ok(())
+    }
+}
+
+/// Set Discord activity to show installing mod
+#[tauri::command]
+async fn discord_set_installing(
+    mod_name: String,
+    discord_state: State<'_, DiscordState>,
+) -> Result<(), String> {
+    if discord_state.manager.is_connected() {
+        discord_state.manager.set_installing_mod(&mod_name)
+    } else {
+        Ok(())
+    }
+}
+
+/// Set Discord activity to show sharing mods
+#[tauri::command]
+async fn discord_set_sharing(discord_state: State<'_, DiscordState>) -> Result<(), String> {
+    if discord_state.manager.is_connected() {
+        discord_state.manager.set_sharing_mods()
+    } else {
+        Ok(())
+    }
+}
+
+/// Set Discord activity to show receiving mods
+#[tauri::command]
+async fn discord_set_receiving(discord_state: State<'_, DiscordState>) -> Result<(), String> {
+    if discord_state.manager.is_connected() {
+        discord_state.manager.set_receiving_mods()
+    } else {
+        Ok(())
+    }
+}
+
+/// Clear Discord activity
+#[tauri::command]
+async fn discord_clear_activity(discord_state: State<'_, DiscordState>) -> Result<(), String> {
+    discord_state.manager.clear_activity()
+}
+
+/// Set Discord theme (changes the logo based on app color palette)
+/// Theme names: "blue", "red", "green", "purple", "orange", "pink", "cyan", "yellow", "teal", "default"
+#[tauri::command]
+async fn discord_set_theme(
+    theme: String,
+    discord_state: State<'_, DiscordState>,
+) -> Result<(), String> {
+    discord_state.manager.set_theme(&theme);
+    // Refresh activity to show new logo immediately
+    if discord_state.manager.is_connected() {
+        discord_state.manager.set_idle()?;
+    }
+    Ok(())
+}
+
+/// Get current Discord theme
+#[tauri::command]
+async fn discord_get_theme(discord_state: State<'_, DiscordState>) -> Result<String, String> {
+    Ok(discord_state.manager.get_theme())
 }
 
 // ============================================================================
@@ -4827,12 +5482,31 @@ fn main() {
         .block_on(p2p_manager::UnifiedP2PManager::new())
         .expect("Failed to initialize P2P network");
     let p2p_state = P2PState { manager: Arc::new(p2p_manager) };
+    
+    // Initialize Discord Rich Presence manager
+    let discord_manager = discord_presence::create_discord_manager();
+    
+    // Auto-connect to Discord on startup
+    if let Err(e) = discord_manager.connect() {
+        warn!("Failed to connect to Discord Rich Presence: {} - Discord may not be running", e);
+    } else {
+        info!("Connected to Discord Rich Presence");
+        // Set initial activity
+        if let Err(e) = discord_manager.set_idle() {
+            warn!("Failed to set initial Discord activity: {}", e);
+        }
+    }
+    
+    let discord_state = DiscordState {
+        manager: discord_manager,
+    };
 
     tauri::Builder::default()
         .manage(state)
         .manage(watcher_state)
         .manage(crash_state)
         .manage(p2p_state)
+        .manage(discord_state)
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             // This closure is called when a second instance is launched
             // `args` contains command line arguments including the deep-link URL
@@ -4913,6 +5587,7 @@ fn main() {
             install_mods,
             quick_organize,
             delete_mod,
+            update_mod,
             rename_mod,
             open_in_explorer,
             copy_to_clipboard,
@@ -4942,6 +5617,11 @@ fn main() {
             recompress_mods,
             get_app_version,
             check_for_updates,
+            download_update,
+            apply_update,
+            get_auto_update_enabled,
+            set_auto_update_enabled,
+            cancel_update_download,
             monitor_game_for_crashes,
             check_for_previous_crash,
             get_crash_history,
@@ -4979,7 +5659,19 @@ fn main() {
             // Bundled LOD Disabler commands
             check_lod_disabler_deployed,
             get_lod_disabler_path,
-            deploy_lod_disabler
+            deploy_lod_disabler,
+            // Discord Rich Presence commands
+            discord_connect,
+            discord_disconnect,
+            discord_is_connected,
+            discord_set_idle,
+            discord_set_managing_mods,
+            discord_set_installing,
+            discord_set_sharing,
+            discord_set_receiving,
+            discord_clear_activity,
+            discord_set_theme,
+            discord_get_theme
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
