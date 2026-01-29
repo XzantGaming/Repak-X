@@ -4165,11 +4165,16 @@ async fn apply_update(
         return Err("Downloaded update file not found".to_string());
     }
     
-    // Get the current exe directory
+    // Get the current exe path and directory
     let exe_path = std::env::current_exe()
         .map_err(|e| format!("Failed to get current exe path: {}", e))?;
     let app_dir = exe_path.parent()
         .ok_or("Failed to get app directory")?;
+    
+    // Get the exe filename for tasklist matching
+    let exe_name = exe_path.file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("RepakX.exe");
     
     // Determine if this is a ZIP file that needs extraction
     let is_zip = downloaded_path.to_lowercase().ends_with(".zip");
@@ -4178,56 +4183,103 @@ async fn apply_update(
     let updater_script_path = std::env::temp_dir().join("repakx_updater.bat");
     
     let script_content = if is_zip {
-        // For ZIP files: extract and replace
+        // For ZIP files: extract and replace (portable app update)
         format!(r#"@echo off
 title RepakX Updater
+echo ============================================
+echo RepakX Portable Update
+echo ============================================
+echo.
 echo Waiting for RepakX to close...
 timeout /t 2 /nobreak >nul
 
 :waitloop
-tasklist /FI "IMAGENAME eq REPAK-X.exe" 2>NUL | find /I /N "REPAK-X.exe">NUL
+tasklist /FI "IMAGENAME eq {exe_name}" 2>NUL | find /I /N "{exe_name}">NUL
 if "%ERRORLEVEL%"=="0" (
+    echo Still running, waiting...
     timeout /t 1 /nobreak >nul
     goto waitloop
 )
 
-echo Extracting update...
+echo RepakX closed. Starting update...
+echo.
+
+echo Extracting update archive...
 cd /d "{temp_dir}"
 
 :: Use PowerShell to extract the ZIP
-powershell -Command "Expand-Archive -Path '{zip_path}' -DestinationPath '{temp_dir}\extracted' -Force"
+powershell -Command "Expand-Archive -Path '{zip_path}' -DestinationPath '{temp_dir}\extracted' -Force" 2>nul
+if %ERRORLEVEL% NEQ 0 (
+    echo ERROR: Failed to extract update archive!
+    echo Please extract manually from: {zip_path}
+    echo To: {app_dir}
+    pause
+    exit /b 1
+)
 
-:: Find the extracted folder (might be nested)
-for /d %%i in ("{temp_dir}\extracted\*") do set "EXTRACTED_DIR=%%i"
+:: Check if extraction created a single subfolder (common with GitHub releases)
+set "EXTRACTED_DIR="
+set "FOLDER_COUNT=0"
+for /d %%i in ("{temp_dir}\extracted\*") do (
+    set "EXTRACTED_DIR=%%i"
+    set /a FOLDER_COUNT+=1
+)
 
-:: If no subfolder, use extracted directly
-if not defined EXTRACTED_DIR set "EXTRACTED_DIR={temp_dir}\extracted"
+:: If exactly one subfolder exists and it contains an exe, use that folder
+if "%FOLDER_COUNT%"=="1" (
+    if exist "%EXTRACTED_DIR%\*.exe" (
+        echo Found nested folder: %EXTRACTED_DIR%
+    ) else (
+        set "EXTRACTED_DIR={temp_dir}\extracted"
+    )
+) else (
+    set "EXTRACTED_DIR={temp_dir}\extracted"
+)
+
+echo Source: %EXTRACTED_DIR%
+echo Destination: {app_dir}
+echo.
 
 echo Copying new files...
-xcopy /E /Y /I "%EXTRACTED_DIR%\*" "{app_dir}\"
+xcopy /E /Y /I /Q "%EXTRACTED_DIR%\*" "{app_dir}\" >nul
+if %ERRORLEVEL% NEQ 0 (
+    echo ERROR: Failed to copy update files!
+    echo Please copy manually from: %EXTRACTED_DIR%
+    echo To: {app_dir}
+    pause
+    exit /b 1
+)
 
-echo Cleaning up...
-rd /s /q "{temp_dir}"
+echo Cleaning up temporary files...
+rd /s /q "{temp_dir}" 2>nul
 
-echo Update complete! Launching RepakX...
+echo.
+echo ============================================
+echo Update complete!
+echo ============================================
+echo.
+echo Launching RepakX...
+timeout /t 2 /nobreak >nul
 start "" "{exe_path}"
 
+:: Delete this script
 del "%~f0"
 "#,
+            exe_name = exe_name,
             temp_dir = download_path.parent().unwrap_or(&std::env::temp_dir()).to_string_lossy().replace('/', "\\"),
             zip_path = download_path.to_string_lossy().replace('/', "\\"),
             app_dir = app_dir.to_string_lossy().replace('/', "\\"),
             exe_path = exe_path.to_string_lossy().replace('/', "\\"),
         )
     } else {
-        // For EXE files: just run the installer
+        // For EXE files: just run the installer (not typical for portable apps)
         format!(r#"@echo off
 title RepakX Updater
 echo Waiting for RepakX to close...
 timeout /t 2 /nobreak >nul
 
 :waitloop
-tasklist /FI "IMAGENAME eq REPAK-X.exe" 2>NUL | find /I /N "REPAK-X.exe">NUL
+tasklist /FI "IMAGENAME eq {exe_name}" 2>NUL | find /I /N "{exe_name}">NUL
 if "%ERRORLEVEL%"=="0" (
     timeout /t 1 /nobreak >nul
     goto waitloop
@@ -4241,6 +4293,7 @@ del "{installer_path}"
 
 del "%~f0"
 "#,
+            exe_name = exe_name,
             installer_path = download_path.to_string_lossy().replace('/', "\\"),
         )
     };
@@ -4256,8 +4309,10 @@ del "%~f0"
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
         
+        // Use start with /MIN to show the window minimized but visible
+        // so user can see progress if needed
         std::process::Command::new("cmd")
-            .args(["/C", "start", "/MIN", "", &updater_script_path.to_string_lossy()])
+            .args(["/C", "start", "/MIN", "RepakX Updater", &updater_script_path.to_string_lossy()])
             .creation_flags(CREATE_NO_WINDOW)
             .spawn()
             .map_err(|e| format!("Failed to launch updater: {}", e))?;
