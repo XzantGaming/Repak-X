@@ -1,7 +1,7 @@
 $rootPath = Resolve-Path "$PSScriptRoot/.."
 Set-Location $rootPath
 
-$submodulePath = "UAssetToolRivals"
+$submodulePath = "UassetToolRivals"
 
 if (-not (Test-Path "$submodulePath")) {
     Write-Error "Submodule directory '$submodulePath' not found."

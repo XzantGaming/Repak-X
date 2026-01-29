@@ -4,8 +4,8 @@ $rootPath = Resolve-Path "$PSScriptRoot/.."
 Set-Location $rootPath
 
 # Paths
-$projectPath = Join-Path $rootPath "UAssetToolRivals\src\UAssetTool\UAssetTool.csproj"
-$targetSidecarPath = Join-Path $rootPath "src-tauri\bin\UAssetTool-x86_64-pc-windows-msvc.exe"
+$projectPath = Join-Path $rootPath "UassetToolRivals\src\UAssetTool\UAssetTool.csproj"
+$targetSidecarPath = Join-Path $rootPath "target\uassettool\UAssetTool.exe"
 $targetDir = Split-Path $targetSidecarPath -Parent
 
 # Validation
@@ -50,7 +50,7 @@ if (Test-Path $builtExe) {
         New-Item -ItemType Directory -Path $targetDir | Out-Null
     }
     
-    Write-Host "Copying binary to src-tauri/bin..." -ForegroundColor Cyan
+    Write-Host "Copying binary to target/uassettool..." -ForegroundColor Cyan
     Copy-Item -Path $builtExe -Destination $targetSidecarPath -Force
     
     # Cleanup

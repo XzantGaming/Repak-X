@@ -3,7 +3,7 @@ param(
 )
 
 $rootPath = Resolve-Path "$PSScriptRoot/.."
-$submodulePath = Join-Path $rootPath "UAssetToolRivals"
+$submodulePath = Join-Path $rootPath "UassetToolRivals"
 $repoUrl = "https://github.com/XzantGaming/UassetToolRivals.git"
 
 # Ensure we are in the root for git commands to work as expected with the correct relative paths
@@ -50,7 +50,7 @@ if (Select-String -Path ".gitmodules" -Pattern "UAssetToolRivals" -Quiet) {
     Write-Host "Submodule already defined in .gitmodules." -ForegroundColor Cyan
 }
 else {
-    git submodule add $repoUrl UAssetToolRivals
+    git submodule add $repoUrl UassetToolRivals
 }
 
 Write-Host "Initializing..." -ForegroundColor Cyan
