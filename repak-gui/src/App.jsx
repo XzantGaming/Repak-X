@@ -352,7 +352,7 @@ function App() {
       // Try to call backend
       await invoke('set_parallel_processing', { enabled });
 
-      setStatus(`Parallel processing ${enabled ? 'enabled' : 'disabled'}`);
+      setStatus(enabled ? 'Parallel processing set to Boost mode' : 'Parallel processing set to Normal mode');
     } catch (error) {
       console.warn('Backend command for parallel processing failed (expected):', error);
       // We don't revert state here because this is a placeholder feature on frontend
