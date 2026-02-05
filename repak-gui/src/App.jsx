@@ -54,6 +54,7 @@ import ModularLogo from './components/ui/ModularLogo'
 import HeroFilterDropdown from './components/HeroFilterDropdown'
 import CustomDropdown from './components/CustomDropdown'
 import ShortcutsHelpModal from './components/ShortcutsHelpModal'
+import AddModSplitButton from './components/AddModSplitButton'
 
 // Utility functions
 import { toTagArray } from './utils/tags'
@@ -194,11 +195,135 @@ function App() {
   const [isDeletingBulk, setIsDeletingBulk] = useState(false)
   const deleteBulkTimeoutRef = useRef(null)
 
-  // Alert system hook
+
   const alert = useAlert();
 
   // Global tooltips - replaces native browser tooltips with styled ones
   useGlobalTooltips();
+
+  // Unified file drop handler function
+  const handleFileDrop = async (paths) => {
+    if (!paths || paths.length === 0) return
+    console.log('Dropped items:', paths)
+
+    // Check if we should quick-organize to a folder (using ref for current value in closure)
+    const targetFolder = dropTargetFolderRef.current
+    if (targetFolder) {
+      // Special case: user dropped on "New Folder" target
+      if (targetFolder === '__NEW_FOLDER__') {
+        // Show the custom folder name prompt modal
+        setNewFolderPrompt({ paths })
+        setDropTargetFolder(null)
+        return
+      }
+
+      // Check if any dropped items are folders with uassets that need proper processing
+      try {
+        const modsData = await invoke('parse_dropped_files', { paths })
+        const hasFolderWithUassets = modsData.some(mod =>
+          mod.is_dir === true && mod.contains_uassets !== false
+        )
+
+        if (hasFolderWithUassets) {
+          // Cancel quick-organize and show alert
+          setDropTargetFolder(null)
+          alert.warning(
+            'Cannot Quick-Organize Folder Mods',
+            'Folder mods with UAssets need to be processed. Please drop them on the Install Mods area.',
+            { duration: 8000 }
+          )
+          return
+        }
+      } catch (parseError) {
+        console.error('Parse error during quick organize check:', parseError)
+        // If parsing fails, we still try quick organize (might be simple PAK files)
+      }
+
+      // Quick organize: directly install to the folder without showing install panel
+      console.log('Quick organizing to folder:', targetFolder)
+
+      const pathCount = paths.length
+      const pathsCopy = [...paths]
+      const folderName = targetFolder
+
+      setDropTargetFolder(null) // Reset for next drop
+
+      // Start progress bar (indeterminate since quick_organize doesn't report progress)
+      setIsModsLoading(true)
+      setModLoadingProgress(-1)
+
+      // Use promise toast for loading state and result
+      alert.promise(
+        (async () => {
+          try {
+            await invoke('quick_organize', { paths: pathsCopy, targetFolder: folderName })
+            await loadMods()
+            await loadFolders()
+            setStatus(`Installed ${pathCount} item(s) to ${folderName}!`)
+
+            // Show warning after success if game is running
+            if (gameRunningRef.current) {
+              alert.warning(
+                'Game Running',
+                'Mods installed, but changes will only take effect after restarting the game.',
+                { duration: 8000 }
+              )
+            }
+
+            return { count: pathCount, folder: folderName }
+          } finally {
+            setIsModsLoading(false)
+            setModLoadingProgress(0)
+          }
+        })(),
+        {
+          loading: {
+            title: 'Quick Installing',
+            description: `Copying ${pathCount} file${pathCount > 1 ? 's' : ''} to "${folderName}"...`
+          },
+          success: (result) => ({
+            title: 'Installation Complete',
+            description: `Installed ${result.count} mod${result.count > 1 ? 's' : ''} to "${result.folder}"`
+          }),
+          error: (err) => ({
+            title: 'Installation Failed',
+            description: String(err)
+          })
+        }
+      )
+
+      return
+    }
+
+    try {
+      setStatus('Processing dropped items...')
+      const modsData = await invoke('parse_dropped_files', { paths })
+      if (!modsData || modsData.length === 0) {
+        setStatus('No installable mods found in dropped items')
+        return
+      }
+      console.log('Parsed mods:', modsData)
+
+      // Check if ALL mods are PAK files with no uassets - if so, use quick organize
+      const allPaksWithNoUassets = modsData.every(mod =>
+        mod.is_dir === false && mod.contains_uassets === false
+      )
+
+      if (allPaksWithNoUassets && modsData.length > 0) {
+        // Skip install panel, show quick organize folder picker
+        console.log('All mods are PAKs with no uassets, using quick organize')
+        setQuickOrganizePaths(paths)
+        return
+      }
+
+      // Normal drop: show install panel
+      setModsToInstall(modsData)
+      setPanel('install', true)
+    } catch (error) {
+      console.error('Parse error:', error)
+      setStatus(`Error parsing dropped items: ${error}`)
+    }
+  }
 
   const handleCheckClashes = async () => {
     try {
@@ -643,130 +768,6 @@ function App() {
     invoke('check_for_previous_crash').catch(err => {
       console.error('Failed to check for previous crashes:', err)
     })
-
-    // Unified file drop handler function
-    const handleFileDrop = async (paths) => {
-      if (!paths || paths.length === 0) return
-      console.log('Dropped items:', paths)
-
-      // Check if we should quick-organize to a folder (using ref for current value in closure)
-      const targetFolder = dropTargetFolderRef.current
-      if (targetFolder) {
-        // Special case: user dropped on "New Folder" target
-        if (targetFolder === '__NEW_FOLDER__') {
-          // Show the custom folder name prompt modal
-          setNewFolderPrompt({ paths })
-          setDropTargetFolder(null)
-          return
-        }
-
-        // Check if any dropped items are folders with uassets that need proper processing
-        try {
-          const modsData = await invoke('parse_dropped_files', { paths })
-          const hasFolderWithUassets = modsData.some(mod =>
-            mod.is_dir === true && mod.contains_uassets !== false
-          )
-
-          if (hasFolderWithUassets) {
-            // Cancel quick-organize and show alert
-            setDropTargetFolder(null)
-            alert.warning(
-              'Cannot Quick-Organize Folder Mods',
-              'Folder mods with UAssets need to be processed. Please drop them on the Install Mods area.',
-              { duration: 8000 }
-            )
-            return
-          }
-        } catch (parseError) {
-          console.error('Parse error during quick organize check:', parseError)
-          // If parsing fails, we still try quick organize (might be simple PAK files)
-        }
-
-        // Quick organize: directly install to the folder without showing install panel
-        console.log('Quick organizing to folder:', targetFolder)
-
-        const pathCount = paths.length
-        const pathsCopy = [...paths]
-        const folderName = targetFolder
-
-        setDropTargetFolder(null) // Reset for next drop
-
-        // Start progress bar (indeterminate since quick_organize doesn't report progress)
-        setIsModsLoading(true)
-        setModLoadingProgress(-1)
-
-        // Use promise toast for loading state and result
-        alert.promise(
-          (async () => {
-            try {
-              await invoke('quick_organize', { paths: pathsCopy, targetFolder: folderName })
-              await loadMods()
-              await loadFolders()
-              setStatus(`Installed ${pathCount} item(s) to ${folderName}!`)
-
-              // Show warning after success if game is running
-              if (gameRunningRef.current) {
-                alert.warning(
-                  'Game Running',
-                  'Mods installed, but changes will only take effect after restarting the game.',
-                  { duration: 8000 }
-                )
-              }
-
-              return { count: pathCount, folder: folderName }
-            } finally {
-              setIsModsLoading(false)
-              setModLoadingProgress(0)
-            }
-          })(),
-          {
-            loading: {
-              title: 'Quick Installing',
-              description: `Copying ${pathCount} file${pathCount > 1 ? 's' : ''} to "${folderName}"...`
-            },
-            success: (result) => ({
-              title: 'Installation Complete',
-              description: `Installed ${result.count} mod${result.count > 1 ? 's' : ''} to "${result.folder}"`
-            }),
-            error: (err) => ({
-              title: 'Installation Failed',
-              description: String(err)
-            })
-          }
-        )
-
-        return
-      }
-
-      try {
-        setStatus('Processing dropped items...')
-        const modsData = await invoke('parse_dropped_files', { paths })
-        if (!modsData || modsData.length === 0) {
-          setStatus('No installable mods found in dropped items')
-          return
-        }
-        console.log('Parsed mods:', modsData)
-
-        // Check if ALL mods are PAK files with no uassets - if so, use quick organize
-        const allPaksWithNoUassets = modsData.every(mod =>
-          mod.is_dir === false && mod.contains_uassets === false
-        )
-
-        if (allPaksWithNoUassets && modsData.length > 0) {
-          // Skip install panel, show quick organize folder picker
-          console.log('All mods are PAKs with no uassets, using quick organize')
-          setQuickOrganizePaths(paths)
-          return
-        }
-
-        // Normal drop: show install panel
-        setModsToInstall(modsData)
-        setPanel('install', true)
-      } catch (error) {
-        console.error('Parse error:', error)
-        setStatus(`Error parsing dropped items: ${error}`)
-      }
-    }
 
     // Listen for Tauri drag-drop event
     const unlistenDragDrop = listen('tauri://drag-drop', (event) => {
@@ -2424,10 +2425,10 @@ function App() {
               icon={<FaTag style={{ fontSize: '1.2rem', opacity: 1, color: 'var(--accent-primary)' }} />}
             />
 
-            <button onClick={handleInstallModClick} className="btn-install-large">
-              <GrInstall className="install-icon" />
-              <span className="install-text">Install Mod</span>
-            </button>
+            <AddModSplitButton
+              onAddFiles={(files) => handleFileDrop(files)}
+              onAddFolder={(folders) => handleFileDrop(folders)}
+            />
           </div>
         </div>
 
