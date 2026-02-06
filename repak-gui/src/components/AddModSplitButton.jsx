@@ -53,7 +53,7 @@ const RightButton = styled(Button)(({ theme }) => ({
     },
 }));
 
-export default function AddModSplitButton({ onAddFiles, onAddFolder }) {
+export default function AddModSplitButton({ onAddFiles, onAddFolder, ...rest }) {
     const handleAddFiles = async () => {
         try {
             const selected = await open({
@@ -96,7 +96,7 @@ export default function AddModSplitButton({ onAddFiles, onAddFolder }) {
     };
 
     return (
-        <StyledButtonGroup variant="contained" aria-label="add mods button group">
+        <StyledButtonGroup variant="contained" aria-label="add mods button group" {...rest}>
             <LeftButton onClick={handleAddFiles} title="Install PAKs or Archives">
                 <GrInstall style={{ marginRight: '8px', fontSize: '1.5rem' }} />
                 PAK

@@ -9,6 +9,7 @@ import { RiSparkling2Fill } from "react-icons/ri"
 import { CgPerformance } from "react-icons/cg"
 import { MdRefresh } from "react-icons/md"
 import { FaDiscord } from "react-icons/fa"
+import { RiGraduationCapFill } from "react-icons/ri"
 import './SettingsPanel.css'
 import { useAlert } from './AlertHandler'
 
@@ -22,7 +23,7 @@ const ACCENT_COLORS = {
 };
 
 
-export default function SettingsPanel({ settings, onSave, onClose, theme, setTheme, accentColor, setAccentColor, gamePath, onAutoDetectGamePath, onBrowseGamePath, isGamePathLoading, onCheckForUpdates, isCheckingUpdates }) {
+export default function SettingsPanel({ settings, onSave, onClose, theme, setTheme, accentColor, setAccentColor, gamePath, onAutoDetectGamePath, onBrowseGamePath, isGamePathLoading, onCheckForUpdates, isCheckingUpdates, onReplayTour }) {
   const alert = useAlert();
   const [globalUsmap, setGlobalUsmap] = useState(settings.globalUsmap || '');
   const [hideSuffix, setHideSuffix] = useState(settings.hideSuffix || false);
@@ -337,6 +338,26 @@ export default function SettingsPanel({ settings, onSave, onClose, theme, setThe
                   />
                 ))}
               </div>
+            </div>
+          </div>
+
+          <div className="setting-section">
+            <h3>Help</h3>
+            <div className="setting-group">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontWeight: 'normal', opacity: 0.9 }}>Replay the app tour to learn about key features</span>
+                <button
+                  onClick={onReplayTour}
+                  className="action-btn"
+                  title="Replay the onboarding tour"
+                  style={{ minWidth: '120px' }}
+                >
+                  <RiGraduationCapFill style={{ color: accentColor }} /> Replay Tour
+                </button>
+              </div>
+              <p style={{ fontSize: '1rem', opacity: 0.6, marginTop: '0.5rem' }}>
+                Press <strong style={{ opacity: 1 }}>F1</strong> anytime to view all available keyboard shortcuts.
+              </p>
             </div>
           </div>
 
