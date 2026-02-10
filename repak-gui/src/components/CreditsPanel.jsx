@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'framer-motion';
 import { FiExternalLink, FiHeart } from 'react-icons/fi';
 import { SiDiscord } from 'react-icons/si';
 import { IoLogoGithub } from 'react-icons/io';
@@ -33,6 +34,24 @@ const CONTRIBUTORS = [
     }
 ];
 
+const EARLY_ACCESS_TESTERS = [
+    'Genny',
+    'Alirica',
+    'Fubuki',
+    'Tobi',
+    'amMatt',
+    'Hobby'
+];
+
+const EARLY_ACCESS_SPECIAL_THANKS = [
+    {
+        name: 'Genny',
+    },
+    {
+        name: 'Alirica',
+    }
+];
+
 const SPECIAL_THANKS = [
     {
         name: 'Marvel Rivals Modding Server',
@@ -43,7 +62,7 @@ const SPECIAL_THANKS = [
         badge: 'community'
     },
     {
-        name: 'Truman Kilen',
+        name: 'Trumank',
         role: 'Developer of original Repak and Retoc libraries',
         avatar: 'https://avatars.githubusercontent.com/u/1144160?v=4',
         link: 'https://github.com/trumank',
@@ -51,9 +70,16 @@ const SPECIAL_THANKS = [
     },
     {
         name: 'Krisan Thyme',
-        role: 'For reverse engineering the Rivals skeletal mesh format',
+        role: 'For developing the initial Rivals skeletal mesh patcher',
         avatar: 'https://avatars.githubusercontent.com/u/13863112?v=4',
         link: 'https://github.com/KrisanThyme',
+        badge: 'developer'
+    },
+    {
+        name: 'Natimerry',
+        role: 'Repak Rivals GUI developer, which inspired this project',
+        avatar: 'https://avatars.githubusercontent.com/u/66298183?v=4',
+        link: 'https://github.com/natimerry',
         badge: 'developer'
     },
     {
@@ -76,7 +102,13 @@ export default function CreditsPanel({ onClose, version }) {
 
     return (
         <div className="modal-overlay" onClick={onClose}>
-            <div className="modal-content credits-modal" onClick={(e) => e.stopPropagation()}>
+            <motion.div
+                className="modal-content credits-modal"
+                onClick={(e) => e.stopPropagation()}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.15 }}
+            >
                 <div className="modal-header">
                     <h2>Credits</h2>
                     <button className="modal-close" onClick={onClose}>×</button>
@@ -133,7 +165,7 @@ export default function CreditsPanel({ onClose, version }) {
 
                         {/* Special Thanks */}
                         <div className="credits-section">
-                            <h3 className="credits-section-title">Special Thanks</h3>
+                            <h3 className="credits-section-title">Who Made It Possible</h3>
                             {SPECIAL_THANKS.map((contributor, index) => (
                                 <a
                                     key={index}
@@ -167,10 +199,33 @@ export default function CreditsPanel({ onClose, version }) {
                             ))}
                         </div>
 
+                        {/* Early Access Testers */}
+                        <div className="credits-section">
+                            <h3 className="credits-section-title">Early Access Testers</h3>
+                            <p className="credits-testers-thanks">Thanks to the following for participating in the early access phase of Repak X</p>
+                            <div className="credits-testers-grid">
+                                {EARLY_ACCESS_TESTERS.map((name, index) => (
+                                    <span key={index} className="credits-tester-chip">{name}</span>
+                                ))}
+                            </div>
+
+                            <h4 className="credits-subsection-title">Special Thanks</h4>
+                            <p className="credits-testers-thanks">For providing critical reports and feedback that shaped the app</p>
+                            <div className="credits-testers-grid">
+                                {EARLY_ACCESS_SPECIAL_THANKS.map((person, index) => (
+                                    <span key={index} className="credits-tester-chip special" title={person.reason}>
+                                        {person.name}
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+
+                        <hr className="credits-divider" />
+
                         {/* Thank You Message */}
                         <div className="credits-thanks">
                             <p className="credits-thanks-text">
-                                Made with <span className="credits-heart"><FiHeart style={{ verticalAlign: 'middle' }} /></span> for the Marvel Rivals community
+                                Made with <span className="credits-heart"><FiHeart style={{ verticalAlign: 'middle' }} /></span> for the Marvel Rivals modding community
                             </p>
                         </div>
                     </div>
@@ -181,7 +236,7 @@ export default function CreditsPanel({ onClose, version }) {
                         Close
                     </button>
                 </div>
-            </div>
+            </motion.div>
         </div>
     );
 }

@@ -1,4 +1,5 @@
 import React from 'react'
+import { motion } from 'framer-motion'
 import { IoMdWarning } from "react-icons/io"
 import {
     Close,
@@ -12,7 +13,13 @@ import './ClashPanel.css'
 const ClashPanel = ({ clashes, mods = [], onSetPriority, onClose }) => {
     return (
         <div className="modal-overlay clash-overlay" onClick={onClose}>
-            <div className="clash-panel-content" onClick={e => e.stopPropagation()}>
+            <motion.div
+                className="clash-panel-content"
+                onClick={e => e.stopPropagation()}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.15 }}
+            >
                 <div className="clash-header">
                     <h2>
                         <IoMdWarning style={{ color: 'var(--danger)' }} />
@@ -83,7 +90,7 @@ const ClashPanel = ({ clashes, mods = [], onSetPriority, onClose }) => {
                 <div className="clash-footer">
                     <button className="btn-primary" onClick={onClose}>Close</button>
                 </div>
-            </div>
+            </motion.div>
         </div>
     )
 }

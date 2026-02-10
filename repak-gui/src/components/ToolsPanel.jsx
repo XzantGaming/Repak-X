@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { motion } from 'framer-motion';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-shell';
@@ -168,7 +169,13 @@ export default function ToolsPanel({ onClose, mods = [], onToggleMod }) {
     return (
         <>
             <div className="modal-overlay" onClick={onClose}>
-                <div className="modal-content settings-modal" onClick={(e) => e.stopPropagation()}>
+                <motion.div
+                    className="modal-content settings-modal"
+                    onClick={(e) => e.stopPropagation()}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.15 }}
+                >
                     <div className="modal-header">
                         <h2>Tools</h2>
                         <button className="modal-close" onClick={onClose}>×</button>
@@ -352,7 +359,7 @@ export default function ToolsPanel({ onClose, mods = [], onToggleMod }) {
                             Close
                         </button>
                     </div>
-                </div>
+                </motion.div>
             </div>
 
             {/* Thanos Snap Easter Egg */}

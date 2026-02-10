@@ -10,8 +10,11 @@ import { CgPerformance } from "react-icons/cg"
 import { MdRefresh } from "react-icons/md"
 import { FaDiscord } from "react-icons/fa"
 import { RiGraduationCapFill } from "react-icons/ri"
+import { BsKeyboardFill } from "react-icons/bs"
+import DiscordWidget from './DiscordWidget'
 import './SettingsPanel.css'
 import { useAlert } from './AlertHandler'
+import { motion } from 'framer-motion'
 
 const ACCENT_COLORS = {
   repakRed: '#be1c1c',
@@ -23,7 +26,7 @@ const ACCENT_COLORS = {
 };
 
 
-export default function SettingsPanel({ settings, onSave, onClose, theme, setTheme, accentColor, setAccentColor, gamePath, onAutoDetectGamePath, onBrowseGamePath, isGamePathLoading, onCheckForUpdates, isCheckingUpdates, onReplayTour }) {
+export default function SettingsPanel({ settings, onSave, onClose, theme, setTheme, accentColor, setAccentColor, gamePath, onAutoDetectGamePath, onBrowseGamePath, isGamePathLoading, onCheckForUpdates, isCheckingUpdates, onReplayTour, onOpenShortcuts }) {
   const alert = useAlert();
   const [globalUsmap, setGlobalUsmap] = useState(settings.globalUsmap || '');
   const [hideSuffix, setHideSuffix] = useState(settings.hideSuffix || false);
@@ -109,7 +112,13 @@ export default function SettingsPanel({ settings, onSave, onClose, theme, setThe
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content settings-modal" onClick={(e) => e.stopPropagation()}>
+      <motion.div
+        className="modal-content settings-modal"
+        onClick={(e) => e.stopPropagation()}
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.15 }}
+      >
         <div className="modal-header">
           <h2>Settings</h2>
           <button className="modal-close" onClick={onClose}>×</button>
@@ -355,9 +364,32 @@ export default function SettingsPanel({ settings, onSave, onClose, theme, setThe
                   <RiGraduationCapFill style={{ color: accentColor }} /> Replay Tour
                 </button>
               </div>
-              <p style={{ fontSize: '1rem', opacity: 0.6, marginTop: '0.5rem' }}>
-                Press <strong style={{ opacity: 1 }}>F1</strong> anytime to view all available keyboard shortcuts.
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '1rem' }}>
+                <span style={{ fontSize: '1rem', opacity: 0.9 }}>
+                  Press <strong style={{ opacity: 1 }}>F1</strong> anytime to view all available keyboard shortcuts
+                </span>
+                <button
+                  onClick={onOpenShortcuts}
+                  className="action-btn"
+                  title="View keyboard shortcuts"
+                  style={{ minWidth: '120px' }}
+                >
+                  <BsKeyboardFill style={{ color: accentColor }} /> Shortcuts
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="setting-section">
+            <h3>Community</h3>
+            <div className="setting-group">
+              <p style={{ fontSize: '0.95rem', fontWeight: 600, opacity: 0.9, marginBottom: '0.15rem' }}>
+                Repak X is built for the community.
               </p>
+              <p style={{ fontSize: '0.85rem', opacity: 0.55, marginBottom: '0.5rem', lineHeight: 1.5 }}>
+                If you need help, want to report a bug, or have a feature request, join the Discord server and help make Repak X better for everyone.
+              </p>
+              <DiscordWidget />
             </div>
           </div>
 
@@ -379,7 +411,7 @@ export default function SettingsPanel({ settings, onSave, onClose, theme, setThe
             Save
           </button>
         </div>
-      </div>
+      </motion.div>
     </div>
   )
 }

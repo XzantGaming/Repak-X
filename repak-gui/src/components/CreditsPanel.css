@@ -29,7 +29,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 0;
+    gap: 0.2em;
 }
 
 .credits-app-name-repak {
@@ -67,8 +67,8 @@
     letter-spacing: 0.08em;
     color: var(--accent-primary);
     margin: 0;
-    padding-bottom: 0.5rem;
-    border-bottom: 1px solid var(--panel-border);
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--panel-border);
     font-weight: 600;
 }
 
@@ -142,6 +142,12 @@
 
 .credits-contributor:hover .credits-link-icon {
     color: var(--accent-primary);
+}
+
+.credits-divider {
+    border: none;
+    border-top: 1px solid color-mix(in srgb, var(--text-secondary), transparent 80%);
+    margin: 0.5rem 0;
 }
 
 /* Special thanks section */
@@ -244,4 +250,59 @@
 
 .credits-badge.community {
     background: linear-gradient(135deg, #ff9800, #ff5722);
+}
+
+/* Early Access Testers */
+.credits-testers-thanks {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.credits-testers-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.credits-tester-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.3rem 0.75rem;
+    background: var(--bg-dark);
+    border: 1px solid var(--panel-border);
+    border-radius: 999px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    transition: all 0.2s ease;
+}
+
+.credits-tester-chip:hover {
+    border-color: var(--accent-primary);
+    color: var(--text-primary);
+}
+
+.credits-tester-chip.special {
+    background: linear-gradient(135deg,
+            color-mix(in srgb, var(--accent-primary), var(--bg-dark) 85%),
+            color-mix(in srgb, var(--accent-secondary), var(--bg-dark) 85%));
+    border-color: color-mix(in srgb, var(--accent-primary), transparent 60%);
+    color: var(--text-primary);
+}
+
+.credits-tester-chip.special:hover {
+    border-color: var(--accent-primary);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.credits-subsection-title {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--accent-secondary);
+    margin: 0.5rem 0 0 0;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--panel-border);
+    font-weight: 600;
 }

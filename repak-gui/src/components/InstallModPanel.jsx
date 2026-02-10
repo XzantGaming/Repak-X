@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { motion } from 'framer-motion'
 import Switch from './ui/Switch'
 import { FaTag } from "react-icons/fa6"
 import { VscFolder, VscFolderOpened, VscChevronRight, VscChevronDown, VscNewFolder } from 'react-icons/vsc'
@@ -152,7 +153,7 @@ function parseModType(modType) {
   return { character, category, additional }
 }
 
-export default function InstallModPanel({ mods, allTags, folders = [], onCreateTag, onCreateFolder, onInstall, onCancel }) {
+export default function InstallModPanel({ mods, allTags, folders = [], onCreateTag, onCreateFolder, onInstall, onCancel, onNewTag }) {
   const [openDropdown, setOpenDropdown] = useState(null)
   const [dropdownPos, setDropdownPos] = useState({ x: 0, y: 0 })
   const [modSettings, setModSettings] = useState(() => buildInitialSettings(mods))
@@ -259,7 +260,12 @@ export default function InstallModPanel({ mods, allTags, folders = [], onCreateT
 
   return (
     <div className="install-mod-overlay">
-      <div className="install-mod-panel">
+      <motion.div
+        className="install-mod-panel"
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.15 }}
+      >
         <div className="install-header">
           <h2>Install Mods</h2>
           <button className="close-btn" onClick={onCancel}>×</button>
@@ -283,13 +289,6 @@ export default function InstallModPanel({ mods, allTags, folders = [], onCreateT
                     key: 'fixTexture',
                     label: 'Patch Textures',
                     hint: 'Experimental - Removes mipmaps from textures'
-                  },
-                  {
-                    key: 'fixSerializeSize',
-                    label: 'Patch Static Meshes',
-                    hint: 'Applies fixes to static mesh serialization sizes',
-                    temporarilyDisabled: true,
-                    disabledHint: 'Temporarily unavailable'
                   }
                 ]
 
@@ -344,15 +343,13 @@ export default function InstallModPanel({ mods, allTags, folders = [], onCreateT
                       </div>
 
                       <div className="install-mod-card__toggles">
-                        {toggleDefinitions.map(({ key, label, hint, temporarilyDisabled, disabledHint }) => {
+                        {toggleDefinitions.map(({ key, label, hint }) => {
                           const isLegacyMode = modSettings[idx]?.forceLegacy || false
                           const canApplyPatches = mod.contains_uassets !== false
-                          const isLocked = isLegacyMode || !canApplyPatches || temporarilyDisabled
+                          const isLocked = isLegacyMode || !canApplyPatches
 
                           let hintText = hint
-                          if (temporarilyDisabled) {
-                            hintText = disabledHint || 'Temporarily unavailable'
-                          } else if (isLegacyMode) {
+                          if (isLegacyMode) {
                             hintText = 'Disabled in Legacy PAK mode'
                           } else if (!canApplyPatches) {
                             hintText = 'No UAsset files detected'
@@ -420,11 +417,12 @@ export default function InstallModPanel({ mods, allTags, folders = [], onCreateT
                                   }}
                                 >
                                   <div className="dropdown-item" onClick={() => {
-                                    const tag = prompt('Enter new tag name:')
-                                    if (tag && tag.trim()) {
-                                      handleAddTag(idx, tag)
-                                      if (onCreateTag) onCreateTag(tag)
-                                    }
+                                    onNewTag((tag) => {
+                                      if (tag && tag.trim()) {
+                                        handleAddTag(idx, tag)
+                                        if (onCreateTag) onCreateTag(tag)
+                                      }
+                                    })
                                     setOpenDropdown(null)
                                   }}>
                                     + New Tag...
@@ -552,7 +550,7 @@ export default function InstallModPanel({ mods, allTags, folders = [], onCreateT
             Install {mods.length} Mod(s)
           </button>
         </div>
-      </div>
+      </motion.div>
     </div>
   )
 }

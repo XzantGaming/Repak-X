@@ -293,9 +293,10 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
     <div className="p2p-overlay">
       <motion.div
         className="p2p-modal"
-        initial={{ opacity: 0, scale: 0.9 }}
+        initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.9 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        transition={{ duration: 0.15 }}
       >
         <div className="p2p-header">
           <div className="p2p-title">

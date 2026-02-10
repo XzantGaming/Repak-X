@@ -4,7 +4,7 @@ import { open } from '@tauri-apps/plugin-dialog'
 import { IoMdWarning } from "react-icons/io"
 import './ContextMenu.css'
 
-const ContextMenu = ({ x, y, mod, folder, onClose, onAssignTag, onMoveTo, onCreateFolder, folders, onDelete, onToggle, onRename, onCheckConflicts, onUpdateMod, allTags, gamePath }) => {
+const ContextMenu = ({ x, y, mod, folder, onClose, onAssignTag, onNewTag, onMoveTo, onCreateFolder, folders, onDelete, onToggle, onRename, onRenameFolder, onCheckConflicts, onUpdateMod, allTags, gamePath }) => {
   const [isDeleting, setIsDeleting] = useState(false)
   const deleteTimeoutRef = useRef(null)
   const menuRef = useRef(null)
@@ -114,6 +114,13 @@ const ContextMenu = ({ x, y, mod, folder, onClose, onAssignTag, onMoveTo, onCrea
         }}>
           Copy Path
         </div>
+        <div className="context-menu-item" onClick={(e) => {
+          e.stopPropagation();
+          onRenameFolder();
+          onClose();
+        }}>
+          Rename Folder
+        </div>
         <div className="context-menu-separator" />
         <div
           className={`context-menu-item danger ${isDeleting ? 'holding' : ''}`}
@@ -138,8 +145,9 @@ const ContextMenu = ({ x, y, mod, folder, onClose, onAssignTag, onMoveTo, onCrea
         Assign Tag...
         <div className="submenu">
           <div className="context-menu-item" onClick={() => {
-            const tag = prompt('Enter new tag name:');
-            if (tag) onAssignTag(tag);
+            onNewTag((tag) => {
+              if (tag) onAssignTag(tag);
+            });
             onClose();
           }}>
             + New Tag...

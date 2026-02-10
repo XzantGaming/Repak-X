@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, lazy, Suspense } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
 import { listen } from '@tauri-apps/api/event'
@@ -74,13 +74,12 @@ const ACCENT_COLORS_MAP = {
 
 import TitleBar from './components/TitleBar'
 
-// Lazy load heavy panels
-const InstallModPanel = lazy(() => import('./components/InstallModPanel'))
-const SettingsPanel = lazy(() => import('./components/SettingsPanel'))
-const CreditsPanel = lazy(() => import('./components/CreditsPanel'))
-const ToolsPanel = lazy(() => import('./components/ToolsPanel'))
-const SharingPanel = lazy(() => import('./components/SharingPanel'))
-const ClashPanel = lazy(() => import('./components/ClashPanel'))
+import InstallModPanel from './components/InstallModPanel'
+import SettingsPanel from './components/SettingsPanel'
+import CreditsPanel from './components/CreditsPanel'
+import ToolsPanel from './components/ToolsPanel'
+import SharingPanel from './components/SharingPanel'
+import ClashPanel from './components/ClashPanel'
 
 function App() {
   const [globalUsmap, setGlobalUsmap] = useState('');
@@ -180,6 +179,8 @@ function App() {
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [quickOrganizePaths, setQuickOrganizePaths] = useState(null) // Paths of PAKs to quick-organize (no uassets)
   const [newFolderPrompt, setNewFolderPrompt] = useState(null) // {paths: []} when prompting for new folder name
+  const [newTagPrompt, setNewTagPrompt] = useState(null) // { callback: (tag) => void } when prompting for new tag name
+  const [renameFolderPrompt, setRenameFolderPrompt] = useState(null) // { folderId, currentName } when prompting for folder rename
 
   // Update Mod State
   const [updateModState, setUpdateModState] = useState({
@@ -534,7 +535,7 @@ function App() {
         try {
           // Find mod details to check if it's a folder mod or regular file
           // If we don't have details, try delete_mod anyway
-          await invoke('delete_mod', { modPath: path })
+          await invoke('delete_mod', { path: path })
           deletedCount++
         } catch (e) {
           console.error(`Failed to delete ${path}:`, e)
@@ -1355,6 +1356,28 @@ function App() {
     }
   }
 
+  const handleRenameFolder = (folderId, currentName) => {
+    setRenameFolderPrompt({ folderId, currentName })
+  }
+
+  const handleRenameFolderConfirm = async (newName) => {
+    if (!renameFolderPrompt) return
+    const { folderId } = renameFolderPrompt
+    setRenameFolderPrompt(null)
+
+    try {
+      const newId = await invoke('rename_folder', { id: folderId, newName: newName })
+      if (selectedFolderId === folderId) {
+        setSelectedFolderId(newId)
+      }
+      await loadFolders()
+      await loadMods()
+      setStatus(`Folder renamed to "${newName}"`)
+    } catch (error) {
+      setStatus('Error renaming folder: ' + error)
+    }
+  }
+
   const handleToggleModSelection = (mod) => {
     const newSelected = new Set(selectedMods)
     if (newSelected.has(mod.path)) {
@@ -2161,72 +2184,72 @@ function App() {
   return (
     <div className="app">
       <TitleBar />
-      <Suspense fallback={null}>
-        {panels.install && (
-          <InstallModPanel
-            mods={modsToInstall}
-            allTags={allTags}
-            folders={folders}
-            onCreateTag={registerTagFromInstallPanel}
-            onCreateFolder={handleCreateFolderAndReturn}
-            onInstall={handleInstallMods}
-            onCancel={() => setPanel('install', false)}
-          />
-        )}
+      {panels.install && (
+        <InstallModPanel
+          mods={modsToInstall}
+          allTags={allTags}
+          folders={folders}
+          onCreateTag={registerTagFromInstallPanel}
+          onCreateFolder={handleCreateFolderAndReturn}
+          onInstall={handleInstallMods}
+          onCancel={() => setPanel('install', false)}
+          onNewTag={(callback) => setNewTagPrompt({ callback })}
+        />
+      )}
 
-        {panels.clash && (
-          <ClashPanel
-            clashes={clashes}
-            mods={mods}
-            onSetPriority={handleSetPriority}
-            onClose={() => setPanel('clash', false)}
-          />
-        )}
+      {panels.clash && (
+        <ClashPanel
+          clashes={clashes}
+          mods={mods}
+          onSetPriority={handleSetPriority}
+          onClose={() => setPanel('clash', false)}
+        />
+      )}
 
-        {panels.settings && (
-          <SettingsPanel
-            settings={{ globalUsmap, hideSuffix, autoOpenDetails, showHeroIcons, showHeroBg, showModType, showExperimental, enableDrp, parallelProcessing, autoCheckUpdates }}
-            onSave={handleSaveSettings}
-            onClose={() => setPanel('settings', false)}
-            theme={theme}
-            setTheme={handleThemeChange}
-            accentColor={accentColor}
-            setAccentColor={handleAccentChange}
-            gamePath={gamePath}
-            onAutoDetectGamePath={handleAutoDetect}
-            onBrowseGamePath={handleBrowseGamePath}
-            isGamePathLoading={loading}
-            setParallelProcessing={handleSetParallelProcessing}
-            onCheckForUpdates={handleCheckForUpdates}
-            isCheckingUpdates={isCheckingUpdates}
-            onReplayTour={handleReplayTour}
-          />
-        )}
+      {panels.settings && (
+        <SettingsPanel
+          settings={{ globalUsmap, hideSuffix, autoOpenDetails, showHeroIcons, showHeroBg, showModType, showExperimental, enableDrp, parallelProcessing, autoCheckUpdates }}
+          onSave={handleSaveSettings}
+          onClose={() => setPanel('settings', false)}
+          theme={theme}
+          setTheme={handleThemeChange}
+          accentColor={accentColor}
+          setAccentColor={handleAccentChange}
+          gamePath={gamePath}
+          onAutoDetectGamePath={handleAutoDetect}
+          onBrowseGamePath={handleBrowseGamePath}
+          isGamePathLoading={loading}
+          setParallelProcessing={handleSetParallelProcessing}
+          onCheckForUpdates={handleCheckForUpdates}
+          isCheckingUpdates={isCheckingUpdates}
+          onReplayTour={handleReplayTour}
+          onOpenShortcuts={() => setPanel('shortcuts', true)}
+        />
+      )}
 
-        {panels.credits && (
-          <CreditsPanel
-            onClose={() => setPanel('credits', false)}
-            version={version}
-          />
-        )}
+      {panels.credits && (
+        <CreditsPanel
+          onClose={() => setPanel('credits', false)}
+          version={version}
+        />
+      )}
 
-        {panels.tools && (
-          <ToolsPanel
-            onClose={() => setPanel('tools', false)}
-            mods={mods}
-            onToggleMod={handleToggleMod}
-          />
-        )}
+      {panels.tools && (
+        <ToolsPanel
+          onClose={() => setPanel('tools', false)}
+          mods={mods}
+          onToggleMod={handleToggleMod}
+        />
+      )}
 
-        {panels.sharing && (
-          <SharingPanel
-            onClose={() => setPanel('sharing', false)}
-            gamePath={gamePath}
-            installedMods={mods}
-            selectedMods={selectedMods}
-          />
-        )}
-      </Suspense>
+      {panels.sharing && (
+        <SharingPanel
+          onClose={() => setPanel('sharing', false)}
+          gamePath={gamePath}
+          installedMods={mods}
+          selectedMods={selectedMods}
+        />
+      )}
 
       {/* Drop Zone Overlay */}
       <DropZoneOverlay
@@ -2281,6 +2304,29 @@ function App() {
         }}
       />
 
+      <InputPromptModal
+        isOpen={!!renameFolderPrompt}
+        title="Rename Folder"
+        placeholder="Enter new folder name..."
+        confirmText="Rename"
+        initialValue={renameFolderPrompt?.currentName || ''}
+        onConfirm={handleRenameFolderConfirm}
+        onCancel={() => setRenameFolderPrompt(null)}
+      />
+
+      <InputPromptModal
+        isOpen={!!newTagPrompt}
+        title="Create New Tag"
+        placeholder="Enter tag name..."
+        confirmText="Create"
+        icon={<FaTag />}
+        onConfirm={(tag) => {
+          if (newTagPrompt?.callback) newTagPrompt.callback(tag)
+          setNewTagPrompt(null)
+        }}
+        onCancel={() => setNewTagPrompt(null)}
+      />
+
       <UpdateModModal
         isOpen={updateModState.isOpen}
         onClose={() => setUpdateModState(prev => ({ ...prev, isOpen: false }))}
@@ -2310,7 +2356,7 @@ function App() {
         >
           <ModularLogo size={50} className="repak-icon" />
           <div className="header-title-group">
-            <h1 className="font-logo">Repak <AuroraText className="font-logo">X</AuroraText> </h1> <h4>[DEV]</h4>
+            <h1 className="font-logo">Repak <AuroraText className="font-logo">X</AuroraText> </h1>
             <span className="version">v{version}</span>
           </div>
         </div>
@@ -2588,7 +2634,7 @@ function App() {
                     {selectedFolderId === 'all' ? 'All Mods' :
                       folders.find(f => f.id === selectedFolderId)?.name || 'Unknown Folder'}
                     <span className="mod-count">
-                      ({filteredMods.filter(m => m.enabled).length} / {filteredMods.length} Enabled)
+                      ({filteredMods.filter(m => m.enabled).length}/{filteredMods.length} enabled)
                     </span>
                   </h2>
                 </div>
@@ -2785,6 +2831,7 @@ function App() {
             folder={contextMenu.folder}
             onClose={closeContextMenu}
             onAssignTag={(tag) => contextMenu.mod && handleAddTagToSingleMod(contextMenu.mod.path, tag)}
+            onNewTag={(callback) => setNewTagPrompt({ callback })}
             onMoveTo={(folderId) => contextMenu.mod && handleMoveSingleMod(contextMenu.mod.path, folderId)}
             onCreateFolder={handleCreateFolder}
             folders={folders}
@@ -2806,6 +2853,11 @@ function App() {
                   return
                 }
                 setRenamingModPath(contextMenu.mod.path)
+              }
+            }}
+            onRenameFolder={() => {
+              if (contextMenu.folder) {
+                handleRenameFolder(contextMenu.folder.id, contextMenu.folder.name)
               }
             }}
             onCheckConflicts={() => contextMenu.mod && handleCheckSingleModClashes(contextMenu.mod)}

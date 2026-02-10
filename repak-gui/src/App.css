@@ -79,12 +79,11 @@ body {
 }
 
 .header-branding:hover .repak-icon {
-  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--accent-primary), transparent 30%));
   transform: scale(1.05);
 }
 
 .header-branding .repak-icon {
-  transition: all 0.3s ease;
+  transition: transform 0.3s ease;
   margin-right: 10px;
 }
 
@@ -98,6 +97,7 @@ body {
 .header-title-group h1,
 .header-title-group h4 {
   margin: 0;
+  transition: text-shadow 0.3s ease;
 }
 
 .header-title-group .version {
