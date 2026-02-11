@@ -153,7 +153,7 @@ function parseModType(modType) {
   return { character, category, additional }
 }
 
-export default function InstallModPanel({ mods, allTags, folders = [], onCreateTag, onCreateFolder, onInstall, onCancel, onNewTag }) {
+export default function InstallModPanel({ mods, allTags, folders = [], onCreateTag, onCreateFolder, onInstall, onCancel, onNewTag, onNewFolder }) {
   const [openDropdown, setOpenDropdown] = useState(null)
   const [dropdownPos, setDropdownPos] = useState({ x: 0, y: 0 })
   const [modSettings, setModSettings] = useState(() => buildInitialSettings(mods))
@@ -236,25 +236,24 @@ export default function InstallModPanel({ mods, allTags, folders = [], onCreateT
     onInstall(modsToInstall)
   }
 
-  const handleNewFolder = async (targetModIdx) => {
-    const name = prompt('Enter new folder name:')
-    if (!name || !name.trim()) return
-
-    setIsCreatingFolder(true)
-    try {
-      if (onCreateFolder) {
-        const newFolderId = await onCreateFolder(name.trim())
-        if (newFolderId) {
-          // If a specific mod index was provided, assign the new folder to that mod
-          if (typeof targetModIdx === 'number') {
-            updateModSetting(targetModIdx, 'installSubfolder', newFolderId)
+  const handleNewFolder = (targetModIdx) => {
+    if (onNewFolder) {
+      onNewFolder(async (name) => {
+        if (!name || !name.trim()) return
+        setIsCreatingFolder(true)
+        try {
+          if (onCreateFolder) {
+            const newFolderId = await onCreateFolder(name.trim())
+            if (newFolderId && typeof targetModIdx === 'number') {
+              updateModSetting(targetModIdx, 'installSubfolder', newFolderId)
+            }
           }
+        } catch (err) {
+          console.error('Failed to create folder:', err)
+        } finally {
+          setIsCreatingFolder(false)
         }
-      }
-    } catch (err) {
-      console.error('Failed to create folder:', err)
-    } finally {
-      setIsCreatingFolder(false)
+      })
     }
   }
 
@@ -284,14 +283,6 @@ export default function InstallModPanel({ mods, allTags, folders = [], onCreateT
                   : 'Direct PAK - can repak if needed'
                 const { character, category, additional } = parseModType(mod.mod_type)
                 const modLabel = mod.is_dir ? 'Folder Drop' : 'PAK File'
-                const toggleDefinitions = [
-                  {
-                    key: 'fixTexture',
-                    label: 'Patch Textures',
-                    hint: 'Experimental - Removes mipmaps from textures'
-                  }
-                ]
-
                 return (
                   <div className="install-mod-card" key={mod.path || idx}>
                     {/* Left: Mod Options */}
@@ -342,39 +333,6 @@ export default function InstallModPanel({ mods, allTags, folders = [], onCreateT
                         )}
                       </div>
 
-                      <div className="install-mod-card__toggles">
-                        {toggleDefinitions.map(({ key, label, hint }) => {
-                          const isLegacyMode = modSettings[idx]?.forceLegacy || false
-                          const canApplyPatches = mod.contains_uassets !== false
-                          const isLocked = isLegacyMode || !canApplyPatches
-
-                          let hintText = hint
-                          if (isLegacyMode) {
-                            hintText = 'Disabled in Legacy PAK mode'
-                          } else if (!canApplyPatches) {
-                            hintText = 'No UAsset files detected'
-                          }
-
-                          return (
-                            <Switch
-                              key={key}
-                              size="sm"
-                              color="primary"
-                              checked={isLocked ? false : (modSettings[idx]?.[key] || false)}
-                              onChange={(value) => updateModSetting(idx, key, value)}
-                              isDisabled={isLocked}
-                              className={`install-toggle ${isLocked ? 'locked' : ''}`}
-                            >
-                              <div className="install-toggle__text">
-                                <span className="install-toggle__label">{label}</span>
-                                <span className="install-toggle__hint">
-                                  {hintText}
-                                </span>
-                              </div>
-                            </Switch>
-                          )
-                        })}
-                      </div>
 
                       <div className="install-mod-card__tags">
                         <div className="install-mod-card__row">

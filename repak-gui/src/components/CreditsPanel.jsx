@@ -35,20 +35,20 @@ const CONTRIBUTORS = [
 ];
 
 const EARLY_ACCESS_TESTERS = [
-    'Genny',
     'Alirica',
-    'Fubuki',
-    'Tobi',
     'amMatt',
-    'Hobby'
+    'Fubuki',
+    'Genny',
+    'Hobby',
+    'Tobi'
 ];
 
 const EARLY_ACCESS_SPECIAL_THANKS = [
     {
-        name: 'Genny',
+        name: 'Alirica',
     },
     {
-        name: 'Alirica',
+        name: 'Genny',
     }
 ];
 

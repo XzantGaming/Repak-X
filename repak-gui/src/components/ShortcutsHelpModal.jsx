@@ -11,6 +11,8 @@ const shortcuts = [
     { keys: ['F2'], action: 'Rename mod' },
     { keys: ['↑', '↓', '←', '→'], action: 'Navigate mods list' },
     { keys: ['Enter'], action: 'Open mod details' },
+    { keys: ['Shift', 'Click'], action: 'Select range of mods' },
+    { keys: ['Shift', 'Ctrl', 'Click'], action: 'Deselect range of mods' },
     { keys: ['F1'], action: 'Show this help' },
 ]
 

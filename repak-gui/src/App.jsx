@@ -180,6 +180,7 @@ function App() {
   const [quickOrganizePaths, setQuickOrganizePaths] = useState(null) // Paths of PAKs to quick-organize (no uassets)
   const [newFolderPrompt, setNewFolderPrompt] = useState(null) // {paths: []} when prompting for new folder name
   const [newTagPrompt, setNewTagPrompt] = useState(null) // { callback: (tag) => void } when prompting for new tag name
+  const [newFolderFromInstall, setNewFolderFromInstall] = useState(null) // { callback: (name) => void } when prompting for new folder from install panel
   const [renameFolderPrompt, setRenameFolderPrompt] = useState(null) // { folderId, currentName } when prompting for folder rename
 
   // Update Mod State
@@ -193,6 +194,8 @@ function App() {
   const searchInputRef = useRef(null)
   const modsGridRef = useRef(null)
   const gameRunningRef = useRef(false)
+  const lastSelectedModIndex = useRef(null) // For Shift+click range selection
+  const filteredModsRef = useRef([]) // Keep in sync with filteredMods for selection handler
 
   // Bulk delete state
   const [isDeletingBulk, setIsDeletingBulk] = useState(false)
@@ -1378,7 +1381,35 @@ function App() {
     }
   }
 
-  const handleToggleModSelection = (mod) => {
+  const handleToggleModSelection = (mod, e) => {
+    const currentList = filteredModsRef.current
+    const clickedIndex = currentList.findIndex(m => m.path === mod.path)
+
+    // Shift+Ctrl+click: deselect range from last selected index to clicked index
+    if (e?.shiftKey && (e?.ctrlKey || e?.metaKey) && lastSelectedModIndex.current !== null && clickedIndex !== -1) {
+      const start = Math.min(lastSelectedModIndex.current, clickedIndex)
+      const end = Math.max(lastSelectedModIndex.current, clickedIndex)
+      const newSelected = new Set(selectedMods)
+      for (let i = start; i <= end; i++) {
+        newSelected.delete(currentList[i].path)
+      }
+      setSelectedMods(newSelected)
+      return
+    }
+
+    // Shift+click: range selection from last selected index to clicked index
+    if (e?.shiftKey && lastSelectedModIndex.current !== null && clickedIndex !== -1) {
+      const start = Math.min(lastSelectedModIndex.current, clickedIndex)
+      const end = Math.max(lastSelectedModIndex.current, clickedIndex)
+      const newSelected = new Set(selectedMods)
+      for (let i = start; i <= end; i++) {
+        newSelected.add(currentList[i].path)
+      }
+      setSelectedMods(newSelected)
+      return
+    }
+
+    // Normal toggle (Ctrl+click or checkbox click)
     const newSelected = new Set(selectedMods)
     if (newSelected.has(mod.path)) {
       newSelected.delete(mod.path)
@@ -1386,6 +1417,11 @@ function App() {
       newSelected.add(mod.path)
     }
     setSelectedMods(newSelected)
+
+    // Track last selected index for future Shift+click
+    if (clickedIndex !== -1) {
+      lastSelectedModIndex.current = clickedIndex
+    }
   }
 
   const handleSelectAll = () => {
@@ -1766,6 +1802,9 @@ function App() {
     return mod.folder_id === selectedFolderId ||
       (mod.folder_id && mod.folder_id.startsWith(selectedFolderId + '/'))
   })
+
+  // Keep filteredModsRef in sync for Shift+click range selection
+  filteredModsRef.current = filteredMods
 
   // Keyboard shortcuts handler (must be after filteredMods is defined)
   useEffect(() => {
@@ -2194,6 +2233,7 @@ function App() {
           onInstall={handleInstallMods}
           onCancel={() => setPanel('install', false)}
           onNewTag={(callback) => setNewTagPrompt({ callback })}
+          onNewFolder={(callback) => setNewFolderFromInstall({ callback })}
         />
       )}
 
@@ -2325,6 +2365,18 @@ function App() {
           setNewTagPrompt(null)
         }}
         onCancel={() => setNewTagPrompt(null)}
+      />
+
+      <InputPromptModal
+        isOpen={!!newFolderFromInstall}
+        title="Create New Folder"
+        placeholder="Enter folder name..."
+        confirmText="Create"
+        onConfirm={(name) => {
+          if (newFolderFromInstall?.callback) newFolderFromInstall.callback(name)
+          setNewFolderFromInstall(null)
+        }}
+        onCancel={() => setNewFolderFromInstall(null)}
       />
 
       <UpdateModModal

@@ -154,7 +154,7 @@
 }
 
 .dropdown-item:hover {
-  background: #4a9eff;
+  background: var(--accent-primary);
   color: white;
 }
 
@@ -195,7 +195,7 @@
   flex-direction: row;
   box-shadow: 0 18px 28px rgba(0, 0, 0, 0.35);
   overflow: hidden;
-  max-height: 410px;
+  max-height: 305px;
 }
 
 /* Left side of card - mod options */

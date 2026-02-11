@@ -222,7 +222,7 @@ const ModItem = memo(function ModItem({
                         checked={selectedMods.has(mod.path)}
                         onChange={(checked, e) => {
                             e?.stopPropagation()
-                            handleToggleModSelection(mod)
+                            handleToggleModSelection(mod, e)
                         }}
                         size="sm"
                         radius="sm"
@@ -286,8 +286,10 @@ const ModItem = memo(function ModItem({
                         type="button"
                         className="mod-name-button"
                         onClick={(e) => {
-                            if (e.ctrlKey || e.metaKey) {
-                                handleToggleModSelection(mod)
+                            if (e.shiftKey) {
+                                handleToggleModSelection(mod, e)
+                            } else if (e.ctrlKey || e.metaKey) {
+                                handleToggleModSelection(mod, e)
                             } else {
                                 onSelect(mod)
                             }
