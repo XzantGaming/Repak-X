@@ -75,7 +75,6 @@ impl ToastPayload {
     /// Set custom duration for auto-dismiss
     pub fn with_duration(mut self, duration_ms: u32) -> Self {
         self.duration = Some(duration_ms);
-        self.duration = Some(duration_ms);
         self
     }
 
@@ -96,24 +95,9 @@ pub fn emit_toast(window: &Window, payload: ToastPayload) {
     }
 }
 
-/// Emit an error toast notification
-pub fn emit_error(window: &Window, title: impl Into<String>, description: impl Into<String>) {
-    emit_toast(window, ToastPayload::error(title, description));
-}
-
-/// Emit a warning toast notification
-pub fn emit_warning(window: &Window, title: impl Into<String>, description: impl Into<String>) {
-    emit_toast(window, ToastPayload::warning(title, description));
-}
-
 /// Emit a success toast notification
 pub fn emit_success(window: &Window, title: impl Into<String>, description: impl Into<String>) {
     emit_toast(window, ToastPayload::success(title, description));
-}
-
-/// Emit an info toast notification
-pub fn emit_info(window: &Window, title: impl Into<String>, description: impl Into<String>) {
-    emit_toast(window, ToastPayload::info(title, description));
 }
 
 // ============================================================================
@@ -126,14 +110,6 @@ pub fn emit_installation_failed(window: &Window, error: &str) {
         "Installation Failed",
         format!("Could not install mod: {}", error)
     ).persistent());
-}
-
-/// Emit extraction failed error
-pub fn emit_extraction_failed(window: &Window, error: &str) {
-    emit_toast(window, ToastPayload::error(
-        "Extraction Failed",
-        format!("File may be corrupted or password-protected: {}", error)
-    ));
 }
 
 /// Emit mod toggle failed error
@@ -197,30 +173,6 @@ pub fn emit_game_path_failed(window: &Window, error: &str) {
     emit_toast(window, ToastPayload::error(
         "Detection Failed",
         format!("Could not auto-detect game path: {}", error)
-    ));
-}
-
-/// Emit parse/drop failed error
-pub fn emit_parse_failed(window: &Window, error: &str) {
-    emit_toast(window, ToastPayload::error(
-        "Parse Error",
-        format!("Could not read dropped files: {}", error)
-    ));
-}
-
-/// Emit game running warning (blocking action)
-pub fn emit_game_running_warning(window: &Window) {
-    emit_toast(window, ToastPayload::warning(
-        "Game Running",
-        "Cannot modify mods while Marvel Rivals is running"
-    ));
-}
-
-/// Emit no mods found warning
-pub fn emit_no_mods_found(window: &Window) {
-    emit_toast(window, ToastPayload::warning(
-        "No Mods Found",
-        "No installable mods found in dropped items"
     ));
 }
 
@@ -288,12 +240,6 @@ pub fn emit_crash_detected(
         description.push_str(detail);
     }
     
-    if is_mesh_crash {
-        if !description.is_empty() {
-            description.push_str("\n");
-        }
-        description.push_str("⚡ Mesh loading error - likely incorrect SerializeSize");
-    }
     
     if description.is_empty() {
         description = error_message.clone().unwrap_or_else(|| "Unknown crash error".to_string());

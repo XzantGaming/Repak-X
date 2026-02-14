@@ -3278,28 +3278,6 @@ async fn extract_mod_assets(mod_path: String, dest_path: String) -> Result<usize
     }
 }
 
-/// Extract ScriptObjects chunk from the game's IoStore bundles
-/// This is needed for proper IoStore -> Legacy conversion
-/// 
-/// # Arguments
-/// * `paks_path` - Path to the game's Paks folder containing .utoc files
-/// * `output_path` - Where to save the ScriptObjects.bin file
-/// 
-/// # Returns
-/// Size of the extracted ScriptObjects file in bytes
-#[tauri::command]
-async fn extract_script_objects(paks_path: String, output_path: String) -> Result<usize, String> {
-    log::info!("Extracting ScriptObjects from: {}", paks_path);
-    
-    // Use UAssetTool to extract ScriptObjects
-    let size = uasset_toolkit::extract_script_objects(&paks_path, &output_path)
-        .map_err(|e| format!("Failed to extract ScriptObjects: {}", e))?;
-    
-    log::info!("Found ScriptObjects! Size: {} bytes ({:.2} MB)", size, size as f64 / 1024.0 / 1024.0);
-    log::info!("ScriptObjects extracted to: {}", output_path);
-    Ok(size)
-}
-
 #[tauri::command]
 async fn check_game_running() -> Result<bool, String> {
     Ok(is_game_process_running())
@@ -4589,8 +4567,7 @@ async fn monitor_game_for_crashes(
                     
                     // Check if it's a mesh-related crash
                     if crash_monitor::is_mesh_related_crash(error_msg) {
-                        error!("⚠️   ⚡ MESH LOADING ERROR - Likely caused by incorrect SerializeSize");
-                        error!("⚠️   💡 Tip: Re-run UAssetGUI on this mod to fix SerializeSize issues");
+                        error!("⚠️   ⚡ MESH LOADING ERROR detected");
                     }
                     
                     if let Some(seconds) = info.seconds_since_start {
@@ -5870,7 +5847,6 @@ fn main() {
             check_single_mod_conflicts,
             extract_pak_to_destination,
             extract_mod_assets,
-            extract_script_objects,
             // Character data commands
             get_character_data,
             get_character_by_skin_id,

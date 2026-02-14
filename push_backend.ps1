@@ -22,7 +22,11 @@ git add "*.ps1"
 git add "*.md"
 git add ".gitignore"
 
-# 4. Check if anything was staged
+# 4. Add submodule pointer if it changed
+Write-Host "Staging submodule reference (UassetToolRivals)..."
+git add "UassetToolRivals"
+
+# 5. Check if anything was staged
 $status = git status --porcelain
 if (-not $status) {
     Write-Host "No backend changes detected to commit." -ForegroundColor Yellow
@@ -31,11 +35,11 @@ if (-not $status) {
     exit
 }
 
-# 5. Commit
+# 6. Commit
 Write-Host "Committing: $Message" -ForegroundColor Green
 git commit -m "$Message"
 
-# 6. Push
+# 7. Push
 Write-Host "Pushing to origin/main..." -ForegroundColor Cyan
 git push
 

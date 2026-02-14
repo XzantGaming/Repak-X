@@ -754,14 +754,8 @@ function App() {
     const unlistenCrash = listen('game_crash_detected', (event) => {
       const payload = event.payload
 
-      // Build enhanced description for crashes
-      let enhancedDesc = payload.description
-      if (payload.is_mesh_crash) {
-        enhancedDesc += '\n\n💡 Tip: Try disabling "Fix Mesh" for this mod'
-      }
-
       // Show persistent error toast for crashes
-      alert.crash(payload.title, enhancedDesc, {
+      alert.crash(payload.title, payload.description, {
         action: {
           label: 'Details',
           onClick: () => {

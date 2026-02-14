@@ -1,7 +1,6 @@
 pub mod archives;
 pub mod iotoc;
 pub mod pak_files;
-pub mod patch_meshes;
 
 use crate::install_mod::InstallableMod;
 use iotoc::convert_to_iostore_directory;
