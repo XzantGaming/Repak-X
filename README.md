@@ -6,7 +6,7 @@
 
 ### The Definitive Marvel Rivals Mod Installer & Manager
 
-A next-gen desktop app to install, organize, and share mods — built with Tauri, React, Rust, and C#.
+A next-gen Windows app to install, organize, and share mods — built with Tauri, React, Rust, and C#.
 
 [![GitHub release](https://img.shields.io/github/v/release/XzantGaming/Repak-X?style=for-the-badge&color=7c3aed&label=Latest)](https://github.com/XzantGaming/Repak-X/releases)
 [![Downloads](https://img.shields.io/github/downloads/XzantGaming/Repak-X/total?style=for-the-badge&color=0ea5e9&label=Downloads)](https://github.com/XzantGaming/Repak-X/releases)
