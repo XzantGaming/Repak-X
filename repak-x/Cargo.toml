@@ -1,0 +1,116 @@
+[package]
+name = "repak-x"
+repository.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+keywords.workspace = true
+version.workspace = true
+
+[[bin]]
+name = "REPAK-X"
+path = "src/main_tauri.rs"
+
+[package.metadata.wix]
+upgrade-guid = "3ABC116E-0858-4842-8C33-F213D7FA8A4B"
+path-guid = "0F727DCE-5DD6-48B8-9882-F9205826FCC0"
+license = false
+eula = false
+
+[dependencies]
+# GUI Framework - Tauri
+tauri = { version = "2.0", features = [] }
+tauri-plugin-dialog = "2.0"
+tauri-plugin-fs = "2.0"
+tauri-plugin-shell = "2.0"
+tauri-plugin-deep-link = "2"
+tauri-plugin-single-instance = "2"
+url = "2"
+urlencoding = "2"
+
+# Logging
+log = "0.4.26"
+simplelog = "0.12.2"
+
+# Core dependencies
+repak = { path = "../repak" ,features = ["oodle", "encryption"] }
+hex.workspace = true
+sha2 = "0.10.9"
+serde = { version = "1.0.218", features = ["derive"] }
+uuid = { version = "1.0", features = ["v4"] }
+serde_json = "1.0.139"
+dirs = "6.0.0"
+tempfile = "3.17.1"
+path-clean = "1.0.1"
+path-slash = "0.2.1"
+rayon = "1.10.0"
+byteorder = "1.5"
+
+# UAsset handling
+uasset_toolkit = { path = "../uasset_toolkit/uasset_app", package = "uasset_app" }
+
+# Utilities
+colored = "3.0.0"
+notify = "8.0.0"
+regex-lite = "0.1.5"
+unrar = "0.5.8"
+zip = "2.6.1"
+sevenz-rust2 = "0.20.1"
+walkdir = "2.5.0"
+
+# Update checking
+reqwest = { version = "0.12.8", features = ["blocking", "json", "rustls-tls", "multipart", "stream"] }
+semver = "1.0.23"
+open = "5.3.0"
+
+# Process checking
+sysinfo = "0.32"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+parking_lot = "0.12"
+
+# P2P Secure Mod Sharing
+aes-gcm = "0.10"
+rand = "0.8"
+base64 = "0.22"
+local-ip-address = "0.6"
+bincode = "1.3"
+
+# libp2p for internet-wide P2P with NAT traversal
+libp2p = { version = "0.54", features = [
+    "tcp",
+    "noise",
+    "yamux",
+    "gossipsub",
+    "kad",
+    "identify",
+    "relay",
+    "dcutr",
+    "autonat",
+    "macros",
+    "tokio",
+    "request-response"
+] }
+futures = "0.3"
+async-trait = "0.1"
+
+# Character data management
+once_cell = "1.19"
+chrono = "0.4"
+
+# Discord Rich Presence
+discord-rich-presence = "1.1.0"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.52"
+
+[features]
+default = []
+# Enable to bundle the LOD Disabler mod into the application
+# Requires: repak-gui/src/bundled_mods/SK_LODs_Disabler_9999999_P.pak
+bundled_lod_mod = []
+
+[build-dependencies]
+winres = "0.1.12"
+tauri-build = { version = "2.0", features = [] }

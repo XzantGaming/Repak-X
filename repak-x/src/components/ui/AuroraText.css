@@ -1,0 +1,40 @@
+.aurora-text {
+  background: linear-gradient(to right,
+      var(--aurora-color-1, #ff1835),
+      var(--aurora-color-2, #ffc900),
+      var(--aurora-color-3, #00d8ff),
+      var(--aurora-color-4, #00ff67),
+      var(--aurora-color-1, #ff1835));
+  background-size: 200% auto;
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: aurora-text-flow var(--aurora-speed, 10s) linear infinite;
+  display: inline;
+  font: inherit;
+  vertical-align: baseline;
+}
+
+/* Accent variant - uses 4-color palette from theme */
+.aurora-text--accent {
+  background: linear-gradient(to right,
+      var(--aurora-color-1, #be1c1c),
+      var(--aurora-color-2, #ff9800),
+      var(--aurora-color-3, #ffcc00),
+      var(--aurora-color-4, #ff6b35),
+      var(--aurora-color-1, #be1c1c));
+  background-size: 400% auto;
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+@keyframes aurora-text-flow {
+  from {
+    background-position: 0% center;
+  }
+
+  to {
+    background-position: -400% center;
+  }
+}

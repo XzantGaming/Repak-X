@@ -1,0 +1,341 @@
+/* Extension Mod Overlay - for mods from browser extension */
+.extension-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    background: var(--overlay-bg, rgba(0, 0, 0, 0.8));
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+}
+
+.extension-panel {
+    width: 100%;
+    max-width: 500px;
+    max-height: 80vh;
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow:
+        0 25px 50px -12px rgba(0, 0, 0, 0.5),
+        0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+/* Header */
+.extension-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.25rem 1.5rem;
+    background: linear-gradient(135deg,
+            color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 85%),
+            transparent);
+    border-bottom: 1px solid var(--panel-border);
+}
+
+.extension-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, var(--accent-primary, #4a9eff), color-mix(in srgb, var(--accent-primary, #4a9eff), #8b5cf6 50%));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: white;
+    flex-shrink: 0;
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 60%);
+}
+
+.extension-title {
+    flex: 1;
+    min-width: 0;
+}
+
+.extension-title h2 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.extension-title .file-name {
+    margin: 0.25rem 0 0;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.close-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    transition: all 0.2s ease;
+}
+
+.close-btn:hover {
+    background: var(--bg-lighter);
+    color: var(--text-primary);
+}
+
+/* Content */
+.extension-content {
+    flex: 1;
+    min-height: 0;
+    padding: 1.5rem;
+    overflow-y: auto;
+}
+
+.folder-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.section-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.section-header svg {
+    font-size: 1.1rem;
+    color: var(--accent-primary, #4a9eff);
+}
+
+/* New Folder Button */
+.extension-panel .btn-new-folder {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.65rem;
+    border-radius: 6px;
+    border: 1px solid color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 60%);
+    background: color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 90%);
+    color: var(--accent-primary, #4a9eff);
+    font-size: 0.75rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.extension-panel .btn-new-folder:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 80%);
+    border-color: color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 40%);
+}
+
+.extension-panel .btn-new-folder:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.extension-panel .btn-new-folder svg {
+    font-size: 0.9rem;
+}
+
+/* Folder Tree */
+.extension-panel .folder-tree-container {
+    background: var(--bg-dark);
+    border-radius: 10px;
+    padding: 0.5rem;
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.ext-folder-tree {
+    margin-left: 0.5rem;
+    border-left: 1px solid var(--panel-border);
+    padding-left: 0.5rem;
+}
+
+/* Folder Items */
+.ext-folder-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+}
+
+.ext-folder-item:hover {
+    background: var(--bg-lighter);
+}
+
+.ext-folder-item.selected {
+    background: color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 70%);
+    color: var(--accent-primary, #4a9eff);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 50%);
+}
+
+.ext-folder-item.virtual {
+    opacity: 0.7;
+}
+
+.ext-folder-item .folder-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    font-size: 0.8rem;
+    opacity: 0.6;
+}
+
+.ext-folder-item .folder-icon {
+    font-size: 1.1rem;
+    color: var(--accent-primary, #4a9eff);
+}
+
+.ext-folder-item .folder-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ext-folder-item.root-item {
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+
+/* Selected Hint */
+.selected-hint {
+    margin-top: 0.75rem;
+    padding: 0.6rem 1rem;
+    background: color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 88%);
+    border: 1px solid color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 75%);
+    border-radius: 8px;
+    font-size: 0.8rem;
+    color: var(--accent-primary, #4a9eff);
+    text-align: center;
+}
+
+.selected-hint strong {
+    color: var(--text-primary);
+}
+
+/* Footer */
+.extension-footer {
+    display: flex;
+    gap: 0.75rem;
+    padding: 1.25rem 1.5rem;
+    background: var(--bg-dark);
+    border-top: 1px solid var(--panel-border);
+}
+
+.btn-cancel,
+.btn-install {
+    flex: 1;
+    padding: 0.75rem 1.5rem;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+}
+
+.btn-cancel {
+    background: var(--bg-lighter);
+    color: var(--text-secondary);
+    border: 1px solid var(--panel-border);
+}
+
+.btn-cancel:hover {
+    background: var(--panel-border);
+    color: var(--text-primary);
+}
+
+.btn-install {
+    background: linear-gradient(135deg, var(--accent-primary, #4a9eff), color-mix(in srgb, var(--accent-primary, #4a9eff), #8b5cf6 40%));
+    color: white;
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 60%);
+}
+
+.btn-install:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px color-mix(in srgb, var(--accent-primary, #4a9eff), transparent 50%);
+}
+
+.btn-install:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn-install.loading {
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.7;
+    }
+}
+
+/* Scrollbar */
+.extension-panel .folder-tree-container::-webkit-scrollbar {
+    width: 6px;
+}
+
+.extension-panel .folder-tree-container::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.extension-panel .folder-tree-container::-webkit-scrollbar-thumb {
+    background: var(--text-secondary);
+    opacity: 0.3;
+    border-radius: 3px;
+}
+
+.extension-panel .folder-tree-container::-webkit-scrollbar-thumb:hover {
+    opacity: 0.5;
+}
+
+/* Responsive */
+@media (max-width: 540px) {
+    .extension-panel {
+        max-width: 100%;
+        margin: 1rem;
+    }
+
+    .extension-header {
+        padding: 1rem;
+    }
+
+    .extension-content {
+        padding: 1rem;
+    }
+
+    .extension-footer {
+        padding: 1rem;
+    }
+}

@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="data:,">
+  <title>Repak X</title>
+  <style>
+    @font-face {
+      font-family: 'BBH Bartle';
+      src: url('/src/styles/fonts/BBHBartle-Regular.ttf') format('truetype');
+      font-weight: normal;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background-color: #141414;
+      color: #e6e6e6;
+    }
+
+    .splash-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #141414 0%, #1a1a1a 50%, #1f1f1f 100%);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      color: #fff;
+      overflow: hidden;
+      z-index: 9999;
+    }
+
+    .splash-content {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      padding: 3rem;
+      max-width: 480px;
+      width: 100%;
+    }
+
+    .logo-container {
+      margin-bottom: 2rem;
+      position: relative;
+    }
+
+    .splash-logo {
+      font-family: 'BBH Bartle', sans-serif;
+      font-size: 2.4rem;
+      font-weight: 300;
+      color: #ffffff;
+    }
+
+    .subtitle {
+      font-size: 0.9rem;
+      color: rgba(255, 255, 255, 0.5);
+      text-transform: uppercase;
+      letter-spacing: 4px;
+      margin-top: 0.5rem;
+    }
+
+    .icon-container {
+      margin: 2.5rem 0;
+      position: relative;
+      height: 100px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .app-icon {
+      width: 80px;
+      height: 80px;
+      border-radius: 20px;
+      position: relative;
+      z-index: 2;
+    }
+
+    .status {
+      margin-bottom: 1.5rem;
+    }
+
+    .status-text {
+      font-size: 1.25rem;
+      font-weight: 500;
+      color: #fff;
+      margin-bottom: 0.5rem;
+    }
+
+    .status-detail {
+      font-size: 0.875rem;
+      color: rgba(255, 255, 255, 0.6);
+      line-height: 1.6;
+    }
+
+    .splash-progress-container {
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-top: 2rem;
+    }
+
+    .splash-progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #dc2626, #b91c1c, #991b1b);
+      border-radius: 2px;
+    }
+
+    .splash-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 24px;
+      padding: 2.5rem;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+    }
+
+    @keyframes initProgress {
+      0% {
+        width: 0%;
+      }
+
+      100% {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="splash-screen" class="splash-container">
+
+    <div class="splash-content">
+      <div class="splash-card">
+        <div class="logo-container">
+          <div class="splash-logo">Repak X</div>
+          <div class="subtitle">Mod Installer</div>
+        </div>
+        <div class="icon-container">
+          <img src="/src/assets/app-icons/RepakIcon-x512.png" alt="Repak X" class="app-icon">
+        </div>
+        <div class="status">
+          <div class="status-text">Initializing...</div>
+          <div class="status-detail">Preparing your environment...</div>
+        </div>
+        <div class="splash-progress-container">
+          <div class="splash-progress-bar" style="animation: initProgress 2s linear"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="root"></div>
+  <script type="module" src="/src/main.jsx"></script>
+  <!-- <script src="http://localhost:8097"></script>  React DevTools -->
+</body>
+
+</html>

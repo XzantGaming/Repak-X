@@ -1,0 +1,308 @@
+/* Credits Panel */
+.credits-modal {
+    max-width: 500px;
+}
+
+.credits-content {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+/* App branding section */
+.credits-branding {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 1rem 0;
+}
+
+.credits-logo {
+    margin-bottom: 1rem;
+}
+
+.credits-app-name {
+    font-size: 2rem;
+    font-weight: 700;
+    margin: 0 0 0.25rem 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.2em;
+}
+
+.credits-app-name-repak {
+    font-family: var(--font-logo), sans-serif;
+    color: var(--text-primary);
+}
+
+.credits-app-name-x {
+    font-family: var(--font-logo), sans-serif;
+    font-size: 2rem;
+}
+
+.credits-version {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.credits-tagline {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin: 0.5rem 0 0 0;
+}
+
+/* Contributor sections */
+.credits-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.credits-section-title {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent-primary);
+    margin: 0;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--panel-border);
+    font-weight: 600;
+}
+
+/* Contributor card */
+.credits-contributor {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: var(--bg-dark);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.credits-contributor:hover {
+    background: var(--bg-lighter);
+    border-color: var(--accent-primary);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.credits-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--bg-lighter);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    color: var(--accent-primary);
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.credits-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.credits-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.credits-name {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.credits-role {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin: 0.15rem 0 0 0;
+}
+
+.credits-link-icon {
+    color: var(--text-secondary);
+    font-size: 1rem;
+    transition: color 0.2s;
+}
+
+.credits-contributor:hover .credits-link-icon {
+    color: var(--accent-primary);
+}
+
+.credits-divider {
+    border: none;
+    border-top: 1px solid color-mix(in srgb, var(--text-secondary), transparent 80%);
+    margin: 0.5rem 0;
+}
+
+/* Special thanks section */
+.credits-thanks {
+    text-align: center;
+    padding: 1rem;
+    background: linear-gradient(135deg,
+            color-mix(in srgb, var(--accent-primary), transparent 90%),
+            color-mix(in srgb, var(--accent-secondary), transparent 90%));
+    border-radius: 10px;
+    border: 1px solid color-mix(in srgb, var(--accent-primary), transparent 70%);
+}
+
+.credits-thanks-text {
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    margin: 0;
+    line-height: 1.5;
+}
+
+.credits-heart {
+    color: #ff4757;
+    animation: heartbeat 1.5s ease-in-out infinite;
+}
+
+@keyframes heartbeat {
+
+    0%,
+    100% {
+        transform: scale(1);
+    }
+
+    10% {
+        transform: scale(1.1);
+    }
+
+    20% {
+        transform: scale(1);
+    }
+
+    30% {
+        transform: scale(1.15);
+    }
+
+    40% {
+        transform: scale(1);
+    }
+}
+
+/* Open Credits Button in Settings */
+.credits-trigger-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: linear-gradient(135deg,
+            color-mix(in srgb, var(--accent-primary), var(--bg-dark) 85%),
+            color-mix(in srgb, var(--accent-secondary), var(--bg-dark) 85%));
+    border: 1px solid color-mix(in srgb, var(--accent-primary), transparent 60%);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.credits-trigger-btn:hover {
+    background: linear-gradient(135deg,
+            color-mix(in srgb, var(--accent-primary), var(--bg-dark) 70%),
+            color-mix(in srgb, var(--accent-secondary), var(--bg-dark) 70%));
+    border-color: var(--accent-primary);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.credits-trigger-btn svg {
+    font-size: 1.1rem;
+}
+
+/* Badge for roles */
+.credits-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem 0.5rem;
+    background: var(--accent-primary);
+    color: white;
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-radius: 4px;
+}
+
+.credits-badge.ai {
+    background: linear-gradient(135deg, #9c27b0, #673ab7);
+}
+
+.credits-badge.community {
+    background: linear-gradient(135deg, #ff9800, #ff5722);
+}
+
+/* Early Access Testers */
+.credits-testers-thanks {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.credits-testers-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.credits-tester-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.3rem 0.75rem;
+    background: var(--bg-dark);
+    border: 1px solid var(--panel-border);
+    border-radius: 999px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    transition: all 0.2s ease;
+}
+
+.credits-tester-chip:hover {
+    border-color: var(--accent-primary);
+    color: var(--text-primary);
+}
+
+.credits-tester-chip.special {
+    background: linear-gradient(135deg,
+            color-mix(in srgb, var(--accent-primary), var(--bg-dark) 85%),
+            color-mix(in srgb, var(--accent-secondary), var(--bg-dark) 85%));
+    border-color: color-mix(in srgb, var(--accent-primary), transparent 60%);
+    color: var(--text-primary);
+}
+
+.credits-tester-chip.special:hover {
+    border-color: var(--accent-primary);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.credits-subsection-title {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--accent-secondary);
+    margin: 0.5rem 0 0 0;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--panel-border);
+    font-weight: 600;
+}

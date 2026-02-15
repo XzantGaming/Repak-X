@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["repak", "repak-gui", "uasset_toolkit/uasset_app"]
+members = ["repak", "repak-x", "uasset_toolkit/uasset_app"]
 
 [workspace.package]
 repository = "https://github.com/XzantGaming/Repak-X"

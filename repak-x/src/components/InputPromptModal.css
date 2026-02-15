@@ -1,0 +1,182 @@
+/* Input Prompt Modal */
+.input-prompt-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 999999;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+}
+
+.input-prompt-modal {
+    width: 100%;
+    max-width: 400px;
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow:
+        0 25px 50px -12px rgba(0, 0, 0, 0.5),
+        0 0 0 1px rgba(255, 255, 255, 0.05),
+        0 0 60px color-mix(in srgb, var(--prompt-accent, var(--accent-primary, #4a9eff)), transparent 85%);
+}
+
+/* Header */
+.prompt-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    background: linear-gradient(135deg,
+            color-mix(in srgb, var(--prompt-accent, var(--accent-primary, #4a9eff)), transparent 85%),
+            transparent);
+    border-bottom: 1px solid var(--panel-border);
+}
+
+.prompt-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: linear-gradient(135deg,
+            var(--prompt-accent, var(--accent-primary, #4a9eff)),
+            color-mix(in srgb, var(--prompt-accent, var(--accent-primary, #4a9eff)), #8b5cf6 40%));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    color: white;
+    flex-shrink: 0;
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--prompt-accent, var(--accent-primary, #4a9eff)), transparent 60%);
+}
+
+.prompt-header h3 {
+    flex: 1;
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.prompt-close {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    transition: all 0.15s ease;
+}
+
+.prompt-close:hover {
+    background: var(--bg-lighter);
+    color: var(--text-primary);
+}
+
+/* Content */
+.prompt-content {
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.prompt-input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border-radius: 10px;
+    border: 2px solid var(--panel-border);
+    background: var(--bg-dark);
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    font-family: inherit;
+    outline: none;
+    transition: all 0.2s ease;
+}
+
+.prompt-input::placeholder {
+    color: var(--text-secondary);
+    opacity: 0.6;
+}
+
+.prompt-input:focus {
+    border-color: var(--prompt-accent, var(--accent-primary, #4a9eff));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--prompt-accent, var(--accent-primary, #4a9eff)), transparent 85%);
+}
+
+/* Actions */
+.prompt-actions {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.prompt-btn {
+    flex: 1;
+    padding: 0.7rem 1.25rem;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+    font-family: inherit;
+}
+
+.prompt-btn-cancel {
+    background: var(--bg-lighter);
+    color: var(--text-secondary);
+    border: 1px solid var(--panel-border);
+}
+
+.prompt-btn-cancel:hover {
+    background: var(--panel-border);
+    color: var(--text-primary);
+}
+
+.prompt-btn-confirm {
+    background: linear-gradient(135deg,
+            var(--prompt-accent, var(--accent-primary, #4a9eff)),
+            color-mix(in srgb, var(--prompt-accent, var(--accent-primary, #4a9eff)), #8b5cf6 40%));
+    color: white;
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--prompt-accent, var(--accent-primary, #4a9eff)), transparent 60%);
+}
+
+.prompt-btn-confirm:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px color-mix(in srgb, var(--prompt-accent, var(--accent-primary, #4a9eff)), transparent 50%);
+}
+
+.prompt-btn-confirm:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Animation for button press */
+.prompt-btn:active:not(:disabled) {
+    transform: scale(0.98);
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+    .input-prompt-modal {
+        max-width: 100%;
+        margin: 1rem;
+    }
+
+    .prompt-header {
+        padding: 0.875rem 1rem;
+    }
+
+    .prompt-content {
+        padding: 1rem;
+    }
+}

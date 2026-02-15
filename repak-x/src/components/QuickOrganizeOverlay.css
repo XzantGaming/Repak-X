@@ -1,0 +1,377 @@
+/* Quick Organize Overlay - for PAKs with no UAssets (Audio/Config) */
+.quick-organize-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    background: var(--overlay-bg, rgba(0, 0, 0, 0.8));
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+}
+
+.quick-organize-panel {
+    width: 100%;
+    max-width: 520px;
+    max-height: 85vh;
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow:
+        0 25px 50px -12px rgba(0, 0, 0, 0.5),
+        0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+/* Header - Orange/Amber accent for Audio/Config */
+.qo-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.25rem 1.5rem;
+    background: linear-gradient(135deg,
+            rgba(255, 160, 0, 0.12),
+            transparent);
+    border-bottom: 1px solid var(--panel-border);
+}
+
+.qo-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #ffa000, #ff6d00);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: white;
+    flex-shrink: 0;
+    box-shadow: 0 4px 12px rgba(255, 160, 0, 0.4);
+}
+
+.qo-title {
+    flex: 1;
+    min-width: 0;
+}
+
+.qo-title h2 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.qo-title .file-info {
+    margin: 0.25rem 0 0;
+    font-size: 0.85rem;
+    color: #ffa000;
+    font-weight: 500;
+}
+
+.close-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    transition: all 0.2s ease;
+}
+
+.close-btn:hover {
+    background: var(--bg-lighter);
+    color: var(--text-primary);
+}
+
+/* File List */
+.qo-file-list {
+    padding: 0.75rem 1.5rem;
+    background: rgba(255, 160, 0, 0.06);
+    border-bottom: 1px solid rgba(255, 160, 0, 0.15);
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    max-height: 120px;
+    overflow-y: auto;
+}
+
+.qo-file-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.qo-file-item .file-icon {
+    font-size: 0.9rem;
+    color: #ffa000;
+    flex-shrink: 0;
+}
+
+.qo-file-item .file-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.qo-file-more {
+    font-size: 0.75rem;
+    color: #ffa000;
+    font-style: italic;
+    padding-left: 1.4rem;
+}
+
+/* Content */
+.qo-content {
+    flex: 1;
+    min-height: 0;
+    padding: 1.5rem;
+    overflow-y: auto;
+}
+
+.qo-content .folder-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.qo-content .section-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.qo-content .section-header svg {
+    font-size: 1.1rem;
+    color: #ffa000;
+}
+
+/* New Folder Button */
+.btn-new-folder {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.65rem;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 160, 0, 0.4);
+    background: rgba(255, 160, 0, 0.1);
+    color: #ffa000;
+    font-size: 0.75rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-new-folder:hover:not(:disabled) {
+    background: rgba(255, 160, 0, 0.2);
+    border-color: rgba(255, 160, 0, 0.6);
+}
+
+.btn-new-folder:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-new-folder svg {
+    font-size: 0.9rem;
+}
+
+/* Folder Tree */
+.quick-organize-panel .folder-tree-container {
+    background: var(--bg-dark);
+    border-radius: 10px;
+    padding: 0.5rem;
+    max-height: 280px;
+    overflow-y: auto;
+}
+
+.qo-folder-tree {
+    margin-left: 0.5rem;
+    border-left: 1px solid var(--panel-border);
+    padding-left: 0.5rem;
+}
+
+/* Folder Items */
+.qo-folder-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+}
+
+.qo-folder-item:hover {
+    background: var(--bg-lighter);
+}
+
+.qo-folder-item.selected {
+    background: rgba(255, 160, 0, 0.2);
+    color: #ffa000;
+    box-shadow: inset 0 0 0 1px rgba(255, 160, 0, 0.4);
+}
+
+.qo-folder-item.virtual {
+    opacity: 0.7;
+}
+
+.qo-folder-item .folder-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    font-size: 0.8rem;
+    opacity: 0.6;
+}
+
+.qo-folder-item .folder-icon {
+    font-size: 1.1rem;
+    color: #ffa000;
+}
+
+.qo-folder-item .folder-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.qo-folder-item.root-item {
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+
+/* Selected Hint */
+.qo-content .selected-hint {
+    margin-top: 0.75rem;
+    padding: 0.6rem 1rem;
+    background: rgba(255, 160, 0, 0.12);
+    border: 1px solid rgba(255, 160, 0, 0.25);
+    border-radius: 8px;
+    font-size: 0.8rem;
+    color: #ffa000;
+    text-align: center;
+}
+
+.qo-content .selected-hint strong {
+    color: var(--text-primary);
+}
+
+/* Footer */
+.qo-footer {
+    display: flex;
+    gap: 0.75rem;
+    padding: 1.25rem 1.5rem;
+    background: var(--bg-dark);
+    border-top: 1px solid var(--panel-border);
+}
+
+.qo-footer .btn-cancel,
+.qo-footer .btn-copy {
+    flex: 1;
+    padding: 0.75rem 1.5rem;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+}
+
+.qo-footer .btn-cancel {
+    background: var(--bg-lighter);
+    color: var(--text-secondary);
+    border: 1px solid var(--panel-border);
+}
+
+.qo-footer .btn-cancel:hover {
+    background: var(--panel-border);
+    color: var(--text-primary);
+}
+
+.qo-footer .btn-copy {
+    background: linear-gradient(135deg, #ffa000, #ff6d00);
+    color: white;
+    box-shadow: 0 4px 12px rgba(255, 160, 0, 0.4);
+}
+
+.qo-footer .btn-copy:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(255, 160, 0, 0.5);
+}
+
+.qo-footer .btn-copy:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.qo-footer .btn-copy.loading {
+    animation: qo-pulse 1.5s infinite;
+}
+
+@keyframes qo-pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.7;
+    }
+}
+
+/* Scrollbar */
+.quick-organize-panel .folder-tree-container::-webkit-scrollbar,
+.qo-file-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.quick-organize-panel .folder-tree-container::-webkit-scrollbar-track,
+.qo-file-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.quick-organize-panel .folder-tree-container::-webkit-scrollbar-thumb,
+.qo-file-list::-webkit-scrollbar-thumb {
+    background: var(--text-secondary);
+    opacity: 0.3;
+    border-radius: 3px;
+}
+
+/* Responsive */
+@media (max-width: 540px) {
+    .quick-organize-panel {
+        max-width: 100%;
+        margin: 1rem;
+    }
+
+    .qo-header {
+        padding: 1rem;
+    }
+
+    .qo-content {
+        padding: 1rem;
+    }
+
+    .qo-footer {
+        padding: 1rem;
+    }
+}

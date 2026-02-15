@@ -1,0 +1,162 @@
+:root {
+  /* Dark theme (defaults) */
+  --bg-darkest: #141414;
+  --bg-darker: #1a1a1a;
+  --bg-dark: #202020;
+  --bg-light: #2a2a2a;
+  --bg-lighter: #323232;
+
+  --panel-bg: var(--bg-darker);
+  --panel-border: #2a2a2a;
+
+  --text-primary: #e6e6e6;
+  --text-secondary: #a7a7a7;
+
+  --accent-primary: #4a9eff;
+  --accent-secondary: #3a8eef;
+  --danger: #f44336;
+  --success: #4CAF50;
+
+  /* Modular logo colors */
+  --logo-x-color: #ffffff;
+
+  /* Auto-generated accent gradient for buttons */
+  --accent-gradient: linear-gradient(135deg,
+      var(--accent-primary),
+      color-mix(in srgb, var(--accent-primary), white 25%));
+
+  --btn-text: #ffffff;
+  --overlay: rgba(0, 0, 0, 0.6);
+
+  /* Added for consistency */
+  --card-surface: rgba(12, 14, 20, 0.9);
+  --card-layer: rgba(18, 20, 28, 0.88);
+  --border-color: rgba(255, 255, 255, 0.08);
+  --header-bg: #1e1e1e;
+  --header-border: #333;
+  --status-bar-bg: #1e1e1e;
+  --status-bar-border: #333;
+  --input-bg: #1a1a1a;
+  --input-border: #3a3a3a;
+  --folder-item-bg: #1a1a1a;
+  --folder-item-hover: #252525;
+  --mod-name-suffix: rgba(255, 255, 255, 0.5);
+  --mod-size-color: #b0b0b0;
+  --mod-switch-track: rgba(255, 255, 255, 0.12);
+  --mod-switch-knob: #fff;
+  --field-bg: rgba(255, 255, 255, 0.04);
+
+  /* Mod Card Specifics */
+  --card-bg: #0f1012;
+  --border-light: rgba(255, 255, 255, 0.05);
+  --tag-bg: rgba(255, 255, 255, 0.06);
+  --tag-border: rgba(255, 255, 255, 0.08);
+  --tag-hover-bg: rgba(255, 255, 255, 0.12);
+}
+
+[data-theme="light"] {
+  /* Better contrast with distinct gray shades instead of pure whites */
+  --bg-darkest: #e8e8ec;
+  --bg-darker: #eeeeef;
+  --bg-dark: #f4f4f5;
+  --bg-light: #f8f8f9;
+  --bg-lighter: #fafafa;
+
+  --panel-bg: #f2f2f4;
+  --panel-border: #d0d0d4;
+
+  --text-primary: #1a1a1c;
+  --text-secondary: #65656c;
+
+  --accent-primary: #3385e0;
+  --accent-secondary: #2a74cc;
+  --danger: #c92a2a;
+  --success: #2e7d32;
+
+  /* Modular logo colors */
+  --logo-x-color: #1a1a1c;
+
+  --btn-text: #1a1a1c;
+  --overlay: rgba(0, 0, 0, 0.15);
+
+  /* Added for consistency */
+  --card-surface: #f6f6f8;
+  --card-layer: #fafafa;
+  --border-color: rgba(0, 0, 0, 0.12);
+  --header-bg: #f0f0f2;
+  --header-border: #d4d4d8;
+  --status-bar-bg: #e8e8ec;
+  --status-bar-border: #d0d0d4;
+  --input-bg: #ffffff;
+  --input-border: #c8c8cc;
+  --folder-item-bg: #e8e8ec;
+  --folder-item-hover: #dcdce0;
+  --mod-name-suffix: rgba(0, 0, 0, 0.45);
+  --mod-size-color: #555558;
+  --mod-switch-track: rgba(0, 0, 0, 0.18);
+  --mod-switch-knob: #fff;
+  --field-bg: rgba(0, 0, 0, 0.06);
+
+  /* Mod Card Specifics for Light Mode */
+  --card-bg: #f4f4f6;
+  --border-light: rgba(0, 0, 0, 0.10);
+  --tag-bg: rgba(0, 0, 0, 0.07);
+  --tag-border: rgba(0, 0, 0, 0.12);
+  --tag-hover-bg: rgba(0, 0, 0, 0.11);
+}
+
+/* Generic helpers used across components */
+.panel,
+.modal-content,
+.install-panel,
+.details-panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  color: var(--text-primary);
+  border-radius: 6px;
+}
+
+input[type="text"],
+.path-input,
+.search-input,
+select {
+  background: var(--bg-darkest);
+  color: var(--text-primary);
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  padding: 8px 10px;
+}
+
+.btn,
+button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  color: var(--btn-text);
+  background: var(--bg-light);
+}
+
+.btn-primary {
+  background: var(--accent-gradient);
+  border-color: var(--accent-primary);
+  color: #ffffff;
+  /* Always white on colored background */
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg,
+      color-mix(in srgb, var(--accent-primary), white 15%),
+      color-mix(in srgb, var(--accent-primary), white 35%));
+  border-color: color-mix(in srgb, var(--accent-primary), white 15%);
+}
+
+/* Note: .tag styles are defined in App.css with full hover/transition support */
+
+.modal-overlay {
+  background: var(--overlay);
+}

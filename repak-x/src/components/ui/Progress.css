@@ -1,0 +1,92 @@
+/* Progress Component Styles */
+.repakx-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  width: 100%;
+}
+
+.repakx-progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.repakx-progress-label {
+  font-weight: 500;
+}
+
+.repakx-progress-value {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+
+.repakx-progress-track {
+  width: 100%;
+  background-color: var(--bg-lighter, #e4e4e7);
+  border-radius: 999px;
+  overflow: hidden;
+  position: relative;
+}
+[data-theme="dark"] .repakx-progress-track {
+  background-color: #3f3f46;
+}
+
+.repakx-progress-indicator {
+  height: 100%;
+  background-color: var(--progress-color, #006fee);
+  border-radius: 999px;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Sizes */
+.repakx-progress.sm .repakx-progress-track { height: 4px; }
+.repakx-progress.md .repakx-progress-track { height: 8px; }
+.repakx-progress.lg .repakx-progress-track { height: 12px; }
+
+/* Colors */
+.repakx-progress.default { --progress-color: #3f3f46; }
+[data-theme="dark"] .repakx-progress.default { --progress-color: #a1a1aa; }
+
+.repakx-progress.primary { --progress-color: #006fee; }
+.repakx-progress.secondary { --progress-color: #7828c8; }
+.repakx-progress.success { --progress-color: #17c964; }
+.repakx-progress.warning { --progress-color: #f5a524; }
+.repakx-progress.danger { --progress-color: #f31260; }
+
+/* Indeterminate Animation */
+.repakx-progress.indeterminate .repakx-progress-indicator {
+  width: 30% !important;
+  position: absolute;
+  left: -30%;
+  animation: indeterminate-anim 1.5s cubic-bezier(0.65, 0.815, 0.735, 0.395) infinite;
+}
+
+@keyframes indeterminate-anim {
+  0% { left: -30%; width: 30%; }
+  50% { width: 60%; }
+  100% { left: 100%; width: 30%; }
+}
+
+/* Striped Animation */
+.repakx-progress.striped .repakx-progress-indicator {
+  background-image: linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.15) 25%,
+    transparent 25%,
+    transparent 50%,
+    rgba(255, 255, 255, 0.15) 50%,
+    rgba(255, 255, 255, 0.15) 75%,
+    transparent 75%,
+    transparent
+  );
+  background-size: 1rem 1rem;
+  animation: striped-anim 1s linear infinite;
+}
+
+@keyframes striped-anim {
+  from { background-position: 1rem 0; }
+  to { background-position: 0 0; }
+}

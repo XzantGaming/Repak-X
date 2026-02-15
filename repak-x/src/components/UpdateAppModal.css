@@ -1,0 +1,40 @@
+.update-modal {
+    max-width: 450px;
+}
+
+.update-version {
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
+}
+
+.download-progress {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin: 1rem 0;
+}
+
+.progress-bar {
+    flex: 1;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: var(--accent-color, #4a9eff);
+    transition: width 0.3s ease;
+}
+
+.progress-text {
+    font-size: 0.9rem;
+    min-width: 45px;
+    text-align: right;
+}
+
+.update-ready {
+    color: #4CAF50;
+    font-weight: 500;
+}

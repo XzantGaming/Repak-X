@@ -1,0 +1,76 @@
+.border-beam {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  border-radius: inherit;
+  overflow: hidden;
+  z-index: 10;
+}
+
+.border-beam::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 var(--border-width, 1px) transparent;
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    var(--color-from, #ffaa40) 40%,
+    var(--color-to, #9c40ff) 60%,
+    transparent 100%
+  );
+  background-size: 200% 200%;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  -webkit-mask-composite: xor;
+  animation: border-beam-anim var(--duration, 6s) linear infinite;
+  animation-delay: var(--delay, 0s);
+}
+
+@keyframes border-beam-anim {
+  0% {
+    offset-distance: 0%;
+  }
+  100% {
+    offset-distance: 100%;
+  }
+}
+
+/* Alternative implementation using clip-path or moving gradient if mask-composite isn't supported well */
+/* Using a simpler approach for broad compatibility: a moving element along the path */
+.border-beam-path {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.border-beam-light {
+  position: absolute;
+  width: var(--size, 100px);
+  height: var(--border-width, 1px);
+  background: linear-gradient(90deg, transparent, var(--color-from), var(--color-to), transparent);
+  offset-path: rect(0% 100% 100% 0% round var(--radius, 0px));
+  animation: border-beam-move var(--duration, 6s) linear infinite;
+  animation-delay: var(--delay, 0s);
+  opacity: 0;
+}
+
+@keyframes border-beam-move {
+  0% {
+    offset-distance: 0%;
+    opacity: 1;
+  }
+  100% {
+    offset-distance: 100%;
+    opacity: 1;
+  }
+}

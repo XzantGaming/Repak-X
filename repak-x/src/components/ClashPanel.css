@@ -1,0 +1,172 @@
+/* ClashPanel.css */
+.clash-panel-content {
+    /* Inherits basic modal styles from theme.css .modal-content */
+    width: 90%;
+    max-width: 700px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+    padding: 0;
+    border: 1px solid var(--panel-border);
+    border-radius: 12px;
+    background: var(--panel-bg);
+    overflow: hidden;
+    position: relative;
+    /* Ensure z-index works if needed */
+}
+
+/* Custom overlay style for ClashPanel */
+.clash-overlay {
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    background: rgba(0, 0, 0, 0.75);
+    /* Slightly darker/more opaque to complement blur */
+}
+
+.clash-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--panel-border);
+    background: var(--header-bg);
+}
+
+.clash-header h2 {
+    margin: 0;
+    font-size: 1.25rem;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.clash-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.clash-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.clash-card {
+    background: var(--bg-dark);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    padding: 1rem;
+    transition: border-color 0.2s;
+}
+
+.clash-card:hover {
+    border-color: var(--border-light);
+}
+
+.clash-file-path {
+    font-family: 'Consolas', monospace;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.75rem;
+    word-break: break-all;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.clash-file-icon {
+    color: var(--accent-primary);
+}
+
+.clash-mods-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.clash-mod-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    background: var(--bg-darkest);
+    border-radius: 6px;
+    border: 1px solid transparent;
+}
+
+.clash-mod-badge {
+    background: rgba(255, 100, 100, 0.15);
+    color: #ff6b6b;
+    border: 1px solid rgba(255, 100, 100, 0.3);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.clash-mod-name {
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.clash-priority-wrapper {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+}
+
+.clash-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--panel-border);
+    background: var(--bg-darker);
+    display: flex;
+    justify-content: flex-end;
+}
+
+.close-icon-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.close-icon-btn:hover {
+    background: var(--bg-lighter);
+    color: var(--text-primary);
+}
+
+.no-clashes {
+    text-align: center;
+    padding: 3rem;
+    color: var(--success);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+}
+
+.no-clashes-icon {
+    font-size: 3rem;
+    opacity: 0.8;
+}

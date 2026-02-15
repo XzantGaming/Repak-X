@@ -1,0 +1,61 @@
+.terminal-window {
+  background: #1e1e1e;
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #333;
+}
+
+.terminal-header {
+  background: #2d2d2d;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid #333;
+}
+
+.terminal-button {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.terminal-button.red { background: #ff5f56; }
+.terminal-button.yellow { background: #ffbd2e; }
+.terminal-button.green { background: #27c93f; }
+
+.terminal-body {
+  padding: 16px;
+  color: #e0e0e0;
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 200px;
+}
+
+.typing-cursor::after {
+  content: '▋';
+  display: inline-block;
+  vertical-align: bottom;
+  animation: blink 1s step-end infinite;
+  color: inherit;
+  margin-left: 2px;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.terminal-line {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.terminal-line.success { color: #4caf50; }
+.terminal-line.warning { color: #ff9800; }
+.terminal-line.error { color: #f44336; }
+.terminal-line.info { color: #2196f3; }

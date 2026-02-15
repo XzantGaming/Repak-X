@@ -1,0 +1,75 @@
+.number-input-container {
+  --scale: 0.85;
+  display: inline-flex;
+  align-items: center;
+  background-color: var(--field-bg, rgba(255, 255, 255, 0.1));
+  border-radius: 999px;
+  padding: calc(2px * var(--scale));
+  height: calc(28px * var(--scale));
+  border: 1px solid var(--border-light, rgba(255, 255, 255, 0.1));
+  transition: border-color 0.2s;
+}
+
+.number-input-container:hover {
+  border-color: var(--text-secondary);
+}
+
+.number-btn {
+  width: calc(22px * var(--scale));
+  height: calc(22px * var(--scale));
+  min-width: calc(22px * var(--scale));
+  min-height: calc(22px * var(--scale));
+  border-radius: 50%;
+  border: none;
+  background-color: var(--bg-light, rgba(255, 255, 255, 0.15));
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: calc(1.1rem * var(--scale));
+  line-height: 1;
+  padding: 0;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.number-btn:hover:not(:disabled) {
+  background-color: var(--accent-primary, #4a9eff);
+  color: #fff;
+  transform: scale(1.1);
+}
+
+.number-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.number-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.number-display {
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  width: calc(32px * var(--scale));
+  text-align: center;
+  font-size: calc(0.9rem * var(--scale));
+  font-weight: 600;
+  padding: 0;
+  font-family: inherit;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.number-display::-webkit-outer-spin-button,
+.number-display::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.number-display:focus {
+  outline: none;
+  color: var(--accent-primary, #4a9eff);
+}

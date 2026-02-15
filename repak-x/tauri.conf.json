@@ -1,0 +1,51 @@
+{
+  "$schema": "https://schema.tauri.app/config/2.0",
+  "productName": "RepakX",
+  "version": "1.0.0",
+  "identifier": "com.xzantgaming.repakx",
+  "build": {
+    "beforeDevCommand": "npm-dev.bat",
+    "beforeBuildCommand": "npm-build.bat",
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "dist"
+  },
+  "bundle": {
+    "active": true,
+    "icon": [
+      "icons/RepakIcon.ico"
+    ]
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Repak X",
+        "width": 1400,
+        "height": 950,
+        "minWidth": 800,
+        "minHeight": 600,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": false,
+        "transparent": false,
+        "center": true,
+        "devtools": true
+      }
+    ],
+    "security": {
+      "csp": null,
+      "capabilities": [
+        "default"
+      ]
+    },
+    "withGlobalTauri": true
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": [
+          "repakx"
+        ]
+      }
+    }
+  }
+}

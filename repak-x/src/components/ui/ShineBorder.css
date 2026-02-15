@@ -1,0 +1,54 @@
+.shine-border {
+  position: relative;
+  border-radius: var(--border-radius, 12px);
+  overflow: hidden;
+}
+
+.shine-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: var(--border-width, 1px);
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--angle, 0deg),
+    transparent 0%,
+    var(--shine-color, #fff) 10%,
+    transparent 20%
+  );
+  -webkit-mask: 
+    linear-gradient(#fff 0 0) content-box, 
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  animation: shine-border-spin var(--duration, 10s) linear infinite;
+}
+
+@property --angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes shine-border-spin {
+  to {
+    --angle: 360deg;
+  }
+}
+
+/* Fallback for browsers not supporting @property (like older Safari/Firefox) */
+/* We can use a rotating pseudo element with a gradient */
+.shine-border-fallback::before {
+  background: conic-gradient(
+    transparent 0%,
+    var(--shine-color, #fff) 10%,
+    transparent 20%
+  );
+  animation: shine-border-spin-transform var(--duration, 10s) linear infinite;
+}
+
+@keyframes shine-border-spin-transform {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
