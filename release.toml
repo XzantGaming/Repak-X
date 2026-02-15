@@ -1,3 +1,0 @@
-allow-branch = ["master"]
-publish = false
-tag-prefix = ""

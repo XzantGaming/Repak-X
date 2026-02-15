@@ -142,30 +142,49 @@ impl SyncToolkit {
         log::info!("[SyncToolkit] Request sent, waiting for response (timeout: 5 min)...");
         
         // Read response with timeout (5 minutes for large batch operations)
+        // Skip non-JSON lines (e.g. log output that leaked to stdout) until we get a valid JSON response
         let timeout = Duration::from_secs(300);
-        match proc.response_rx.recv_timeout(timeout) {
-            Ok(Ok(line)) => {
-                log::info!("[SyncToolkit] Got response: {} bytes", line.len());
-                match serde_json::from_str::<UAssetResponse>(&line) {
-                    Ok(response) => Ok(response),
-                    Err(e) => {
-                        *process_guard = None;
-                        anyhow::bail!("Failed to parse response: {} (Line: {})", e, &line[..std::cmp::min(500, line.len())]);
-                    }
-                }
-            }
-            Ok(Err(e)) => {
-                *process_guard = None;
-                anyhow::bail!("Failed to read from UAssetTool: {}", e);
-            }
-            Err(mpsc::RecvTimeoutError::Timeout) => {
+        let deadline = std::time::Instant::now() + timeout;
+        loop {
+            let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+            if remaining.is_zero() {
                 log::error!("[SyncToolkit] TIMEOUT waiting for UAssetTool response after {:?}", timeout);
                 *process_guard = None;
                 anyhow::bail!("Timeout waiting for UAssetTool response after {:?}", timeout);
             }
-            Err(mpsc::RecvTimeoutError::Disconnected) => {
-                *process_guard = None;
-                anyhow::bail!("UAssetTool process closed connection (channel disconnected)");
+            match proc.response_rx.recv_timeout(remaining) {
+                Ok(Ok(line)) => {
+                    let trimmed = line.trim();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+                    // JSON responses start with '{' — skip anything else (log lines)
+                    if !trimmed.starts_with('{') {
+                        log::warn!("[SyncToolkit] Skipping non-JSON stdout line: {}", &trimmed[..std::cmp::min(200, trimmed.len())]);
+                        continue;
+                    }
+                    log::info!("[SyncToolkit] Got response: {} bytes", line.len());
+                    match serde_json::from_str::<UAssetResponse>(&line) {
+                        Ok(response) => return Ok(response),
+                        Err(e) => {
+                            *process_guard = None;
+                            anyhow::bail!("Failed to parse response: {} (Line: {})", e, &line[..std::cmp::min(500, line.len())]);
+                        }
+                    }
+                }
+                Ok(Err(e)) => {
+                    *process_guard = None;
+                    anyhow::bail!("Failed to read from UAssetTool: {}", e);
+                }
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    log::error!("[SyncToolkit] TIMEOUT waiting for UAssetTool response after {:?}", timeout);
+                    *process_guard = None;
+                    anyhow::bail!("Timeout waiting for UAssetTool response after {:?}", timeout);
+                }
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    *process_guard = None;
+                    anyhow::bail!("UAssetTool process closed connection (channel disconnected)");
+                }
             }
         }
     }
