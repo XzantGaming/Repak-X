@@ -97,47 +97,14 @@ jobs:
           sccache --start-server
           sccache --show-stats
 
-      - name: Auto-Increment Version (Local)
+      - name: Read Version
         id: version
         shell: pwsh
         run: |
-          # Read current version from Cargo.toml
           $cargoContent = Get-Content -Path "Cargo.toml" -Raw
-          $currentVersion = [regex]::Match($cargoContent, '(?m)^version\s*=\s*"([^"]+)"').Groups[1].Value
-          
-          Write-Host "Current version: $currentVersion" -ForegroundColor Yellow
-          
-          # Parse version (MAJOR.MINOR.PATCH)
-          $versionParts = $currentVersion -split '\.'
-          $major = [int]$versionParts[0]
-          $minor = [int]$versionParts[1]
-          $patch = [int]$versionParts[2]
-          
-          # Increment patch version
-          $patch++
-          $newVersion = "$major.$minor.$patch"
-          
-          Write-Host "New version: $newVersion" -ForegroundColor Green
-          
-          # Update Cargo.toml
-          $cargoContent = $cargoContent -replace '(?m)^version\s*=\s*"[^"]+"', "version = `"$newVersion`""
-          Set-Content -Path "Cargo.toml" -Value $cargoContent -NoNewline
-          
-          # Update tauri.conf.json
-          $tauriPath = "repak-gui\tauri.conf.json"
-          $tauriContent = Get-Content -Path $tauriPath -Raw
-          $tauriContent = $tauriContent -replace '"version":\s*"[^"]+"', "`"version`": `"$newVersion`""
-          Set-Content -Path $tauriPath -Value $tauriContent -NoNewline
-          
-          # Update package.json
-          $packagePath = "repak-gui\package.json"
-          $packageContent = Get-Content -Path $packagePath -Raw
-          $packageContent = $packageContent -replace '"version":\s*"[^"]+"', "`"version`": `"$newVersion`""
-          Set-Content -Path $packagePath -Value $packageContent -NoNewline
-          
-          # Set outputs
-          echo "VERSION=$newVersion" >> $env:GITHUB_OUTPUT
-          echo "OLD_VERSION=$currentVersion" >> $env:GITHUB_OUTPUT
+          $version = [regex]::Match($cargoContent, '(?m)^version\s*=\s*"([^"]+)"').Groups[1].Value
+          Write-Host "Version: $version" -ForegroundColor Green
+          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
 
       - name: Create Distribution Package (ZIP Only)
         id: package
@@ -159,23 +126,16 @@ jobs:
             exit 1
           }
 
-      - name: Commit and Push Version Bump
+      - name: Create and Push Tag
         shell: pwsh
         run: |
-          $newVersion = "${{ steps.version.outputs.VERSION }}"
+          $version = "${{ steps.version.outputs.VERSION }}"
           
-          # Configure git
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
-          # Commit version bump
-          git add Cargo.toml repak-gui/tauri.conf.json repak-gui/package.json
-          git commit -m "chore: bump version to $newVersion [skip ci]"
-          
-          # Create and push tag
-          git tag "v$newVersion"
-          git push origin HEAD:main
-          git push origin "v$newVersion"
+          git tag "v$version"
+          git push origin "v$version"
 
       - name: Upload ZIP to Cloudflare R2
         id: r2_upload
@@ -249,7 +209,7 @@ jobs:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           $version = "${{ steps.version.outputs.VERSION }}"
-          $oldVersion = "${{ steps.version.outputs.OLD_VERSION }}"
+          
           $zipSize = "${{ steps.package.outputs.ZIP_SIZE }}"
           $downloadUrl = "${{ steps.r2_upload.outputs.DOWNLOAD_URL }}"
           
@@ -267,7 +227,7 @@ jobs:
             embeds = @(
               @{
                 title = "🚀 New Release: Repak X v$version"
-                description = "A new version has been released!`n`n**What's New:**`n• Version bumped from $oldVersion → $version`n• Fresh build with latest changes"
+                description = "A new version has been released!`n`n**What's New:**`n• Fresh build with latest changes"
                 color = 9109504 # Dark Red color
                 fields = @(
                   @{

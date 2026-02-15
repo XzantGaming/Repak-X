@@ -1,12 +1,12 @@
 [workspace]
 resolver = "2"
-members = ["repak", "repak-gui", "repak_cli","simd_str_cmp", "uasset_toolkit/uasset_app"]
+members = ["repak", "repak-gui", "uasset_toolkit/uasset_app"]
 
 [workspace.package]
-repository = "https://github.com/natimerry/repak-rivals"
-authors = ["spuds", "trumank","natimerry"]
-license = "MIT OR Apache-2.0"
-version = "2.6.27"
+repository = "https://github.com/XzantGaming/Repak-X"
+authors = ["Xzant", "Saturn"]
+license = "MIT"
+version = "1.0.0"
 edition = "2021"
 keywords = ["marvel-rivals","unreal-engine", "pak", "unrealpak"]
 

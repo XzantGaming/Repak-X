@@ -1,5 +1,5 @@
 [package]
-name = "repak-gui"
+name = "repak-x"
 repository.workspace = true
 authors.workspace = true
 license.workspace = true

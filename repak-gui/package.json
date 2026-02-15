@@ -1,6 +1,6 @@
 {
   "name": "repakx-frontend",
-  "version": "2.6.27",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
