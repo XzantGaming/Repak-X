@@ -565,7 +565,7 @@ pub fn extract_iostore(file_path: &str, output_path: &str, aes_key: Option<&str>
         anyhow::bail!("Failed to extract IoStore: {}", response.message);
     }
     let data = response.data.unwrap_or(serde_json::json!({}));
-    let converted = data.get("converted_count").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+    let converted = data.get("extracted_count").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
     Ok(converted)
 }
 
