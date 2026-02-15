@@ -114,7 +114,7 @@ jobs:
           .\build_and_package.ps1 -Configuration release -Zip
           
           $version = "${{ steps.version.outputs.VERSION }}"
-          $zipPath = "dist\Repak-Gui-Revamped-v$version.zip"
+          $zipPath = "dist\Repak-X-v$version.zip"
           
           if (Test-Path $zipPath) {
             $zipSize = [math]::Round((Get-Item $zipPath).Length / 1MB, 2)
@@ -149,7 +149,7 @@ jobs:
         run: |
           $version = "${{ steps.version.outputs.VERSION }}"
           $zipPath = "${{ steps.package.outputs.ZIP_PATH }}"
-          $fileName = "Repak-Gui-Revamped-v$version.zip"
+          $fileName = "Repak-X-v$version.zip"
           
           Write-Host "Uploading to Cloudflare R2..." -ForegroundColor Cyan
           Write-Host "  Bucket: $env:R2_BUCKET" -ForegroundColor Yellow
@@ -232,7 +232,7 @@ jobs:
                 fields = @(
                   @{
                     name = "📦 Package"
-                    value = "``Repak-Gui-Revamped-v$version.zip``"
+                    value = "``Repak-X-v$version.zip``"
                     inline = $true
                   }
                   @{
@@ -266,7 +266,7 @@ jobs:
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: repak-gui-revamped-v${{ steps.version.outputs.VERSION }}
+          name: repak-x-v${{ steps.version.outputs.VERSION }}
           path: ${{ steps.package.outputs.ZIP_PATH }}
           retention-days: 30
 

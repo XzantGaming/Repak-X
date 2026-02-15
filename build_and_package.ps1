@@ -86,7 +86,7 @@ try {
     $profileDir = if ($Configuration -eq "release") { "release" } else { "debug" }
     $targetDir = Join-Path $workspaceRoot "target\$profileDir"
     $distRoot = Join-Path $workspaceRoot "dist"
-    $appFolderName = "Repak-Gui-Revamped-v$version"
+    $appFolderName = "Repak-X-v$version"
     $distDir = Join-Path $distRoot $appFolderName
     
     Write-Info "Creating distribution folder: $distDir"
