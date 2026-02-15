@@ -251,6 +251,15 @@ export default function ToolsPanel({ onClose, mods = [], onToggleMod }) {
                                         {charUpdateStatus}
                                     </p>
                                 )}
+                                <p style={{ fontSize: '0.75rem', opacity: 0.5, marginTop: '0.5rem' }}>
+                                    Database maintained by{' '}
+                                    <span
+                                        style={{ textDecoration: 'underline', cursor: 'pointer' }}
+                                        onClick={() => open('https://github.com/donutman07/MarvelRivalsCharacterIDs')}
+                                    >
+                                        donutman07
+                                    </span>
+                                </p>
                             </div>
                         </div>
 
