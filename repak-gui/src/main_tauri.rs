@@ -3115,7 +3115,22 @@ async fn cleanup_ubulk_for_inline_textures(output_dir: &PathBuf) {
 /// # Returns
 /// Number of files extracted
 #[tauri::command]
-async fn extract_mod_assets(mod_path: String, dest_path: String) -> Result<usize, String> {
+async fn extract_mod_assets(mod_path: String, dest_path: String, state: State<'_, Arc<Mutex<AppState>>>) -> Result<usize, String> {
+    // Set USMAP_PATH from AppState so UAssetTool can load mappings
+    {
+        let state_guard = state.lock().unwrap();
+        let usmap_filename = state_guard.usmap_path.clone();
+        drop(state_guard);
+        if !usmap_filename.is_empty() {
+            if let Some(usmap_full_path) = get_usmap_full_path(&usmap_filename) {
+                std::env::set_var("USMAP_PATH", &usmap_full_path);
+            }
+        }
+    }
+    extract_mod_assets_inner(mod_path, dest_path).await
+}
+
+async fn extract_mod_assets_inner(mod_path: String, dest_path: String) -> Result<usize, String> {
     let mut path = PathBuf::from(&mod_path);
     if !path.exists() {
         return Err(format!("File not found: {}", mod_path));
@@ -3236,7 +3251,7 @@ async fn extract_mod_assets(mod_path: String, dest_path: String) -> Result<usize
             
             // Recursively call with the .utoc path
             let utoc_str = utoc_path.to_string_lossy().to_string();
-            Box::pin(extract_mod_assets(utoc_str, dest_path)).await
+            Box::pin(extract_mod_assets_inner(utoc_str, dest_path)).await
         }
         "bak_repak" => {
             // Disabled PAK file - extract it as a regular PAK
