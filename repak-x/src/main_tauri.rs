@@ -4060,7 +4060,7 @@ async fn get_app_version() -> Result<String, String> {
 async fn check_for_updates(window: Window) -> Result<Option<UpdateInfo>, String> {
     let client = reqwest::Client::new();
     // Assuming repository is correct based on context
-    let url = "https://api.github.com/repos/XzantGaming/Repak-Gui-Revamped/releases/latest";
+    let url = "https://api.github.com/repos/XzantGaming/Repak-X/releases/latest";
     
     let res = client.get(url)
         .header("User-Agent", "RepakX")
