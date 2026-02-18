@@ -28,19 +28,20 @@ A next-gen Windows app to install, organize, and share mods — built with Tauri
 
 ### ⚙️ Core
 
-- **Install** paks and uassets into **Legacy** and **IoStore** bundles from folder drops, paks, and archives
-- **Install Panel with Per-Mod Settings** — custom name, tags, folder destination, compression, Legacy PAK vs IoStore toggle, and Repak toggle per mod
+- **Install** paks and uassets into **Legacy** and **IO Store** bundles from folder drops, paks, and archives
+- **Install Panel with Per-Mod Settings** — custom name, tags, folder destination, compression, Legacy PAK vs IO Store toggle, and Repak toggle per mod
 - **Multiple Mod Installations** — install several mods at once
-- **Organize** pre-packaged mods — quickly manage pre-made IoStore bundles
+- **Organize** pre-packaged mods — quickly manage pre-made IO Store bundles
 - **Global Clash Detection** — resolve mod conflicts with priority selector system
+- **Mod Obfuscation/Encryption** — protect your mods with AES-256 encryption and asset obfuscation, blocking FModel extraction
 - **Mod Detection API** — auto-detects character, category, mod type, and package type
 - **Game Integration** — smart crash detection, Steam launch, and mods operations lockdown when game is running
-- **Oodle Compression** — applied to IoStore bundles to keep your drive happy
+- **Oodle Compression** — applied to IO Store bundles to keep your drive happy
 - **Mod Sharing** — AES-256 encrypted modpack sharing across the globe
 - **Parallel Processing Mode** — toggle between Normal (50%) and Boost (75%) thread usage for faster mod installations
 - **Extract Assets** — extract all assets to a chosen folder from a mod bundle
 - **Browser Extension Install** — receive NexusMods mods from the Repak X browser extension
-- **Proper Formatting** of Marvel Rivals proprietary asset formats (Skeletal Mesh, Static Mesh, StringTable)
+- **Proper Formatting** of Marvel Rivals proprietary asset formats (Skeletal Mesh, Static Mesh, StringTable and Texture)
 - **Utility Tools** — Skip Launcher Patch, Character Database, ReCompress, LOD Disabler shortcut
 - **Auto-Update Checker** — automatically checks and applies new app versions
 - **MaterialTag Injection** — MaterialTag containers injected through the packing process <sub>(needs the MaterialTag UE Plugin to create a compatible mod)</sub>
