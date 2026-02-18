@@ -22,9 +22,10 @@ pub fn read_utoc(utoc_path: &Path) -> Vec<UtocFileEntry> {
 
 pub fn try_read_utoc(utoc_path: &Path) -> Result<Vec<UtocFileEntry>, String> {
     // Use UAssetTool via uasset_toolkit to list IoStore files
+    // Pass the Marvel Rivals AES key explicitly so obfuscated (encrypted) containers can be read
     let result = uasset_toolkit::list_iostore_files(
         utoc_path.to_string_lossy().as_ref(),
-        None, // Use default AES key
+        Some("0C263D8C22DCB085894899C3A3796383E9BF9DE0CBFB08C9BF2DEF2E84F29D74"),
     ).map_err(|e| format!("Failed to read utoc: {}", e))?;
     
     // Convert to UtocFileEntry format, normalizing paths to remove /../ patterns

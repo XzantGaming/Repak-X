@@ -834,22 +834,24 @@ async fn parse_dropped_files(
                                 let _ = window.emit("install_log", format!("[Detection] IoStore package detected in archive: {}", mod_name));
                             }
                             
-                            // Found a single pak file, analyze it
-                            if let Ok(file) = File::open(entry_path) {
+                            // Get file list - for IoStore, read from utoc directly (works with obfuscated mods);
+                            // otherwise open PAK with AES key
+                            let files: Option<Vec<String>> = if is_iostore {
+                                use crate::utoc_utils::read_utoc;
+                                let _ = window.emit("install_log", "[Detection] Reading IoStore .utoc file for accurate file list");
+                                let utoc_files: Vec<String> = read_utoc(&utoc_path)
+                                    .iter()
+                                    .map(|entry| entry.file_path.clone())
+                                    .collect();
+                                if utoc_files.is_empty() { None } else { Some(utoc_files) }
+                            } else if let Ok(file) = File::open(entry_path) {
                                 if let Ok(aes_key) = AesKey::from_str("0C263D8C22DCB085894899C3A3796383E9BF9DE0CBFB08C9BF2DEF2E84F29D74") {
                                     let mut reader = BufReader::new(file);
-                                    if let Ok(pak) = PakBuilder::new().key(aes_key.0).reader(&mut reader) {
-                                        // Get file list - for IoStore, read from utoc; otherwise use pak.files()
-                                        let files: Vec<String> = if is_iostore {
-                                            use crate::utoc_utils::read_utoc;
-                                            let _ = window.emit("install_log", "[Detection] Reading IoStore .utoc file for accurate file list");
-                                            read_utoc(&utoc_path)
-                                                .iter()
-                                                .map(|entry| entry.file_path.clone())
-                                                .collect()
-                                        } else {
-                                            pak.files()
-                                        };
+                                    PakBuilder::new().key(aes_key.0).reader(&mut reader).ok().map(|pak| pak.files())
+                                } else { None }
+                            } else { None };
+                            
+                            if let Some(files) = files {
                                         
                                         // Use detailed characteristics (same as get_mod_details)
                                         use crate::utils::get_pak_characteristics_detailed;
@@ -954,8 +956,6 @@ async fn parse_dropped_files(
                                             auto_to_repak: !is_iostore,  // Don't repak IoStore packages
                                             contains_uassets: has_uassets,
                                         }]);
-                                    }
-                                }
                             }
                         }
                         
@@ -1033,22 +1033,27 @@ async fn parse_dropped_files(
                 }
                 
                 // Read file list for mod type detection
-                let mod_type = if let Ok(file) = File::open(&path) {
-                    if let Ok(aes_key) = AesKey::from_str("0C263D8C22DCB085894899C3A3796383E9BF9DE0CBFB08C9BF2DEF2E84F29D74") {
-                        let aes_key_for_extraction = aes_key.clone();
-                        let mut reader = BufReader::new(file);
-                        if let Ok(pak) = PakBuilder::new().key(aes_key.0).reader(&mut reader) {
-                            // Get file list - for IoStore, read from utoc; otherwise use pak.files()
-                            let files: Vec<String> = if is_iostore {
-                                use crate::utoc_utils::read_utoc;
-                                let _ = window.emit("install_log", "[Detection] Reading IoStore .utoc file for accurate file list");
-                                read_utoc(&utoc_path)
-                                    .iter()
-                                    .map(|entry| entry.file_path.clone())
-                                    .collect()
-                            } else {
-                                pak.files()
-                            };
+                // For IoStore, read from utoc directly (works with obfuscated mods);
+                // otherwise open PAK with AES key
+                let mod_type = {
+                    let files_and_key: Option<(Vec<String>, Option<repak::utils::AesKey>)> = if is_iostore {
+                        use crate::utoc_utils::read_utoc;
+                        let _ = window.emit("install_log", "[Detection] Reading IoStore .utoc file for accurate file list");
+                        let utoc_files: Vec<String> = read_utoc(&utoc_path)
+                            .iter()
+                            .map(|entry| entry.file_path.clone())
+                            .collect();
+                        if utoc_files.is_empty() { None } else { Some((utoc_files, None)) }
+                    } else if let Ok(file) = File::open(&path) {
+                        if let Ok(aes_key) = AesKey::from_str("0C263D8C22DCB085894899C3A3796383E9BF9DE0CBFB08C9BF2DEF2E84F29D74") {
+                            let aes_key_for_extraction = aes_key.clone();
+                            let mut reader = BufReader::new(file);
+                            PakBuilder::new().key(aes_key.0).reader(&mut reader).ok().map(|pak| (pak.files(), Some(aes_key_for_extraction)))
+                        } else { None }
+                    } else { None };
+                    
+                    if let Some((files, aes_key_opt)) = files_and_key {
+                        let aes_key_for_extraction = aes_key_opt.unwrap_or_else(|| AesKey::from_str("0C263D8C22DCB085894899C3A3796383E9BF9DE0CBFB08C9BF2DEF2E84F29D74").unwrap());
                             
                             // Use detailed characteristics (same as get_mod_details)
                             use crate::utils::get_pak_characteristics_detailed;
@@ -1151,12 +1156,9 @@ async fn parse_dropped_files(
                                 contains_uassets: has_uassets,
                             });
                             continue; // Continue to next file instead of returning
-                        }
                     }
                     
                     "PAK".to_string()
-                } else {
-                    "Unknown".to_string()
                 };
                 
                 (mod_type, false, false, true) // Default to true for safety
@@ -4961,35 +4963,35 @@ async fn get_mod_details(mod_path: String, _detect_blueprint: Option<bool>) -> R
         return Err(format!("Mod file does not exist: {}", path.display()));
     }
     
-    // Get AES key
-    let aes_key = AesKey::from_str("0C263D8C22DCB085894899C3A3796383E9BF9DE0CBFB08C9BF2DEF2E84F29D74")
-        .map_err(|e| format!("Failed to create AES key: {}", e))?;
-    
-    // Open PAK file directly (no temp file needed)
-    let file = File::open(&path)
-        .map_err(|e| format!("Failed to open PAK file: {}", e))?;
-    
-    let mut reader = BufReader::new(file);
-    let pak = PakBuilder::new()
-        .key(aes_key.0)
-        .reader(&mut reader)
-        .map_err(|e| format!("Failed to read PAK (bad AES key or corrupted file): {}", e))?;
-    
-    // Check if it's IoStore (has .utoc file)
+    // Check if it's IoStore (has .utoc file) BEFORE trying to open the PAK
+    // Obfuscated IoStore mods have encrypted PAK indexes with zeroed EncryptionKeyGuid,
+    // which causes repak to fail. For IoStore mods we read the file list from .utoc instead.
     let mut utoc_path = path.clone();
     utoc_path.set_extension("utoc");
     let is_iostore = utoc_path.exists();
     
-    // Get file list - same as egui version
+    // Get file list
     let files: Vec<String> = if is_iostore {
-        // For IoStore, read from utoc
+        // For IoStore, read from utoc (handles both normal and obfuscated containers)
         use crate::utoc_utils::read_utoc;
         read_utoc(&utoc_path)
             .iter()
             .map(|entry| entry.file_path.clone())
             .collect()
     } else {
-        // For regular PAK
+        // For regular PAK, open with AES key
+        let aes_key = AesKey::from_str("0C263D8C22DCB085894899C3A3796383E9BF9DE0CBFB08C9BF2DEF2E84F29D74")
+            .map_err(|e| format!("Failed to create AES key: {}", e))?;
+        
+        let file = File::open(&path)
+            .map_err(|e| format!("Failed to open PAK file: {}", e))?;
+        
+        let mut reader = BufReader::new(file);
+        let pak = PakBuilder::new()
+            .key(aes_key.0)
+            .reader(&mut reader)
+            .map_err(|e| format!("Failed to read PAK (bad AES key or corrupted file): {}", e))?;
+        
         pak.files()
     };
     

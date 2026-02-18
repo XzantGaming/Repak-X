@@ -131,41 +131,42 @@ fn find_mods_from_archive(path: &str) -> Vec<InstallableMod> {
 
             // Check if this is an iostore mod (has all three files: pak, utoc, ucas)
             if utoc_path.exists() && ucas_path.exists() {
-                // This is an iostore mod - just copy the files, don't go through repak workflow
-                let builder = repak::PakBuilder::new()
+                // This is an iostore mod - read file list from utoc (works with obfuscated mods)
+                // Don't require PAK reading since obfuscated mods have encrypted PAK indexes
+                let files = read_utoc(&utoc_path);
+                let files = files
+                    .iter()
+                    .map(|x| x.file_path.clone())
+                    .collect::<Vec<_>>();
+                let len = files.len();
+                let modtype = get_current_pak_characteristics(files.clone());
+                let has_uassets = contains_uasset_files(&files);
+
+                // Try to open PAK for reader (optional - may fail for obfuscated mods)
+                let reader = repak::PakBuilder::new()
                     .key(AES_KEY.clone().0)
-                    .reader(&mut BufReader::new(File::open(&file_path).unwrap()));
+                    .reader(&mut BufReader::new(File::open(&file_path).unwrap()))
+                    .ok();
 
-                if let Ok(builder) = builder {
-                    let files = read_utoc(&utoc_path);
-                    let files = files
-                        .iter()
-                        .map(|x| x.file_path.clone())
-                        .collect::<Vec<_>>();
-                    let len = files.len();
-                    let modtype = get_current_pak_characteristics(files.clone());
-                    let has_uassets = contains_uasset_files(&files);
+                let installable_mod = InstallableMod {
+                    mod_name: mod_base_name,
+                    mod_type: modtype.to_string(),
+                    repak: false,  // Don't use repak workflow for iostore mods
+                    is_dir: false,
+                    reader,
+                    mod_path: file_path.to_path_buf(),
+                    mount_point: "../../../".to_string(),
+                    path_hash_seed: "00000000".to_string(),
+                    total_files: len,
+                    iostore: true,  // Mark as iostore so it gets copied directly
+                    is_archived: false,
+                    editing: false,
+                    compression: Oodle,
+                    contains_uassets: has_uassets,
+                    ..Default::default()
+                };
 
-                    let installable_mod = InstallableMod {
-                        mod_name: mod_base_name,
-                        mod_type: modtype.to_string(),
-                        repak: false,  // Don't use repak workflow for iostore mods
-                        is_dir: false,
-                        reader: Some(builder),
-                        mod_path: file_path.to_path_buf(),
-                        mount_point: "../../../".to_string(),
-                        path_hash_seed: "00000000".to_string(),
-                        total_files: len,
-                        iostore: true,  // Mark as iostore so it gets copied directly
-                        is_archived: false,
-                        editing: false,
-                        compression: Oodle,
-                        contains_uassets: has_uassets,
-                        ..Default::default()
-                    };
-
-                    new_mods.push(installable_mod);
-                }
+                new_mods.push(installable_mod);
             }
             // This is a standalone .pak file
             else {
@@ -376,38 +377,44 @@ fn map_to_mods_internal(paths: &[PathBuf]) -> Vec<InstallableMod> {
             let mut has_uassets = true; // Default to true for safety
 
             if !is_dir && !is_archive {
-                let builder = repak::PakBuilder::new()
-                    .key(AES_KEY.clone().0)
-                    .reader(&mut BufReader::new(File::open(path.clone()).unwrap()));
-                match builder {
-                    Ok(builder) => {
-                        pak = Some(builder.clone());
-                        
-                        // For IoStore packages, read from .utoc file
-                        let files = if is_iostore {
-                            let utoc_path = path.with_extension("utoc");
-                            let utoc_files = read_utoc(&utoc_path);
-                            len = utoc_files.len();
-                            utoc_files.iter().map(|f| f.file_path.clone()).collect()
-                        } else {
+                if is_iostore {
+                    // For IoStore packages, read from .utoc file directly (works with obfuscated mods)
+                    // Don't require PAK reading since obfuscated mods have encrypted PAK indexes
+                    let utoc_path = path.with_extension("utoc");
+                    let utoc_files = read_utoc(&utoc_path);
+                    len = utoc_files.len();
+                    let files: Vec<String> = utoc_files.iter().map(|f| f.file_path.clone()).collect();
+                    
+                    modtype = get_current_pak_characteristics(files.clone());
+                    has_uassets = contains_uasset_files(&files);
+                    
+                    // Try to open PAK for reader (optional - may fail for obfuscated mods)
+                    pak = repak::PakBuilder::new()
+                        .key(AES_KEY.clone().0)
+                        .reader(&mut BufReader::new(File::open(path.clone()).unwrap()))
+                        .ok();
+                } else {
+                    let builder = repak::PakBuilder::new()
+                        .key(AES_KEY.clone().0)
+                        .reader(&mut BufReader::new(File::open(path.clone()).unwrap()));
+                    match builder {
+                        Ok(builder) => {
+                            pak = Some(builder.clone());
+                            
                             let files = builder.files();
                             len = files.len();
-                            files
-                        };
-                        
-                        modtype = get_current_pak_characteristics(files.clone());
-                        has_uassets = contains_uasset_files(&files);
-                        
-                        // IoStore packages should not have auto-fixes enabled
-                        if !is_iostore {
+                            
+                            modtype = get_current_pak_characteristics(files.clone());
+                            has_uassets = contains_uasset_files(&files);
+                            
                             // Auto-detect texture files (mesh patching is handled automatically by UAssetTool)
                             auto_fix_textures = detect_texture_files(&files);
                             auto_fix_static_mesh = detect_static_mesh_files(&files);
                         }
-                    }
-                    Err(e) => {
-                        error!("Error reading pak file: {}", e);
-                        return Err(e);
+                        Err(e) => {
+                            error!("Error reading pak file: {}", e);
+                            return Err(e);
+                        }
                     }
                 }
             }
