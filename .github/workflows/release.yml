@@ -137,53 +137,7 @@ jobs:
           git tag "v$version"
           git push origin "v$version"
 
-      - name: Upload ZIP to Cloudflare R2
-        id: r2_upload
-        shell: pwsh
-        env:
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
-          R2_BUCKET: ${{ secrets.R2_BUCKET_NAME }}
-          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
-        run: |
-          $version = "${{ steps.version.outputs.VERSION }}"
-          $zipPath = "${{ steps.package.outputs.ZIP_PATH }}"
-          $fileName = "Repak-X-v$version.zip"
-          
-          Write-Host "Uploading to Cloudflare R2..." -ForegroundColor Cyan
-          Write-Host "  Bucket: $env:R2_BUCKET" -ForegroundColor Yellow
-          Write-Host "  File: $fileName" -ForegroundColor Yellow
-          
-          # Install AWS CLI if not present (R2 uses S3-compatible API)
-          if (-not (Get-Command aws -ErrorAction SilentlyContinue)) {
-            Write-Host "Installing AWS CLI..." -ForegroundColor Yellow
-            choco install awscli -y
-            refreshenv
-          }
-          
-          # Configure AWS CLI for R2
-          $env:AWS_ACCESS_KEY_ID = $env:R2_ACCESS_KEY_ID
-          $env:AWS_SECRET_ACCESS_KEY = $env:R2_SECRET_ACCESS_KEY
-          
-          # Upload to R2
-          aws s3 cp $zipPath "s3://$env:R2_BUCKET/$fileName" --endpoint-url $env:R2_ENDPOINT
-          
-          if ($LASTEXITCODE -eq 0) {
-            # Construct public URL
-            $downloadUrl = "$env:R2_PUBLIC_URL/$fileName"
-            
-            Write-Host "✅ Upload successful!" -ForegroundColor Green
-            Write-Host "Download URL: $downloadUrl" -ForegroundColor Cyan
-            
-            echo "DOWNLOAD_URL=$downloadUrl" >> $env:GITHUB_OUTPUT
-            echo "FILE_NAME=$fileName" >> $env:GITHUB_OUTPUT
-          } else {
-            Write-Host "❌ R2 upload failed!" -ForegroundColor Red
-            exit 1
-          }
-
-      - name: Create GitHub Release (Private)
+      - name: Create GitHub Release
         id: create_release
         uses: softprops/action-gh-release@v1
         with:
@@ -191,18 +145,12 @@ jobs:
           name: Repak X v${{ steps.version.outputs.VERSION }}
           draft: false
           prerelease: false
-          generate_release_notes: true
+          generate_release_notes: false
           files: ${{ steps.package.outputs.ZIP_PATH }}
-          body: |
-            ## Repak GUI Revamped v${{ steps.version.outputs.VERSION }}
-            
-            **Public Download Link:** ${{ steps.r2_upload.outputs.DOWNLOAD_URL }}
-            
-            This release was automatically generated.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Post Release to Discord
+      - name: Notify Discord
         if: success()
         shell: pwsh
         env:
@@ -210,57 +158,22 @@ jobs:
         run: |
           $version = "${{ steps.version.outputs.VERSION }}"
           
-          $zipSize = "${{ steps.package.outputs.ZIP_SIZE }}"
-          $downloadUrl = "${{ steps.r2_upload.outputs.DOWNLOAD_URL }}"
-          
           if (-not $env:DISCORD_WEBHOOK) {
             Write-Host "Discord webhook not configured, skipping notification" -ForegroundColor Yellow
             exit 0
           }
           
-          Write-Host "Posting release to Discord..." -ForegroundColor Cyan
-          Write-Host "Download URL: $downloadUrl" -ForegroundColor Yellow
+          Write-Host "Sending Discord notification..." -ForegroundColor Cyan
           
-          # Create Discord embed
           $payload = @{
-            content = "<@&1448687070296936600>"
-            embeds = @(
-              @{
-                title = "🚀 New Release: Repak X v$version"
-                description = "A new version has been released!`n`n**What's New:**`n• Fresh build with latest changes"
-                color = 9109504 # Dark Red color
-                fields = @(
-                  @{
-                    name = "📦 Package"
-                    value = "``Repak-X-v$version.zip``"
-                    inline = $true
-                  }
-                  @{
-                    name = "📊 Size"
-                    value = "$zipSize MB"
-                    inline = $true
-                  }
-                  @{
-                    name = "⬇️ Download"
-                    value = "**[Click here to download]($downloadUrl)**"
-                    inline = $false
-                  }
-                )
-                timestamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
-                footer = @{
-                  text = "Repak X • Auto-Release"
-                }
-              }
-            )
-          } | ConvertTo-Json -Depth 10
+            content = "<@&1472639362557542510> <:RepakXApp:1448417099318956133> **Repak X v$version** is now available!`nhttps://github.com/XzantGaming/Repak-X/releases/latest"
+          } | ConvertTo-Json -Depth 5
           
-          # Send to Discord
           try {
             Invoke-RestMethod -Uri $env:DISCORD_WEBHOOK -Method Post -Body $payload -ContentType 'application/json'
-            Write-Host "✅ Release posted to Discord successfully!" -ForegroundColor Green
+            Write-Host "Discord notification sent successfully!" -ForegroundColor Green
           } catch {
-            Write-Host "❌ Failed to post to Discord: $_" -ForegroundColor Red
-            Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host "Failed to notify Discord: $($_.Exception.Message)" -ForegroundColor Red
           }
 
       - name: Upload Build Artifacts
