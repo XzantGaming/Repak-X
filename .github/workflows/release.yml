@@ -111,7 +111,7 @@ jobs:
         shell: pwsh
         run: |
           Write-Host "Creating ZIP distribution package..." -ForegroundColor Cyan
-          .\build_and_package.ps1 -Configuration release -Zip
+          .\scripts\Repak-X_scripts\build_and_package.ps1 -Configuration release -Zip
           
           $version = "${{ steps.version.outputs.VERSION }}"
           $zipPath = "dist\Repak-X-v$version.zip"
