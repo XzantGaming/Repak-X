@@ -55,7 +55,7 @@ pub fn convert_to_iostore_directory(
             // Construct full path to Usmap folder in roaming directory
             let usmap_dir = dirs::config_dir()
                 .unwrap_or_else(|| std::path::PathBuf::from("."))
-                .join("RepakGuiRevamped")
+                .join("Repak-X")
                 .join("Usmap");
             let usmap_file = usmap_dir.join(&pak.usmap_path);
             if usmap_file.exists() {
@@ -222,7 +222,7 @@ pub fn convert_to_iostore_directory(
     let usmap_full_path = if !pak.usmap_path.is_empty() {
         let usmap_dir = dirs::config_dir()
             .unwrap_or_else(|| std::path::PathBuf::from("."))
-            .join("RepakGuiRevamped")
+            .join("Repak-X")
             .join("Usmap");
         let usmap_file = usmap_dir.join(&pak.usmap_path);
         if usmap_file.exists() {

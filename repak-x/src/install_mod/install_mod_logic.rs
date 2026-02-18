@@ -79,7 +79,7 @@ pub fn normalize_mod_base_name(name: &str, min_nines: usize) -> String {
 pub fn record_installed_tags(base_name: &str, tags: &Vec<String>) {
     if tags.is_empty() { return; }
     let mut cfg_dir = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
-    cfg_dir.push("repak_manager");
+    cfg_dir.push("Repak-X");
     let _ = fs::create_dir_all(&cfg_dir);
     let mut path = cfg_dir.clone();
     path.push("pending_custom_tags.json");

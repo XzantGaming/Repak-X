@@ -102,7 +102,7 @@ pub fn get_character_name_from_id(char_id: &str) -> Option<String> {
 pub fn character_data_path() -> PathBuf {
     let app_dir = dirs::config_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("RepakGuiRevamped");
+        .join("Repak-X");
     
     // Ensure directory exists
     let _ = fs::create_dir_all(&app_dir);
@@ -571,7 +571,7 @@ where
     reset_cancel_flag();
     
     let client = reqwest::Client::builder()
-        .user_agent("RepakGuiRevamped/1.0")
+        .user_agent("Repak-X/1.0")
         .timeout(std::time::Duration::from_secs(30))
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;

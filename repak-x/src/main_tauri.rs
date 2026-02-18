@@ -2823,7 +2823,7 @@ async fn remove_custom_tag(
 /// 
 /// # Behavior
 /// - Deletes ALL existing .usmap files in the roaming Usmap folder before copying
-/// - Copies the new file to `%APPDATA%/RepakGuiRevamped/Usmap/`
+/// - Copies the new file to `%APPDATA%/Repak-X/Usmap/`
 /// - Only one USMAP file should exist at a time
 #[tauri::command]
 async fn copy_usmap_to_folder(source_path: String) -> Result<String, String> {
@@ -2886,7 +2886,7 @@ async fn get_usmap_path(state: State<'_, Arc<Mutex<AppState>>>) -> Result<String
 /// Get the USMAP directory path in the roaming folder.
 /// 
 /// # Returns
-/// Full path to `%APPDATA%/RepakGuiRevamped/Usmap/`
+/// Full path to `%APPDATA%/Repak-X/Usmap/`
 #[tauri::command]
 async fn get_usmap_dir_path() -> Result<String, String> {
     Ok(usmap_dir().to_string_lossy().to_string())
@@ -4825,7 +4825,7 @@ async fn identify_mod_character(file_paths: Vec<String>) -> Result<Option<(Strin
 fn app_dir() -> PathBuf {
     dirs::config_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("RepakGuiRevamped")
+        .join("Repak-X")
 }
 
 /// Directory for USMAP files - stored in roaming folder
