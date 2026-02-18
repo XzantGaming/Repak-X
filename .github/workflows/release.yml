@@ -146,7 +146,7 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: false
-          files: ${{ steps.package.outputs.ZIP_PATH }}
+          files: dist/Repak-X-v${{ steps.version.outputs.VERSION }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
