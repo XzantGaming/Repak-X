@@ -1,0 +1,65 @@
+.changelog-modal {
+    max-width: 550px;
+}
+
+.changelog-modal .modal-body {
+    overflow-y: auto;
+    max-height: 60vh;
+}
+
+.changelog-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.changelog-section-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--accent-primary, #4a9eff);
+    margin: 0.75rem 0 0.25rem 0;
+}
+
+.changelog-section-title:first-child {
+    margin-top: 0;
+}
+
+.changelog-list {
+    list-style: none;
+    padding-left: 1rem;
+    margin: 0.25rem 0;
+}
+
+.changelog-list li {
+    position: relative;
+    padding: 0.2rem 0;
+    padding-left: 0.75rem;
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.changelog-list li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.65em;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--accent-primary, #4a9eff);
+}
+
+.changelog-text {
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+    margin: 0.25rem 0;
+    line-height: 1.5;
+}
+
+.changelog-empty {
+    color: var(--text-secondary);
+    font-style: italic;
+    text-align: center;
+    padding: 2rem 0;
+}

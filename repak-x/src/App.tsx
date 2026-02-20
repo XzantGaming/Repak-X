@@ -41,6 +41,7 @@ import QuickOrganizeOverlay from './components/QuickOrganizeOverlay'
 import InputPromptModal from './components/InputPromptModal'
 import UpdateModModal from './components/UpdateModModal'
 import UpdateAppModal from './components/UpdateAppModal'
+import ChangelogModal from './components/ChangelogModal'
 import PromiseTransitionLoader from './components/PromiseTransitionLoader'
 import { AuroraText } from './components/ui/AuroraText'
 import { AlertProvider, useAlert } from './components/AlertHandler'
@@ -213,6 +214,8 @@ function App() {
   const [updateDownloadProgress, setUpdateDownloadProgress] = useState<UpdateDownloadProgress | null>(null); // { percentage, status }
   const [downloadedUpdatePath, setDownloadedUpdatePath] = useState<string | null>(null);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [showChangelogModal, setShowChangelogModal] = useState(false);
+  const [changelogContent, setChangelogContent] = useState('');
 
   // Panel visibility state - grouped for cleaner management
   const [panels, setPanels] = useState<PanelState>({
@@ -1080,6 +1083,27 @@ function App() {
 
       const ver = await invoke('get_app_version') as any
       setVersion(ver)
+
+      // Check if we just updated — show changelog if version changed
+      const lastSeen = localStorage.getItem('lastSeenVersion')
+      if (lastSeen && lastSeen !== ver) {
+        try {
+          const res = await fetch(
+            `https://api.github.com/repos/XzantGaming/Repak-X/releases/tags/v${ver}`,
+            { headers: { 'Accept': 'application/vnd.github.v3+json' } }
+          )
+          if (res.ok) {
+            const release = await res.json()
+            if (release.body) {
+              setChangelogContent(release.body)
+              setShowChangelogModal(true)
+            }
+          }
+        } catch (err) {
+          console.warn('Failed to fetch changelog:', err)
+        }
+      }
+      localStorage.setItem('lastSeenVersion', ver)
 
       // Fetch character data from backend (up-to-date from GitHub sync)
       try {
@@ -2597,6 +2621,13 @@ function App() {
         onApply={handleApplyUpdate}
         onOpenReleasePage={(url: string) => invoke('open_in_explorer', { path: url })}
         onClose={handleCancelUpdate}
+      />
+
+      <ChangelogModal
+        isOpen={showChangelogModal}
+        version={version}
+        changelog={changelogContent}
+        onClose={() => setShowChangelogModal(false)}
       />
 
 
