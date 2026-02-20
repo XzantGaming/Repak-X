@@ -40,7 +40,7 @@ const CONTRIBUTORS: Contributor[] = [
     {
         name: 'Xzant',
         role: 'Backend Developer, Project Founder',
-        avatar: 'https://cdn.discordapp.com/avatars/771103606010806283/e666c4287efbcc05d3d851626c5f9e56.webp',
+        avatar: 'https://avatars.githubusercontent.com/u/186908189?v=4',
         link: 'https://github.com/XzantGaming',
         badge: 'developer'
     },

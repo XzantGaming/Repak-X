@@ -425,11 +425,15 @@
 .no-uassets-badge {
   background: rgba(100, 100, 100, 0.5);
   color: #ddd;
-  padding: 2px 8px;
+  padding: 4px 8px;
   border-radius: 4px;
   font-size: 0.75rem;
   font-weight: 500;
   border: 1px solid rgba(255, 255, 255, 0.15);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .install-mod-card__meta {

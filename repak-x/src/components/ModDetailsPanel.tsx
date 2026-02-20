@@ -32,6 +32,7 @@ type ModDetailsData = {
   additional_categories?: string[]
   has_blueprint?: boolean
   is_iostore?: boolean
+  is_encrypted?: boolean
   [key: string]: any
 }
 
@@ -223,18 +224,42 @@ export default function ModDetailsPanel({ mod, initialDetails, onClose, characte
                     {cat}
                   </div>
                 ))}
-                {details.is_iostore && (
-                  <div className="iostore-badge">IoStore Package</div>
-                )}
-                {/* No UAssets badge - show if mod has no .uasset files (but not for IoStore bundles) */}
-                {!details.is_iostore && details.files && details.files.length > 0 && !details.files.some(f => f.toLowerCase().endsWith('.uasset')) && (
-                  <div className="no-uassets-badge" title="This mod contains no UAsset files">No UAssets</div>
-                )}
               </div>
             </div>
 
             <div className="detail-section">
               <h3>Information</h3>
+              <div className="badges-group" style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                {(details.is_iostore || details.is_encrypted) && (
+                  <div style={{ display: 'flex', gap: '0' }}>
+                    {details.is_iostore && (
+                      <div className="iostore-badge" style={{ borderTopRightRadius: details.is_encrypted ? '0' : '4px', borderBottomRightRadius: details.is_encrypted ? '0' : '4px' }}>IO Store Bundle</div>
+                    )}
+                    {details.is_encrypted && (
+                      <div className="encrypted-badge" style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '0.4rem 0.75rem',
+                        borderTopLeftRadius: details.is_iostore ? '0' : '4px',
+                        borderBottomLeftRadius: details.is_iostore ? '0' : '4px',
+                        borderTopRightRadius: '4px',
+                        borderBottomRightRadius: '4px',
+                        fontWeight: 600,
+                        fontSize: '0.85rem',
+                        background: 'rgba(59, 130, 246, 0.15)',
+                        color: '#60a5fa',
+                        border: '1px solid rgba(59, 130, 246, 0.35)',
+                        borderLeft: details.is_iostore ? 'none' : '1px solid rgba(59, 130, 246, 0.35)'
+                      }} title="This mod package is encrypted">Encrypted</div>
+                    )}
+                  </div>
+                )}
+                {/* No UAssets badge - show if mod has no .uasset files (but not for IoStore bundles) */}
+                {!details.is_iostore && details.files && details.files.length > 0 && !details.files.some(f => f.toLowerCase().endsWith('.uasset')) && (
+                  <div className="no-uassets-badge" title="This mod contains no UAsset files" style={{ padding: '0.4rem 0.75rem', display: 'inline-block' }}>No UAssets</div>
+                )}
+              </div>
               <div className="detail-item">
                 <span className="detail-label">Assets Count:</span>
                 <span className="detail-value">{details.file_count}</span>

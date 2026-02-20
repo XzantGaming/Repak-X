@@ -255,6 +255,7 @@ body {
 .content-wrapper {
   flex-shrink: 0;
   overflow: hidden;
+  min-width: 180px;
 }
 
 .right-panel {
@@ -1569,6 +1570,8 @@ input[type="text"]:focus {
   flex-direction: column;
   overflow: hidden;
   min-height: 0;
+  min-width: 260px;
+  flex: 1;
 }
 
 .center-header {

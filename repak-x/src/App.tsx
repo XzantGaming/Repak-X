@@ -1295,6 +1295,7 @@ function App() {
       setGamePath(path)
       setStatus('Game path detected: ' + path)
       await loadMods()
+      await loadFolders()
     } catch (error) {
       setStatus('Failed to auto-detect: ' + error)
     } finally {
@@ -1315,6 +1316,7 @@ function App() {
         setGamePath(selected)
         setStatus('Game path set: ' + selected)
         await loadMods()
+        await loadFolders()
       }
     } catch (error) {
       setStatus('Error setting game path: ' + error)
@@ -2523,17 +2525,17 @@ function App() {
       {(() => {
         const promptPathCount = newFolderPrompt ? newFolderPrompt.paths.length : 0
         return (
-      <InputPromptModal
-        isOpen={!!newFolderPrompt}
-        title={promptPathCount > 0 ? "Create Folder & Install" : "Create New Folder"}
-        placeholder="Enter folder name..."
-        confirmText={promptPathCount > 0 ? "Create & Install" : "Create"}
-        onConfirm={handleNewFolderConfirm}
-        onCancel={() => {
-          setNewFolderPrompt(null)
-          setStatus('Folder creation cancelled')
-        }}
-      />
+          <InputPromptModal
+            isOpen={!!newFolderPrompt}
+            title={promptPathCount > 0 ? "Create Folder & Install" : "Create New Folder"}
+            placeholder="Enter folder name..."
+            confirmText={promptPathCount > 0 ? "Create & Install" : "Create"}
+            onConfirm={handleNewFolderConfirm}
+            onCancel={() => {
+              setNewFolderPrompt(null)
+              setStatus('Folder creation cancelled')
+            }}
+          />
         )
       })()}
 
