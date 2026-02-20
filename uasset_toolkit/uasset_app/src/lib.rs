@@ -50,28 +50,53 @@ impl SyncToolkit {
     }
     
     fn find_tool_path() -> Result<String> {
+        let exe_name = Self::get_tool_executable_name();
         let exe_path = std::env::current_exe()?;
         let exe_dir = exe_path.parent().context("Failed to get executable directory")?;
-        let tool_path = exe_dir.join("uassettool").join("UAssetTool.exe");
+        let tool_path = exe_dir.join("uassettool").join(exe_name);
         
         if tool_path.exists() {
             return Ok(tool_path.to_string_lossy().to_string());
         }
         
         // Try relative to workspace
-        let workspace_tool = Path::new("target/uassettool/UAssetTool.exe");
+        let workspace_tool = Path::new("target/uassettool").join(exe_name);
         if workspace_tool.exists() {
             return Ok(workspace_tool.to_string_lossy().to_string());
         }
         
-        // Try dev path
-        let dev_tool = Path::new("uasset_toolkit/tools/UAssetTool/bin/Release/net8.0/win-x64/publish/UAssetTool.exe");
+        // Try dev path with platform-specific runtime identifier
+        let runtime_id = Self::get_runtime_identifier();
+        let dev_tool = Path::new("uasset_toolkit/tools/UAssetTool/bin/Release/net8.0")
+            .join(runtime_id)
+            .join("publish")
+            .join(exe_name);
         if dev_tool.exists() {
             return Ok(dev_tool.to_string_lossy().to_string());
         }
         
         // Default assumption
         Ok(tool_path.to_string_lossy().to_string())
+    }
+    
+    /// Get the executable name based on the current platform
+    fn get_tool_executable_name() -> &'static str {
+        #[cfg(windows)]
+        { "UAssetTool.exe" }
+        #[cfg(not(windows))]
+        { "UAssetTool" }
+    }
+    
+    /// Get the .NET runtime identifier for the current platform
+    fn get_runtime_identifier() -> &'static str {
+        #[cfg(target_os = "windows")]
+        { "win-x64" }
+        #[cfg(target_os = "linux")]
+        { "linux-x64" }
+        #[cfg(target_os = "macos")]
+        { "osx-x64" }
+        #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
+        { "win-x64" } // fallback
     }
     
     fn send_request(&self, request: &UAssetRequest) -> Result<UAssetResponse> {

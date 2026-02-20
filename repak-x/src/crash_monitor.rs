@@ -18,17 +18,70 @@ pub struct CrashInfo {
 
 /// Get the path to Marvel Rivals crash logs directory
 pub fn get_crash_log_path() -> PathBuf {
-    let local_appdata = std::env::var("LOCALAPPDATA")
-        .unwrap_or_else(|_| {
-            // Fallback to default Windows path
-            let userprofile = std::env::var("USERPROFILE").unwrap_or_default();
-            format!("{}\\AppData\\Local", userprofile)
-        });
+    #[cfg(target_os = "windows")]
+    {
+        let local_appdata = std::env::var("LOCALAPPDATA")
+            .unwrap_or_else(|_| {
+                // Fallback to default Windows path
+                let userprofile = std::env::var("USERPROFILE").unwrap_or_default();
+                format!("{}\\AppData\\Local", userprofile)
+            });
+        
+        PathBuf::from(local_appdata)
+            .join("Marvel")
+            .join("Saved")
+            .join("Crashes")
+    }
     
-    PathBuf::from(local_appdata)
-        .join("Marvel")
-        .join("Saved")
-        .join("Crashes")
+    #[cfg(target_os = "linux")]
+    {
+        // Marvel Rivals on Linux runs via Steam Proton
+        // Crash logs are in the Proton prefix for the game (AppID: 2767030)
+        if let Some(home) = dirs::home_dir() {
+            // Try common Steam library locations
+            let steam_paths = [
+                home.join(".steam/steam"),
+                home.join(".local/share/Steam"),
+                home.join("SteamLibrary"),
+            ];
+            
+            for steam_path in &steam_paths {
+                let crash_path = steam_path
+                    .join("steamapps/compatdata/2767030/pfx/drive_c/users/steamuser/AppData/Local/Marvel/Saved/Crashes");
+                if crash_path.exists() {
+                    return crash_path;
+                }
+            }
+            
+            // Default to first path even if it doesn't exist yet
+            return steam_paths[0]
+                .join("steamapps/compatdata/2767030/pfx/drive_c/users/steamuser/AppData/Local/Marvel/Saved/Crashes");
+        }
+        
+        // Fallback if home dir not found
+        PathBuf::from("/home")
+            .join(std::env::var("USER").unwrap_or_else(|_| "user".to_string()))
+            .join(".steam/steam/steamapps/compatdata/2767030/pfx/drive_c/users/steamuser/AppData/Local/Marvel/Saved/Crashes")
+    }
+    
+    #[cfg(target_os = "macos")]
+    {
+        // macOS - Marvel Rivals may run via CrossOver or similar
+        // TODO: Determine actual path when macOS support is added
+        if let Some(home) = dirs::home_dir() {
+            home.join("Library/Application Support/Marvel/Saved/Crashes")
+        } else {
+            PathBuf::from("/Users")
+                .join(std::env::var("USER").unwrap_or_else(|_| "user".to_string()))
+                .join("Library/Application Support/Marvel/Saved/Crashes")
+        }
+    }
+    
+    #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
+    {
+        // Fallback for other platforms
+        PathBuf::new()
+    }
 }
 
 /// Check for new crash folders created after a specific time

@@ -4393,6 +4393,165 @@ del "%~f0"
             .map_err(|e| format!("Failed to launch updater: {}", e))?;
     }
     
+    #[cfg(target_os = "linux")]
+    {
+        // On Linux, create and run a shell script for updating
+        let linux_script_path = std::env::temp_dir().join("repakx_updater.sh");
+        let linux_script = if is_zip {
+            format!(r#"#!/bin/bash
+echo "============================================"
+echo "RepakX Portable Update"
+echo "============================================"
+echo ""
+echo "Waiting for RepakX to close..."
+sleep 2
+
+# Wait for process to exit
+while pgrep -f "{exe_name}" > /dev/null; do
+    echo "Still running, waiting..."
+    sleep 1
+done
+
+echo "RepakX closed. Starting update..."
+echo ""
+
+# Extract update
+TEMP_DIR="{temp_dir}"
+ZIP_PATH="{zip_path}"
+APP_DIR="{app_dir}"
+
+echo "Extracting update archive..."
+mkdir -p "$TEMP_DIR/extracted"
+unzip -o "$ZIP_PATH" -d "$TEMP_DIR/extracted"
+
+# Check for nested folder
+EXTRACTED_DIR="$TEMP_DIR/extracted"
+SUBDIR_COUNT=$(find "$EXTRACTED_DIR" -maxdepth 1 -type d | wc -l)
+if [ "$SUBDIR_COUNT" -eq 2 ]; then
+    SUBDIR=$(find "$EXTRACTED_DIR" -maxdepth 1 -type d ! -path "$EXTRACTED_DIR")
+    if [ -f "$SUBDIR/REPAK-X" ] || [ -f "$SUBDIR/repak-x" ]; then
+        EXTRACTED_DIR="$SUBDIR"
+    fi
+fi
+
+echo "Source: $EXTRACTED_DIR"
+echo "Destination: $APP_DIR"
+echo ""
+
+echo "Copying new files..."
+cp -rf "$EXTRACTED_DIR"/* "$APP_DIR/"
+chmod +x "$APP_DIR/REPAK-X" 2>/dev/null || true
+
+echo "Cleaning up..."
+rm -rf "$TEMP_DIR"
+
+echo ""
+echo "============================================"
+echo "Update complete!"
+echo "============================================"
+echo ""
+echo "Launching RepakX..."
+sleep 2
+"{exe_path}" &
+
+# Delete this script
+rm -f "$0"
+"#,
+                exe_name = exe_name,
+                temp_dir = download_path.parent().unwrap_or(&std::env::temp_dir()).to_string_lossy(),
+                zip_path = download_path.to_string_lossy(),
+                app_dir = app_dir.to_string_lossy(),
+                exe_path = exe_path.to_string_lossy(),
+            )
+        } else {
+            // For non-zip files on Linux (AppImage, etc.)
+            format!(r#"#!/bin/bash
+echo "Waiting for RepakX to close..."
+sleep 2
+
+while pgrep -f "{exe_name}" > /dev/null; do
+    sleep 1
+done
+
+echo "Installing update..."
+chmod +x "{installer_path}"
+"{installer_path}"
+
+rm -f "{installer_path}"
+rm -f "$0"
+"#,
+                exe_name = exe_name,
+                installer_path = download_path.to_string_lossy(),
+            )
+        };
+        
+        std::fs::write(&linux_script_path, linux_script)
+            .map_err(|e| format!("Failed to write Linux updater script: {}", e))?;
+        
+        // Make script executable
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(&linux_script_path)
+                .map_err(|e| format!("Failed to get script metadata: {}", e))?
+                .permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&linux_script_path, perms)
+                .map_err(|e| format!("Failed to set script permissions: {}", e))?;
+        }
+        
+        std::process::Command::new("bash")
+            .arg(&linux_script_path)
+            .spawn()
+            .map_err(|e| format!("Failed to launch updater: {}", e))?;
+    }
+    
+    #[cfg(target_os = "macos")]
+    {
+        // macOS updater - similar to Linux
+        let macos_script_path = std::env::temp_dir().join("repakx_updater.sh");
+        let macos_script = format!(r#"#!/bin/bash
+echo "Waiting for RepakX to close..."
+sleep 2
+
+while pgrep -f "{exe_name}" > /dev/null; do
+    sleep 1
+done
+
+echo "Installing update..."
+unzip -o "{zip_path}" -d "{app_dir}"
+
+echo "Update complete! Launching RepakX..."
+open "{exe_path}"
+
+rm -f "$0"
+"#,
+            exe_name = exe_name,
+            zip_path = download_path.to_string_lossy(),
+            app_dir = app_dir.to_string_lossy(),
+            exe_path = exe_path.to_string_lossy(),
+        );
+        
+        std::fs::write(&macos_script_path, macos_script)
+            .map_err(|e| format!("Failed to write macOS updater script: {}", e))?;
+        
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(&macos_script_path)
+                .map_err(|e| format!("Failed to get script metadata: {}", e))?
+                .permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&macos_script_path, perms)
+                .map_err(|e| format!("Failed to set script permissions: {}", e))?;
+        }
+        
+        std::process::Command::new("bash")
+            .arg(&macos_script_path)
+            .spawn()
+            .map_err(|e| format!("Failed to launch updater: {}", e))?;
+    }
+    
     info!("Updater script launched, app will update on close");
     
     // Emit event to notify frontend that update is ready
@@ -5618,9 +5777,64 @@ fn register_protocol_handler() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(target_os = "linux")]
 fn register_protocol_handler() -> Result<(), Box<dyn std::error::Error>> {
-    // No-op on non-Windows platforms
+    // On Linux, register the protocol handler via .desktop file
+    // This creates a user-local .desktop file in ~/.local/share/applications/
+    
+    let exe_path = std::env::current_exe()?;
+    let exe_path_str = exe_path.to_string_lossy();
+    
+    // Create the .desktop file content
+    let desktop_content = format!(r#"[Desktop Entry]
+Type=Application
+Name=Repak X
+Comment=Marvel Rivals Mod Manager
+Exec="{}" %u
+Icon=repakx
+Terminal=false
+Categories=Game;Utility;
+MimeType=x-scheme-handler/repakx;
+StartupNotify=true
+"#, exe_path_str);
+    
+    // Get the applications directory
+    if let Some(home) = dirs::home_dir() {
+        let applications_dir = home.join(".local/share/applications");
+        std::fs::create_dir_all(&applications_dir)?;
+        
+        let desktop_file = applications_dir.join("repakx.desktop");
+        std::fs::write(&desktop_file, desktop_content)?;
+        
+        // Update the MIME database to register the handler
+        // This is done via xdg-mime or update-desktop-database
+        let _ = std::process::Command::new("update-desktop-database")
+            .arg(&applications_dir)
+            .output();
+        
+        // Also try to set as default handler
+        let _ = std::process::Command::new("xdg-mime")
+            .args(["default", "repakx.desktop", "x-scheme-handler/repakx"])
+            .output();
+        
+        info!("Registered repakx:// protocol handler for Linux: {}", exe_path_str);
+    }
+    
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn register_protocol_handler() -> Result<(), Box<dyn std::error::Error>> {
+    // On macOS, protocol handlers are registered via Info.plist in the app bundle
+    // This is typically done at build time, not runtime
+    // For now, just log that it's not implemented
+    info!("macOS protocol handler registration is handled via Info.plist at build time");
+    Ok(())
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
+fn register_protocol_handler() -> Result<(), Box<dyn std::error::Error>> {
+    // No-op on other platforms
     Ok(())
 }
 

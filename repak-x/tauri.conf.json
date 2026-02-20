@@ -4,8 +4,8 @@
   "version": "1.0.0",
   "identifier": "com.xzantgaming.repakx",
   "build": {
-    "beforeDevCommand": "npm-dev.bat",
-    "beforeBuildCommand": "npm-build.bat",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
     "devUrl": "http://localhost:5173",
     "frontendDist": "dist"
   },

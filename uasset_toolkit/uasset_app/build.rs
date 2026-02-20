@@ -3,6 +3,45 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+/// Get the runtime identifier for the current target platform
+fn get_runtime_identifier() -> &'static str {
+    // Check CARGO_CFG_TARGET_OS which is set during cross-compilation
+    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_else(|_| {
+        if cfg!(target_os = "windows") {
+            "windows".to_string()
+        } else if cfg!(target_os = "linux") {
+            "linux".to_string()
+        } else if cfg!(target_os = "macos") {
+            "macos".to_string()
+        } else {
+            "windows".to_string() // default fallback
+        }
+    });
+    
+    match target_os.as_str() {
+        "linux" => "linux-x64",
+        "macos" => "osx-x64",
+        _ => "win-x64",
+    }
+}
+
+/// Get the executable name for the current target platform
+fn get_executable_name() -> &'static str {
+    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_else(|_| {
+        if cfg!(target_os = "windows") {
+            "windows".to_string()
+        } else {
+            "linux".to_string()
+        }
+    });
+    
+    if target_os == "windows" {
+        "UAssetTool.exe"
+    } else {
+        "UAssetTool"
+    }
+}
+
 fn main() {
     let out_dir = env::var("OUT_DIR").unwrap();
     let target_dir = Path::new(&out_dir)
@@ -52,7 +91,11 @@ fn main() {
         );
     }
 
-    let dest_exe = tool_output_dir.join("UAssetTool.exe");
+    let runtime_id = get_runtime_identifier();
+    let exe_name = get_executable_name();
+    let dest_exe = tool_output_dir.join(exe_name);
+
+    println!("cargo:warning=Building for runtime: {}, executable: {}", runtime_id, exe_name);
 
     // Force rebuild if output doesn't exist
     if !dest_exe.exists() {
@@ -80,7 +123,7 @@ fn main() {
                 "-c",
                 "Release",
                 "-r",
-                "win-x64",
+                runtime_id,
                 "--self-contained",
                 "true",
                 "-o",
@@ -110,7 +153,7 @@ fn main() {
             }
         }
     } else {
-        println!("cargo:warning=dotnet not found; attempting to use precompiled UAssetTool.exe");
+        println!("cargo:warning=dotnet not found; attempting to use precompiled UAssetTool");
     }
 
     // 2) If publish not successful, fallback to existing precompiled build
@@ -120,21 +163,21 @@ fn main() {
                 .join("bin")
                 .join("Release")
                 .join("net8.0")
-                .join("win-x64")
+                .join(runtime_id)
                 .join("publish")
-                .join("UAssetTool.exe"),
+                .join(exe_name),
             tool_project_dir
                 .join("bin")
                 .join("Release")
                 .join("net8.0")
-                .join("win-x64")
-                .join("UAssetTool.exe"),
+                .join(runtime_id)
+                .join(exe_name),
             tool_project_dir
                 .join("bin")
                 .join("Debug")
                 .join("net8.0")
-                .join("win-x64")
-                .join("UAssetTool.exe"),
+                .join(runtime_id)
+                .join(exe_name),
         ];
 
         let mut copied = false;
@@ -160,7 +203,8 @@ fn main() {
         }
 
         if !copied {
-            panic!("UAssetTool.exe is required but was not produced. Ensure .NET SDK is installed or precompile via: 'dotnet publish UassetToolRivals/src/UAssetTool -c Release -r win-x64 --self-contained true'");
+            let build_cmd = format!("dotnet publish UassetToolRivals/src/UAssetTool -c Release -r {} --self-contained true", runtime_id);
+            panic!("UAssetTool is required but was not produced. Ensure .NET SDK is installed or precompile via: '{}'", build_cmd);
         }
     }
 }
