@@ -4429,8 +4429,8 @@ echo Launching RepakX...
 timeout /t 2 /nobreak >nul
 start "" "{exe_path}"
 
-:: Self-delete without "batch file cannot be found" error
-(goto) 2>nul & del "%~f0"
+:: Self-delete and exit cleanly
+(goto) 2>nul & del "%~f0" & exit
 "#,
             exe_name = exe_name,
             temp_dir = download_path.parent().unwrap_or(&std::env::temp_dir()).to_string_lossy().replace('/', "\\"),
@@ -4458,8 +4458,8 @@ start /wait "" "{installer_path}"
 echo Cleaning up...
 del "{installer_path}"
 
-:: Self-delete without "batch file cannot be found" error
-(goto) 2>nul & del "%~f0"
+:: Self-delete and exit cleanly
+(goto) 2>nul & del "%~f0" & exit
 "#,
             exe_name = exe_name,
             installer_path = download_path.to_string_lossy().replace('/', "\\"),
