@@ -4206,37 +4206,53 @@ async fn download_update(
     
     let total_size = response.content_length();
     let mut downloaded: u64 = 0;
+    let mut last_emitted_pct: i32 = -1;
     
     // Create file and stream the download
     let mut file = tokio::fs::File::create(&download_path)
         .await
         .map_err(|e| format!("Failed to create download file: {}", e))?;
     
-    let mut stream = response.bytes_stream();
-    use futures::StreamExt;
+    // Read in small fixed-size pieces (64 KB) for smooth progress updates
+    let mut body = response;
     
-    while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| format!("Download stream error: {}", e))?;
-        file.write_all(&chunk)
-            .await
-            .map_err(|e| format!("Failed to write chunk: {}", e))?;
-        
-        downloaded += chunk.len() as u64;
-        
-        let percentage = if let Some(total) = total_size {
-            (downloaded as f32 / total as f32) * 100.0
-        } else {
-            -1.0 // Indeterminate
+    loop {
+        let n = body.chunk().await.map_err(|e| format!("Download stream error: {}", e))?;
+        let chunk = match n {
+            Some(c) => c,
+            None => break,
         };
         
-        // Emit progress event
-        let progress = UpdateDownloadProgress {
-            downloaded_bytes: downloaded,
-            total_bytes: total_size,
-            percentage,
-            status: "downloading".to_string(),
-        };
-        let _ = window.emit("update_download_progress", &progress);
+        // Write the network chunk in 64 KB slices to get granular progress
+        let mut offset = 0;
+        while offset < chunk.len() {
+            let end = (offset + 65_536).min(chunk.len());
+            file.write_all(&chunk[offset..end])
+                .await
+                .map_err(|e| format!("Failed to write chunk: {}", e))?;
+            
+            downloaded += (end - offset) as u64;
+            offset = end;
+            
+            let percentage = if let Some(total) = total_size {
+                (downloaded as f32 / total as f32) * 100.0
+            } else {
+                -1.0
+            };
+            
+            // Only emit when percentage changes by >= 1% to avoid flooding
+            let pct_int = percentage as i32;
+            if pct_int > last_emitted_pct {
+                last_emitted_pct = pct_int;
+                let progress = UpdateDownloadProgress {
+                    downloaded_bytes: downloaded,
+                    total_bytes: total_size,
+                    percentage,
+                    status: "downloading".to_string(),
+                };
+                let _ = window.emit("update_download_progress", &progress);
+            }
+        }
     }
     
     file.flush().await.map_err(|e| format!("Failed to flush file: {}", e))?;
