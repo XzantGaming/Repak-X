@@ -180,6 +180,9 @@ async fn try_bore_tunnel(local_port: u16) -> Option<(String, u16, tokio::task::J
         }
     });
 
+    // Give the listen task time to start accepting forwarded connections
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
     Some(("bore.pub".to_string(), remote_port, handle))
 }
 
@@ -449,45 +452,59 @@ impl UnifiedP2PManager {
                     d.progress.status = TransferStatus::Connecting;
                 }
 
-                // Build a fresh client for this address (no probe — go directly)
-                let client = crate::p2p_sharing::P2PClient::new(key, addr.clone());
+                // Relay addresses get extra retries (bore tunnel may need warmup)
+                let max_attempts = if addr.contains("bore.pub") { 3 } else { 1 };
 
-                // Update stop flag so cancellation works on this client
-                let client_stop = client.get_stop_flag();
-                if let Some(d) = dl.lock().get_mut(&c) {
-                    d.stop_flag = client_stop.clone();
-                }
-
-                // Publish progress handle for the sync task
-                if let Ok(mut guard) = active_progress.lock() {
-                    *guard = Some(client.progress_handle());
-                }
-
-                match client.download_pack(&out, client_name.clone()) {
-                    Ok(pack) => {
-                        info!(
-                            "[P2P] Download complete! {} mods received via {}",
-                            pack.mods.len(),
-                            addr
-                        );
+                for attempt in 0..max_attempts {
+                    if attempt > 0 {
+                        info!("[P2P] Retrying {} (attempt {}/{})", addr, attempt + 1, max_attempts);
+                        std::thread::sleep(Duration::from_secs(2));
                         if let Some(d) = dl.lock().get_mut(&c) {
-                            d.progress.status = TransferStatus::Completed;
-                            d.progress.files_completed = d.progress.total_files;
+                            d.progress.current_file =
+                                format!("Retrying {} ({}/{})...", addr, attempt + 1, max_attempts);
                         }
-                        let _ = window.emit("mods_dir_changed", ());
-                        return; // success
                     }
-                    Err(crate::p2p_sharing::P2PError::Cancelled) => {
-                        info!("[P2P] Download cancelled by user");
-                        if let Some(d) = dl.lock().get_mut(&c) {
-                            d.progress.status = TransferStatus::Cancelled;
+
+                    // Build a fresh client for this address (no probe — go directly)
+                    let client = crate::p2p_sharing::P2PClient::new(key, addr.clone());
+
+                    // Update stop flag so cancellation works on this client
+                    let client_stop = client.get_stop_flag();
+                    if let Some(d) = dl.lock().get_mut(&c) {
+                        d.stop_flag = client_stop.clone();
+                    }
+
+                    // Publish progress handle for the sync task
+                    if let Ok(mut guard) = active_progress.lock() {
+                        *guard = Some(client.progress_handle());
+                    }
+
+                    match client.download_pack(&out, client_name.clone()) {
+                        Ok(pack) => {
+                            info!(
+                                "[P2P] Download complete! {} mods received via {}",
+                                pack.mods.len(),
+                                addr
+                            );
+                            if let Some(d) = dl.lock().get_mut(&c) {
+                                d.progress.status = TransferStatus::Completed;
+                                d.progress.files_completed = d.progress.total_files;
+                            }
+                            let _ = window.emit("mods_dir_changed", ());
+                            return; // success
                         }
-                        return;
-                    }
-                    Err(e) => {
-                        warn!("[P2P] Transfer via {} failed: {}", addr, e);
-                        last_error = format!("{}: {}", addr, e);
-                        // try next address
+                        Err(crate::p2p_sharing::P2PError::Cancelled) => {
+                            info!("[P2P] Download cancelled by user");
+                            if let Some(d) = dl.lock().get_mut(&c) {
+                                d.progress.status = TransferStatus::Cancelled;
+                            }
+                            return;
+                        }
+                        Err(e) => {
+                            warn!("[P2P] Transfer via {} failed (attempt {}/{}): {}", addr, attempt + 1, max_attempts, e);
+                            last_error = format!("{}: {}", addr, e);
+                            // retry or try next address
+                        }
                     }
                 }
             }

@@ -606,10 +606,13 @@ impl P2PServer {
     /// Handle a single client connection
     fn handle_connection(&self, mut stream: TcpStream, addr: SocketAddr) -> P2PResult<()> {
         stream
-            .set_read_timeout(Some(Duration::from_secs(30)))
+            .set_nodelay(true)
+            .map_err(|e| P2PError::NetworkError(format!("Failed to set nodelay: {}", e)))?;
+        stream
+            .set_read_timeout(Some(Duration::from_secs(120)))
             .map_err(|e| P2PError::NetworkError(format!("Failed to set timeout: {}", e)))?;
         stream
-            .set_write_timeout(Some(Duration::from_secs(30)))
+            .set_write_timeout(Some(Duration::from_secs(120)))
             .map_err(|e| P2PError::NetworkError(format!("Failed to set timeout: {}", e)))?;
 
         // Increment active connections
@@ -842,10 +845,13 @@ impl P2PClient {
             .map_err(|e| P2PError::NetworkError(format!("Failed to connect: {}", e)))?;
 
         stream
-            .set_read_timeout(Some(Duration::from_secs(60)))
+            .set_nodelay(true)
+            .map_err(|e| P2PError::NetworkError(format!("Failed to set nodelay: {}", e)))?;
+        stream
+            .set_read_timeout(Some(Duration::from_secs(120)))
             .map_err(|e| P2PError::NetworkError(format!("Failed to set timeout: {}", e)))?;
         stream
-            .set_write_timeout(Some(Duration::from_secs(60)))
+            .set_write_timeout(Some(Duration::from_secs(120)))
             .map_err(|e| P2PError::NetworkError(format!("Failed to set timeout: {}", e)))?;
 
         // Update progress
