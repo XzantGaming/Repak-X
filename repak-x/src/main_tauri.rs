@@ -27,6 +27,7 @@ use simplelog::{ColorChoice, CombinedLogger, Config, TermLogger, TerminalMode, W
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{Emitter, Listener, Manager, State, Window};
 use utils::find_marvel_rivals;
 use walkdir::WalkDir;
@@ -41,6 +42,8 @@ struct WatcherState {
     watcher: Mutex<Option<RecommendedWatcher>>,
     #[allow(dead_code)]
     last_event_time: Mutex<std::time::Instant>,
+    /// When true, the file watcher suppresses events (e.g. during P2P transfer)
+    paused: Arc<AtomicBool>,
 }
 
 /// P2P Sharing state management
@@ -329,9 +332,14 @@ async fn start_file_watcher(
     let window_clone = window.clone();
     let last_event_time = Arc::new(Mutex::new(std::time::Instant::now()));
     
+    let paused = watcher_state.paused.clone();
     let watcher_result = notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
         match res {
             Ok(event) => {
+                // Skip events while paused (e.g. during P2P transfer)
+                if paused.load(Ordering::Relaxed) {
+                    return;
+                }
                 // We only care about Create, Remove, Rename, and Modify events (files and directories)
                 match event.kind {
                     EventKind::Create(_) | EventKind::Remove(_) | EventKind::Modify(_) => {
@@ -5736,7 +5744,12 @@ async fn p2p_start_receiving(
     window: Window,
     state: State<'_, Arc<Mutex<AppState>>>,
     p2p_state: State<'_, P2PState>,
+    watcher_state: State<'_, WatcherState>,
 ) -> Result<(), String> {
+    // Pause file watcher so incoming files don't trigger mod-list spam
+    watcher_state.paused.store(true, Ordering::Relaxed);
+    info!("[P2P] File watcher paused for transfer");
+
     let output_dir = {
         let state_guard = state.lock().unwrap();
         state_guard.game_path.clone()
@@ -5750,9 +5763,19 @@ async fn p2p_start_receiving(
 
 /// Stop receiving
 #[tauri::command]
-async fn p2p_stop_receiving(p2p_state: State<'_, P2PState>) -> Result<(), String> {
+async fn p2p_stop_receiving(
+    p2p_state: State<'_, P2PState>,
+    watcher_state: State<'_, WatcherState>,
+    window: Window,
+) -> Result<(), String> {
     // Signal all active clients to stop, then clear
     p2p_state.manager.stop_all_downloads();
+
+    // Unpause file watcher and emit one refresh so the mod list picks up new files
+    watcher_state.paused.store(false, Ordering::Relaxed);
+    info!("[P2P] File watcher resumed after transfer");
+    let _ = window.emit("mods_dir_changed", ());
+
     Ok(())
 }
 
@@ -5987,6 +6010,7 @@ fn main() {
     let watcher_state = WatcherState { 
         watcher: Mutex::new(None),
         last_event_time: Mutex::new(std::time::Instant::now()),
+        paused: Arc::new(AtomicBool::new(false)),
     };
     let crash_state = CrashMonitorState {
         game_start_time: Mutex::new(None),
