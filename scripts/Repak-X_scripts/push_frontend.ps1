@@ -79,9 +79,9 @@ if (-not $status) {
     exit 0
 }
 
-# Show what's changed
+# Show what's changed (excluding uasset_toolkit/)
 Write-Host "`nChanged files:" -ForegroundColor Yellow
-git status --short
+git status --short | Where-Object { $_ -notmatch 'uasset_toolkit/' }
 
 # Get commit message
 if (-not $Message) {

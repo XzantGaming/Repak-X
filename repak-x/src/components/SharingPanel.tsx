@@ -27,12 +27,11 @@ type InstalledMod = {
   custom_name?: string;
 };
 
-type ShareSession = {
-  connection_string?: string;
-  peer_id?: string;
-  share_code?: string;
-  encryption_key?: string;
-  [key: string]: any;
+type ShareInfo = {
+  peer_id: string;
+  addresses: string[];
+  encryption_key: string;
+  share_code: string;
 };
 
 type PackPreview = {
@@ -40,12 +39,15 @@ type PackPreview = {
   file_count: number;
 };
 
-type ReceiveProgress = {
-  status?: string | Record<string, unknown>;
-  current_file?: string;
+type TransferStatus = 'Connecting' | 'Handshaking' | 'Transferring' | 'Verifying' | 'Completed' | 'Cancelled' | { Failed: string };
+
+type TransferProgress = {
+  current_file: string;
   files_completed: number;
   total_files: number;
   bytes_transferred: number;
+  total_bytes: number;
+  status: TransferStatus;
 };
 
 type SharingPanelProps = {
@@ -64,7 +66,7 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
   const [packName, setPackName] = useState('');
   const [packDesc, setPackDesc] = useState('');
   const [creatorName, setCreatorName] = useState('User');
-  const [shareSession, setShareSession] = useState<ShareSession | null>(null);
+  const [shareInfo, setShareInfo] = useState<ShareInfo | null>(null);
   const [isSharing, setIsSharing] = useState(false);
   const [selectedModPaths, setSelectedModPaths] = useState<Set<string>>(new Set());
   const [packPreview, setPackPreview] = useState<PackPreview | null>(null);
@@ -75,8 +77,9 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
   const [connectionString, setConnectionString] = useState('');
   const [clientName, setClientName] = useState('User');
   const [isReceiving, setIsReceiving] = useState(false);
-  const [progress, setProgress] = useState<ReceiveProgress | null>(null);
+  const [progress, setProgress] = useState<TransferProgress | null>(null);
   const [receiveComplete, setReceiveComplete] = useState(false);
+  const receiveHandledRef = useRef(false);
   const [isValidCode, setIsValidCode] = useState<boolean | null>(null); // null, true, false
 
   // Initialize selected mods from props
@@ -138,20 +141,33 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
       setIsSharing(sharing);
 
       if (sharing) {
-        const session = await invoke<ShareSession>('p2p_get_share_session');
-        setShareSession(session);
+        const session = await invoke<ShareInfo | null>('p2p_get_share_session');
+        if (session) setShareInfo(session);
       }
 
       const receiving = await invoke('p2p_is_receiving') as any;
-      setIsReceiving(receiving);
 
-      if (receiving) {
-        const prog = await invoke<ReceiveProgress>('p2p_get_receive_progress');
-        setProgress(prog);
-        if (prog && prog.status && prog.status.hasOwnProperty('Completed')) {
-          setReceiveComplete(true);
-          setIsReceiving(false);
-          alert.success('Download Complete', 'All mods have been received and installed.');
+      if (receiving && !receiveHandledRef.current) {
+        setIsReceiving(true);
+        const prog = await invoke<TransferProgress | null>('p2p_get_receive_progress');
+        if (prog) {
+          setProgress(prog);
+          if (prog.status === 'Completed') {
+            receiveHandledRef.current = true;
+            setReceiveComplete(true);
+            setIsReceiving(false);
+            await invoke('p2p_stop_receiving');
+            alert.success('Receive Complete', 'All mods have been received and installed.');
+          } else if (typeof prog.status === 'object' && prog.status !== null && 'Failed' in prog.status) {
+            receiveHandledRef.current = true;
+            setIsReceiving(false);
+            await invoke('p2p_stop_receiving');
+            alert.error('Transfer Failed', (prog.status as { Failed: string }).Failed);
+          } else if (prog.status === 'Cancelled') {
+            receiveHandledRef.current = true;
+            setIsReceiving(false);
+            await invoke('p2p_stop_receiving');
+          }
         }
       }
     } catch (err) {
@@ -159,21 +175,15 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
     }
   };
 
-  // Helper to get the connection string from session
+  // Helper to get the connection string from ShareInfo
   const getConnectionString = () => {
-    if (!shareSession) return '';
-    // If it has connection_string (old ShareSession), use it
-    if (shareSession.connection_string) return shareSession.connection_string;
-    // If it's ShareInfo (new libp2p), encode it
-    if (shareSession.peer_id && shareSession.share_code) {
-      try {
-        return btoa(JSON.stringify(shareSession));
-      } catch (e) {
-        console.error("Failed to encode session", e);
-        return '';
-      }
+    if (!shareInfo) return '';
+    try {
+      return btoa(JSON.stringify(shareInfo));
+    } catch (e) {
+      console.error("Failed to encode ShareInfo", e);
+      return '';
     }
-    return '';
   };
 
   const handleCalculatePreview = async () => {
@@ -214,13 +224,13 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
     });
 
     try {
-      const session = await invoke<ShareSession>('p2p_start_sharing', {
+      const session = await invoke<ShareInfo>('p2p_start_sharing', {
         name: packName,
         description: packDesc,
         modPaths: Array.from(selectedModPaths),
         creator: creatorName
       });
-      setShareSession(session);
+      setShareInfo(session);
       setIsSharing(true);
 
 
@@ -245,14 +255,10 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
 
   const handleStopSharing = async () => {
     try {
-      if (shareSession && shareSession.share_code) {
-        await invoke('p2p_stop_sharing', { shareCode: shareSession.share_code });
-      } else {
-        // Fallback if session is lost but UI thinks we are sharing
-        await invoke('p2p_stop_sharing', { shareCode: "" });
-      }
+      const code = shareInfo?.share_code || '';
+      await invoke('p2p_stop_sharing', { shareCode: code });
 
-      setShareSession(null);
+      setShareInfo(null);
       setIsSharing(false);
 
       alert.info('Sharing Stopped', 'The sharing session has been terminated.');
@@ -289,7 +295,7 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
       },
       {
         loading: { title: 'Connecting', description: 'Establishing connection to host...' },
-        success: { title: 'Connected', description: 'Download starting...' },
+        success: { title: 'Connected', description: 'Receiving starting...' },
         error: (err) => ({ title: 'Connection Failed', description: String(err) })
       }
     );
@@ -300,9 +306,9 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
       await invoke('p2p_stop_receiving');
       setIsReceiving(false);
 
-      alert.info('Download Cancelled', 'The download was cancelled by user.');
+      alert.info('Receive Cancelled', 'The receive was cancelled by user.');
     } catch (err) {
-      alert.error('Cancel Failed', `Failed to stop download: ${err}`);
+      alert.error('Cancel Failed', `Failed to stop receive: ${err}`);
     }
   };
 
@@ -550,7 +556,7 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
                     className="btn-primary btn-large"
                     disabled={isValidCode !== true}
                   >
-                    <DownloadIcon /> Connect & Download
+                    <DownloadIcon /> Connect & Receive
                   </button>
                 </>
               ) : (
@@ -558,46 +564,53 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
                   {receiveComplete ? (
                     <div className="completion-state">
                       <CheckIcon className="success-icon-large" />
-                      <h3>Download Complete!</h3>
-                      <p>All mods have been installed successfully.</p>
+                      <h3>Received Complete!</h3>
+                      <p>All mods have been received and installed successfully.</p>
                       <button
                         onClick={() => {
                           setReceiveComplete(false);
+                          receiveHandledRef.current = false;
                           setConnectionString('');
                           setProgress(null);
                           setIsValidCode(null);
                         }}
                         className="btn-secondary"
                       >
-                        Download Another
+                        Receive Another
                       </button>
                     </div>
                   ) : (
                     <>
-                      <h3>{progress?.status === 'Connecting' ? 'Connecting via relay...' : 'Downloading...'}</h3>
+                      <h3>
+                        {progress?.status === 'Connecting' && 'Connecting...'}
+                        {progress?.status === 'Handshaking' && 'Handshaking...'}
+                        {progress?.status === 'Transferring' && 'Receiving...'}
+                        {progress?.status === 'Verifying' && 'Verifying...'}
+                        {(!progress || (typeof progress.status === 'object')) && 'Receiving...'}
+                      </h3>
                       {progress && (
                         <div className="progress-container">
                           <div className="progress-info">
                             <span>{progress.current_file}</span>
-                            <span>{Math.round((progress.files_completed / progress.total_files) * 100)}%</span>
+                            <span>{progress.total_files > 0 ? `${Math.round((progress.files_completed / progress.total_files) * 100)}%` : '—'}</span>
                           </div>
                           <div className="progress-bar-track">
                             <div
                               className="progress-bar-fill"
-                              style={{ width: `${(progress.files_completed / progress.total_files) * 100}%` }}
+                              style={{ width: progress.total_files > 0 ? `${(progress.files_completed / progress.total_files) * 100}%` : '0%' }}
                             />
                           </div>
                           <div className="progress-stats">
-                            <span>{progress.files_completed} / {progress.total_files} files</span>
+                            <span>{progress.total_files > 0 ? `${progress.files_completed} / ${progress.total_files} files` : 'Waiting for file list...'}</span>
                             <span>{(progress.bytes_transferred / 1024 / 1024).toFixed(1)} MB transferred</span>
                           </div>
                           <div className="status-badge">
-                            {typeof progress.status === 'string' ? progress.status : JSON.stringify(progress.status)}
+                            {typeof progress.status === 'string' ? progress.status : (progress.status as { Failed: string }).Failed}
                           </div>
                         </div>
                       )}
                       <button onClick={handleStopReceiving} className="btn-danger">
-                        Cancel Download
+                        Cancel Receive
                       </button>
                     </>
                   )}
