@@ -183,7 +183,7 @@ jobs:
       - name: Build Rust Application
         shell: bash
         run: |
-          cargo build --release --target ${{ matrix.target }}
+          cargo build --release --target ${{ matrix.target }} --features custom-protocol
 
       # ========== Package - Windows ==========
       - name: Package Windows Distribution
