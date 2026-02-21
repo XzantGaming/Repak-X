@@ -12,7 +12,8 @@
   "bundle": {
     "active": true,
     "icon": [
-      "icons/RepakIcon.ico"
+      "icons/RepakIcon.ico",
+      "icons/RepakIcon.png"
     ]
   },
   "app": {
