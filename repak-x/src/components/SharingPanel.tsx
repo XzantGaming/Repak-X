@@ -152,21 +152,27 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
         const prog = await invoke<TransferProgress | null>('p2p_get_receive_progress');
         if (prog) {
           setProgress(prog);
-          if (prog.status === 'Completed') {
+          const isTerminal = prog.status === 'Completed'
+            || prog.status === 'Cancelled'
+            || (typeof prog.status === 'object' && prog.status !== null && 'Failed' in prog.status);
+
+          if (isTerminal) {
+            // Guard immediately before any async work to prevent duplicate handling
+            if (receiveHandledRef.current) return;
             receiveHandledRef.current = true;
-            setReceiveComplete(true);
+
             setIsReceiving(false);
             await invoke('p2p_stop_receiving');
-            alert.success('Receive Complete', 'All mods have been received and installed.');
-          } else if (typeof prog.status === 'object' && prog.status !== null && 'Failed' in prog.status) {
-            receiveHandledRef.current = true;
-            setIsReceiving(false);
-            await invoke('p2p_stop_receiving');
-            alert.error('Transfer Failed', (prog.status as { Failed: string }).Failed);
-          } else if (prog.status === 'Cancelled') {
-            receiveHandledRef.current = true;
-            setIsReceiving(false);
-            await invoke('p2p_stop_receiving');
+
+            if (prog.status === 'Completed') {
+              setReceiveComplete(true);
+              const count = prog.total_files || prog.files_completed;
+              alert.success('Receive Complete', count > 0
+                ? `${count} mod${count !== 1 ? 's' : ''} received and installed.`
+                : 'All mods received and installed.');
+            } else if (typeof prog.status === 'object' && 'Failed' in prog.status) {
+              alert.error('Transfer Failed', (prog.status as { Failed: string }).Failed);
+            }
           }
         }
       }
@@ -186,24 +192,31 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
     }
   };
 
-  const handleCalculatePreview = async () => {
-    if (selectedModPaths.size === 0) return;
-    setCalculatingPreview(true);
-    try {
-      const preview = await invoke<PackPreview>('p2p_create_mod_pack_preview', {
-        name: packName || "Untitled",
-        description: packDesc || "",
-        modPaths: Array.from(selectedModPaths),
-        creator: creatorName
-      });
-      setPackPreview(preview);
-    } catch (err) {
-      console.error("Preview failed", err);
-      alert.error("Calculation Failed", String(err));
-    } finally {
+  // Auto-calculate pack preview when selected mods change
+  useEffect(() => {
+    if (selectedModPaths.size === 0) {
+      setPackPreview(null);
       setCalculatingPreview(false);
+      return;
     }
-  };
+    setCalculatingPreview(true);
+    const timeout = setTimeout(async () => {
+      try {
+        const preview = await invoke<PackPreview>('p2p_create_mod_pack_preview', {
+          name: packName || "Untitled",
+          description: packDesc || "",
+          modPaths: Array.from(selectedModPaths),
+          creator: creatorName
+        });
+        setPackPreview(preview);
+      } catch (err) {
+        console.error("Preview failed", err);
+      } finally {
+        setCalculatingPreview(false);
+      }
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [selectedModPaths]);
 
   const handleStartSharing = async () => {
     if (selectedModPaths.size === 0) {
@@ -312,9 +325,11 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
     }
   };
 
+  const [copied, setCopied] = useState(false);
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    alert.info('Copied!', 'Share code copied to clipboard.');
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   const toggleModSelection = (path: string) => {
@@ -387,11 +402,11 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
                         <div className="mod-list-scroll">
                           {installedMods.filter((mod) => {
                             const filename = mod.path.split('\\').pop();
-                            const name = mod.custom_name || (filename || '').replace(/_9999999_P/g, '').replace(/\.pak$/i, '');
+                            const name = mod.custom_name || (filename || '').replace(/_\d+_P/g, '').replace(/\.pak$/i, '').replace(/\.bak_repak$/i, '');
                             return name.toLowerCase().includes(searchTerm.toLowerCase());
                           }).map((mod) => {
                             const filename = mod.path.split('\\').pop();
-                            const displayName = mod.custom_name || (filename || '').replace(/_9999999_P/g, '').replace(/\.pak$/i, '');
+                            const displayName = mod.custom_name || (filename || '').replace(/_\d+_P/g, '').replace(/\.pak$/i, '').replace(/\.bak_repak$/i, '');
                             return (
                               <div
                                 key={mod.path}
@@ -444,21 +459,11 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
                       </div>
 
                       {selectedModPaths.size > 0 && (
-                        <div className="pack-preview-section">
-                          {!packPreview ? (
-                            <button
-                              onClick={handleCalculatePreview}
-                              className="btn-secondary btn-small"
-                              disabled={calculatingPreview}
-                            >
-                              {calculatingPreview ? "Calculating..." : "Calculate Pack Size"}
-                            </button>
-                          ) : (
-                            <div className="preview-info">
-                              <span>Total Size: {(packPreview.total_size / 1024 / 1024).toFixed(2)} MB</span>
-                              <span>Files: {packPreview.file_count}</span>
-                            </div>
-                          )}
+                        <div className={`pack-preview-section ${calculatingPreview ? 'calculating' : ''}`}>
+                          <div className="preview-info">
+                            <span>Total Size: {packPreview ? `${(packPreview.total_size / 1024 / 1024).toFixed(2)} MB` : '—'}</span>
+                            <span>Files: {packPreview ? packPreview.file_count : '—'}</span>
+                          </div>
                         </div>
                       )}
 
@@ -480,10 +485,10 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
                       {getConnectionString()}
                       <button
                         onClick={() => copyToClipboard(getConnectionString())}
-                        className="btn-copy"
+                        className={`btn-copy ${copied ? 'copied' : ''}`}
                         title="Copy to clipboard"
                       >
-                        <CopyIcon />
+                        {copied ? <CheckIcon /> : <CopyIcon />}
                       </button>
                     </div>
                     <p className="hint">Share this code with your friend to let them download your pack.</p>
@@ -591,7 +596,9 @@ export default function SharingPanel({ onClose, gamePath, installedMods, selecte
                       {progress && (
                         <div className="progress-container">
                           <div className="progress-info">
-                            <span>{progress.current_file}</span>
+                            <span>{progress.status === 'Transferring' || progress.status === 'Verifying'
+                              ? (progress.current_file.split('\\').pop()?.split('/').pop() || progress.current_file)
+                              : ''}</span>
                             <span>{progress.total_files > 0 ? `${Math.round((progress.files_completed / progress.total_files) * 100)}%` : '—'}</span>
                           </div>
                           <div className="progress-bar-track">

@@ -37,7 +37,7 @@ jobs:
             dotnet_rid: linux-x64
             artifact_name: Repak-X-Linux
             artifact_ext: .tar.gz
-            sccache_path: ~/.cache/sccache
+            sccache_path: /home/runner/.cache/sccache
     
     runs-on: ${{ matrix.os }}
     
@@ -133,6 +133,13 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-sccache-
 
+      - name: Fix sccache permissions
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          mkdir -p /home/runner/.cache/sccache/preprocessor
+          sudo chown -R $(id -u):$(id -g) /home/runner/.cache/sccache
+
       - name: Start sccache server
         shell: bash
         run: |
@@ -159,6 +166,15 @@ jobs:
             --self-contained true \
             -o target/uassettool
 
+      # ========== Sync Version ==========
+      - name: Sync Tauri Config Version
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          cd repak-x
+          # Update version in tauri.conf.json to match Cargo.toml
+          sed -i'' -e "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" tauri.conf.json
+
       # ========== Build Application ==========
       - name: Build Frontend
         working-directory: repak-x
@@ -167,7 +183,7 @@ jobs:
       - name: Build Rust Application
         shell: bash
         run: |
-          cargo build --release --target ${{ matrix.target }}
+          cargo build --release --target ${{ matrix.target }} --features custom-protocol
 
       # ========== Package - Windows ==========
       - name: Package Windows Distribution
@@ -315,37 +331,6 @@ jobs:
             git tag "v$VERSION"
             git push origin "v$VERSION"
           fi
-
-      - name: Build Release Body
-        id: release_body
-        shell: bash
-        run: |
-          VERSION="${{ needs.build.outputs.version }}"
-          CHANGELOG=$(cat ${{ steps.changelog.outputs.CHANGELOG_FILE }})
-          
-          # Build the full release body
-          cat > /tmp/release_body.md << 'RELEASE_EOF'
-          $CHANGELOG
-          
-          ---
-          
-          ## Downloads
-          
-          - **Windows**: `Repak-X-v$VERSION-Windows.zip`
-          - **Linux**: `Repak-X-v$VERSION-Linux.tar.gz`
-          
-          ### Linux Requirements
-          Make sure you have the following packages installed:
-          ```bash
-          sudo apt install libwebkit2gtk-4.1-0 libgtk-3-0 libayatana-appindicator3-1 unzip
-          ```
-          RELEASE_EOF
-          
-          # Replace variables in the file
-          sed -i "s/\$VERSION/$VERSION/g" /tmp/release_body.md
-          sed -i "s/\$CHANGELOG/$CHANGELOG/g" /tmp/release_body.md
-          
-          echo "BODY_FILE=/tmp/release_body.md" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1

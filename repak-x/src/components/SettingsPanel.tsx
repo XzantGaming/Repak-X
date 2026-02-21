@@ -7,7 +7,7 @@ import Checkbox from './ui/Checkbox'
 import { LuFolderInput } from "react-icons/lu"
 import { RiSparkling2Fill } from "react-icons/ri"
 import { CgPerformance } from "react-icons/cg"
-import { MdRefresh } from "react-icons/md"
+import { MdRefresh, MdArticle } from "react-icons/md"
 import { FaDiscord } from "react-icons/fa"
 import { RiGraduationCapFill } from "react-icons/ri"
 import { BsKeyboardFill } from "react-icons/bs"
@@ -53,13 +53,14 @@ type SettingsPanelProps = {
   isGamePathLoading: boolean;
   setParallelProcessing: (enabled: boolean) => void;
   onCheckForUpdates: () => void;
+  onViewChangelog: () => void;
   isCheckingUpdates: boolean;
   onReplayTour: () => void;
   onOpenShortcuts: () => void;
 };
 
 
-export default function SettingsPanel({ settings, onSave, onClose, theme, setTheme, accentColor, setAccentColor, gamePath, onAutoDetectGamePath, onBrowseGamePath, isGamePathLoading, setParallelProcessing, onCheckForUpdates, isCheckingUpdates, onReplayTour, onOpenShortcuts }: SettingsPanelProps) {
+export default function SettingsPanel({ settings, onSave, onClose, theme, setTheme, accentColor, setAccentColor, gamePath, onAutoDetectGamePath, onBrowseGamePath, isGamePathLoading, setParallelProcessing, onCheckForUpdates, onViewChangelog, isCheckingUpdates, onReplayTour, onOpenShortcuts }: SettingsPanelProps) {
   const alert = useAlert();
   const [globalUsmap, setGlobalUsmap] = useState(settings.globalUsmap || '');
   const [hideSuffix, setHideSuffix] = useState(settings.hideSuffix || false);
@@ -241,6 +242,15 @@ export default function SettingsPanel({ settings, onSave, onClose, theme, setThe
                 >
                   <MdRefresh className={isCheckingUpdates ? 'spin-icon' : ''} />
                   {isCheckingUpdates ? 'Checking...' : 'Check Now'}
+                </button>
+                <button
+                  onClick={onViewChangelog}
+                  className="action-btn"
+                  title="View changelog"
+                  style={{ minWidth: '160px' }}
+                >
+                  <MdArticle />
+                  View Changelog
                 </button>
                 <span style={{ fontSize: '0.8rem', opacity: 0.6 }}>Current Version: v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0'}</span>
               </div>

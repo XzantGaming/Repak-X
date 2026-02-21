@@ -126,6 +126,7 @@ type UpdateInfo = {
   url?: string
   asset_url?: string
   asset_name?: string
+  changelog?: string
   [key: string]: any
 }
 
@@ -202,7 +203,7 @@ function App() {
   const [showHeroBg, setShowHeroBg] = useState(false);
   const [showModType, setShowModType] = useState(false);
   const [showExperimental, setShowExperimental] = useState(false);
-  const [autoCheckUpdates, setAutoCheckUpdates] = useState(false);
+  const [autoCheckUpdates, setAutoCheckUpdates] = useState(true);
   const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
   const [enableDrp, setEnableDrp] = useState(false);
   const [parallelProcessing, setParallelProcessing] = useState(false);
@@ -502,7 +503,7 @@ function App() {
       if (result) {
         setUpdateInfo(result);
         setShowUpdateModal(true);
-        alert.info('Update Available', `Version ${result.latest} is available!`);
+        console.debug('[Updates] Update available, opening UpdateAppModal', { latest: result.latest });
       } else {
         alert.success('Up to Date', 'You are running the latest version.');
       }
@@ -511,6 +512,39 @@ function App() {
       alert.error('Update Check Failed', String(error));
     } finally {
       setIsCheckingUpdates(false);
+    }
+  };
+
+  const handleViewChangelog = async () => {
+    try {
+      console.debug('[Changelog] Manual changelog open requested from settings');
+      const res = await fetch('https://api.github.com/repos/XzantGaming/Repak-X/releases/latest', {
+        headers: { 'Accept': 'application/vnd.github.v3+json' }
+      });
+      console.debug('[Changelog] Latest changelog fetch response', { status: res.status, ok: res.ok });
+
+      if (!res.ok) {
+        alert.error('Changelog Unavailable', 'Could not fetch latest changelog right now.');
+        return;
+      }
+
+      const release = await res.json();
+      const releaseBody = String(release?.body || '').trim();
+
+      if (!releaseBody) {
+        alert.info('No Changelog', 'No changelog content was found for the latest release.');
+        return;
+      }
+
+      setChangelogContent(releaseBody);
+      setShowChangelogModal(true);
+      console.debug('[Changelog] Opened changelog modal from settings', {
+        bodyLength: releaseBody.length,
+        tag: release?.tag_name
+      });
+    } catch (error) {
+      console.error('[Changelog] Failed to open latest changelog from settings:', error);
+      alert.error('Changelog Failed', String(error));
     }
   };
 
@@ -539,8 +573,8 @@ function App() {
     if (!downloadedUpdatePath) return;
 
     try {
+      console.debug('[Updates] Applying update and handing off to backend auto-exit flow', { downloadedUpdatePath });
       await invoke('apply_update', { downloadedPath: downloadedUpdatePath });
-      alert.success('Update Ready', 'The update will be applied when you close the app.');
     } catch (error) {
       console.error('Apply update failed:', error);
       alert.error('Update Failed', String(error));
@@ -1024,7 +1058,7 @@ function App() {
     });
 
     const unlistenUpdateReady = listen('update_ready_to_apply', () => {
-      alert.success('Update Ready', 'Close the app to complete the update.');
+      console.debug('[Updates] Backend reported update ready; waiting for auto-exit/app shutdown');
     });
 
     return () => {
@@ -1091,22 +1125,75 @@ function App() {
 
       // Check if we just updated — show changelog if version changed
       const lastSeen = localStorage.getItem('lastSeenVersion')
+      const normalizedVersion = String(ver || '').replace(/^v/, '')
       if (lastSeen && lastSeen !== ver) {
+        console.debug('[Changelog] Version change detected', { lastSeen, currentVersion: ver, normalizedVersion })
         try {
-          const res = await fetch(
-            `https://api.github.com/repos/XzantGaming/Repak-X/releases/tags/v${ver}`,
-            { headers: { 'Accept': 'application/vnd.github.v3+json' } }
-          )
-          if (res.ok) {
-            const release = await res.json()
-            if (release.body) {
-              setChangelogContent(release.body)
-              setShowChangelogModal(true)
+          const headers = { 'Accept': 'application/vnd.github.v3+json' }
+          let releaseBody = ''
+          const tagCandidates = [`v${normalizedVersion}`, normalizedVersion]
+
+          for (const tag of tagCandidates) {
+            const tagUrl = `https://api.github.com/repos/XzantGaming/Repak-X/releases/tags/${encodeURIComponent(tag)}`
+            console.debug('[Changelog] Trying tag endpoint', { tag, tagUrl })
+            const tagRes = await fetch(tagUrl, { headers })
+            console.debug('[Changelog] Tag endpoint response', { tag, status: tagRes.status, ok: tagRes.ok })
+            if (!tagRes.ok) continue
+
+            const tagRelease = await tagRes.json()
+            if (tagRelease?.body) {
+              releaseBody = String(tagRelease.body)
+              console.debug('[Changelog] Changelog found via tag endpoint', { tag })
+              break
             }
           }
+
+          // Fallback: releases/latest (helps when the expected tag is not published yet)
+          if (!releaseBody) {
+            const latestUrl = 'https://api.github.com/repos/XzantGaming/Repak-X/releases/latest'
+            console.debug('[Changelog] Falling back to latest release endpoint', { latestUrl })
+            const latestRes = await fetch(latestUrl, { headers })
+            console.debug('[Changelog] Latest release response', { status: latestRes.status, ok: latestRes.ok })
+            if (latestRes.ok) {
+              const latestRelease = await latestRes.json()
+              const latestTagNormalized = String(latestRelease?.tag_name || '').replace(/^v/, '')
+              console.debug('[Changelog] Latest release payload', {
+                latestTag: latestRelease?.tag_name,
+                latestTagNormalized,
+                expectedNormalizedVersion: normalizedVersion
+              })
+
+              if (latestTagNormalized === normalizedVersion && latestRelease?.body) {
+                releaseBody = String(latestRelease.body)
+                console.debug('[Changelog] Changelog found via latest release fallback')
+              }
+            }
+          }
+
+          if (releaseBody) {
+            setChangelogContent(releaseBody)
+            setShowChangelogModal(true)
+            console.debug('[Changelog] Showing changelog modal', {
+              version: ver,
+              bodyLength: releaseBody.length
+            })
+          } else {
+            console.warn('[Changelog] No changelog body found for updated version', {
+              lastSeen,
+              currentVersion: ver,
+              normalizedVersion,
+              tagCandidates
+            })
+          }
         } catch (err) {
-          console.warn('Failed to fetch changelog:', err)
+          console.warn('[Changelog] Failed to fetch changelog after update:', err)
         }
+      } else {
+        console.debug('[Changelog] Skipping changelog check on startup', {
+          reason: !lastSeen ? 'first_install_or_no_last_seen' : 'version_unchanged',
+          lastSeen,
+          currentVersion: ver
+        })
       }
       localStorage.setItem('lastSeenVersion', ver)
 
@@ -2332,6 +2419,7 @@ function App() {
     localStorage.setItem('showModType', JSON.stringify(settings.showModType || false))
     localStorage.setItem('showExperimental', JSON.stringify(settings.showExperimental || false))
     localStorage.setItem('autoCheckUpdates', JSON.stringify(settings.autoCheckUpdates || false))
+    console.debug('[Settings] Saved autoCheckUpdates preference', { autoCheckUpdates: settings.autoCheckUpdates })
     localStorage.setItem('parallelProcessing', JSON.stringify(settings.parallelProcessing || false))
     localStorage.setItem('holdToDelete', JSON.stringify(settings.holdToDelete !== false))
 
@@ -2364,6 +2452,7 @@ function App() {
     const savedShowHeroBg = JSON.parse(localStorage.getItem('showHeroBg') || 'false');
     const savedShowModType = JSON.parse(localStorage.getItem('showModType') || 'false');
     const savedShowExperimental = JSON.parse(localStorage.getItem('showExperimental') || 'false');
+    const savedAutoCheckUpdates = JSON.parse(localStorage.getItem('autoCheckUpdates') ?? 'true');
     const savedParallelProcessing = JSON.parse(localStorage.getItem('parallelProcessing') || 'false');
     const savedHoldToDelete = JSON.parse(localStorage.getItem('holdToDelete') ?? 'true');
 
@@ -2380,8 +2469,17 @@ function App() {
     setShowHeroBg(savedShowHeroBg);
     setShowModType(savedShowModType);
     setShowExperimental(savedShowExperimental);
+    setAutoCheckUpdates(savedAutoCheckUpdates);
+    console.debug('[Settings] Loaded autoCheckUpdates preference', { autoCheckUpdates: savedAutoCheckUpdates });
     setParallelProcessing(savedParallelProcessing);
     setHoldToDelete(savedHoldToDelete);
+
+    if (savedAutoCheckUpdates) {
+      console.debug('[Updates] Running startup auto-check for updates');
+      void handleCheckForUpdates();
+    } else {
+      console.debug('[Updates] Skipping startup auto-check (disabled in settings)');
+    }
 
     const hasSeenTour = localStorage.getItem('hasSeenOnboarding');
     if (!hasSeenTour) {
@@ -2486,6 +2584,7 @@ function App() {
           isGamePathLoading={loading}
           setParallelProcessing={handleSetParallelProcessing}
           onCheckForUpdates={handleCheckForUpdates}
+          onViewChangelog={handleViewChangelog}
           isCheckingUpdates={isCheckingUpdates}
           onReplayTour={handleReplayTour}
           onOpenShortcuts={() => setPanel('shortcuts', true)}

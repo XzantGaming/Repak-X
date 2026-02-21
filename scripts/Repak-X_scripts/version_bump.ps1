@@ -96,9 +96,22 @@ function Invoke-VersionBump {
     Write-Host ""
     Write-Host "Updating version $currentVersion -> $newVersion ..." -ForegroundColor Cyan
     
-    # 1. Update Cargo.toml (workspace version)
-    $cargoContent = $cargoContent -replace '(version\s*=\s*")[\d.]+(")', "`${1}$newVersion`${2}"
-    Set-Content $cargoPath $cargoContent -NoNewline
+    # 1. Update Cargo.toml (workspace version only, not dependency versions)
+    $cargoLines = Get-Content $cargoPath
+    $inWorkspacePackage = $false
+    $updatedLines = @()
+    foreach ($line in $cargoLines) {
+        if ($line -match '^\[workspace\.package\]') {
+            $inWorkspacePackage = $true
+        } elseif ($line -match '^\[') {
+            $inWorkspacePackage = $false
+        }
+        if ($inWorkspacePackage -and $line -match '^version\s*=\s*"[\d.]+"') {
+            $line = $line -replace '(version\s*=\s*")[\d.]+(")', "`${1}$newVersion`${2}"
+        }
+        $updatedLines += $line
+    }
+    $updatedLines -join "`n" | Set-Content $cargoPath -NoNewline
     Write-Host "  [OK] Cargo.toml" -ForegroundColor Green
     
     # 2. Update tauri.conf.json

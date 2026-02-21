@@ -4200,17 +4200,40 @@ async fn download_update(
     
     let download_path = temp_dir.join(&asset_name);
     
-    // Download the file with progress reporting
+    // Download the file with progress reporting and retry logic
     let client = reqwest::Client::new();
-    let response = client.get(&asset_url)
-        .header("User-Agent", "RepakX")
-        .send()
-        .await
-        .map_err(|e| format!("Download request failed: {}", e))?;
-    
-    if !response.status().is_success() {
-        return Err(format!("Download failed with status: {}", response.status()));
+    let mut response = None;
+    let max_retries = 3;
+    for attempt in 1..=max_retries {
+        let res = client.get(&asset_url)
+            .header("User-Agent", "RepakX")
+            .send()
+            .await;
+        match res {
+            Ok(r) if r.status().is_success() => {
+                response = Some(r);
+                break;
+            }
+            Ok(r) => {
+                let status = r.status();
+                if attempt < max_retries && (status.as_u16() == 502 || status.as_u16() == 503 || status.as_u16() == 429) {
+                    info!("Download attempt {}/{} failed with status {}, retrying...", attempt, max_retries, status);
+                    tokio::time::sleep(std::time::Duration::from_secs(2 * attempt as u64)).await;
+                } else {
+                    return Err(format!("Download failed with status: {}", status));
+                }
+            }
+            Err(e) => {
+                if attempt < max_retries {
+                    info!("Download attempt {}/{} failed: {}, retrying...", attempt, max_retries, e);
+                    tokio::time::sleep(std::time::Duration::from_secs(2 * attempt as u64)).await;
+                } else {
+                    return Err(format!("Download request failed: {}", e));
+                }
+            }
+        }
     }
+    let response = response.ok_or("Download failed after all retries")?;
     
     let total_size = response.content_length();
     let mut downloaded: u64 = 0;
@@ -4344,8 +4367,11 @@ echo.
 echo Extracting update archive...
 cd /d "{temp_dir}"
 
+:: Ensure extracted directory exists
+if not exist "{temp_dir}\extracted" mkdir "{temp_dir}\extracted"
+
 :: Use PowerShell to extract the ZIP
-powershell -Command "Expand-Archive -Path '{zip_path}' -DestinationPath '{temp_dir}\extracted' -Force" 2>nul
+powershell -Command "Expand-Archive -LiteralPath '{zip_path}' -DestinationPath '{temp_dir}\extracted' -Force" 2>nul
 if %ERRORLEVEL% NEQ 0 (
     echo ERROR: Failed to extract update archive!
     echo Please extract manually from: {zip_path}
@@ -4618,6 +4644,10 @@ rm -f "$0"
     
     // Emit event to notify frontend that update is ready
     let _ = window.emit("update_ready_to_apply", ());
+
+    // Exit immediately so the updater script can continue without manual user action
+    info!("Auto-closing app to continue update process");
+    window.app_handle().exit(0);
     
     Ok(())
 }

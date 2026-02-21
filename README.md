@@ -6,7 +6,7 @@
 
 ### The Definitive Marvel Rivals Mod Installer & Manager
 
-A next-gen Windows app to install, organize, and share mods — built with Tauri, React, Rust, and C#.
+A next-gen Windows and Linux app to install, organize, and share mods — built with Tauri, React, Rust, and C#.
 
 [![GitHub release](https://img.shields.io/github/v/release/XzantGaming/Repak-X?style=for-the-badge&color=7c3aed&label=Latest)](https://github.com/XzantGaming/Repak-X/releases)
 [![Downloads](https://img.shields.io/github/downloads/XzantGaming/Repak-X/total?style=for-the-badge&color=0ea5e9&label=Downloads)](https://github.com/XzantGaming/Repak-X/releases)
@@ -44,7 +44,7 @@ A next-gen Windows app to install, organize, and share mods — built with Tauri
 - **Proper Formatting** of Marvel Rivals proprietary asset formats (Skeletal Mesh, Static Mesh, StringTable and Texture)
 - **Utility Tools** — Skip Launcher Patch, Character Database, ReCompress, LOD Disabler shortcut
 - **Auto-Update Checker** — automatically checks and applies new app versions
-- **MaterialTag Injection** — MaterialTag containers injected through the packing process <sub>(needs the MaterialTag UE Plugin to create a compatible mod)</sub>
+- **MaterialTag Injection** — MaterialTag containers injected through the packing process <sub>(needs the [MaterialTag UE Plugin](https://github.com/XzantGaming/MaterialTagPluginRivals) to create a compatible mod)</sub>
 
 </td>
 <td width="50%" valign="top">
