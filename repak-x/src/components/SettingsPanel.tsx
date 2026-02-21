@@ -36,6 +36,7 @@ type SettingsPayload = {
   autoCheckUpdates: boolean;
   parallelProcessing: boolean;
   enableDrp: boolean;
+  holdToDelete: boolean;
 };
 
 type SettingsPanelProps = {
@@ -69,8 +70,8 @@ export default function SettingsPanel({ settings, onSave, onClose, theme, setThe
   const [showExperimental, setShowExperimental] = useState(settings.showExperimental || false);
   const [autoCheckUpdates, setAutoCheckUpdates] = useState(settings.autoCheckUpdates || false);
   const [parallelProcessing, setLocalParallelProcessing] = useState(settings.parallelProcessing || false);
-  const [enableDrp, setEnableDrp] = useState(settings.enableDrp !== false); // Default true if undefined, or check requirements? Actually default false usually safer, but user eager. Let's stick to explicit default or false. Code says "settings.enableDrp || false" usually.
-  // Wait, usually I do settings.enableDrp || false.
+  const [holdToDelete, setHoldToDelete] = useState(settings.holdToDelete !== false);
+  const [enableDrp, setEnableDrp] = useState(settings.enableDrp !== false);
   const [usmapStatus, setUsmapStatus] = useState('');
   const [showRatMode, setShowRatMode] = useState(false);
 
@@ -104,7 +105,8 @@ export default function SettingsPanel({ settings, onSave, onClose, theme, setThe
       showExperimental,
       autoCheckUpdates,
       parallelProcessing,
-      enableDrp
+      enableDrp,
+      holdToDelete
     });
     alert.success('Settings Saved', 'Your preferences have been updated.');
     onClose();
@@ -300,6 +302,19 @@ export default function SettingsPanel({ settings, onSave, onClose, theme, setThe
                 >
                   <span style={{ paddingLeft: '4px', fontWeight: 'normal', opacity: 0.9 }}>Enables "Compact List" view</span>
                 </Checkbox>
+              </div>
+              <div>
+                <Checkbox
+                  checked={holdToDelete}
+                  onChange={(checked: boolean) => setHoldToDelete(checked)}
+                >
+                  <span style={{ paddingLeft: '4px', fontWeight: 'normal', opacity: 0.9 }}>Require hold to delete (2s)</span>
+                </Checkbox>
+                <p style={{ fontSize: '0.9rem', opacity: 0.6, marginLeft: '28px', marginTop: '0.15rem', color: !holdToDelete ? '#ff5252' : undefined }}>
+                  {!holdToDelete
+                    ? '⚠ Deleting mods is irreversible. Mods will be removed instantly on click.'
+                    : 'Hold the delete button for 2 seconds to confirm deletion.'}
+                </p>
               </div>
             </div>
           </div>

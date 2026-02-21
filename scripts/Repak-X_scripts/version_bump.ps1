@@ -143,5 +143,3 @@ function Invoke-VersionBump {
     return @{ RunCI = $true; Version = $newVersion }
 }
 
-# Export function for use in other scripts
-Export-ModuleMember -Function Invoke-VersionBump

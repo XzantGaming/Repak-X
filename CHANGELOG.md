@@ -9,4 +9,5 @@
 
 ### 🎨 Frontend / UI
 - Encrypted badge for encrypted mods
+- Added global hold to delete barrier toggle in the settings
 - Minor UI changes

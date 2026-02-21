@@ -206,6 +206,7 @@ function App() {
   const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
   const [enableDrp, setEnableDrp] = useState(false);
   const [parallelProcessing, setParallelProcessing] = useState(false);
+  const [holdToDelete, setHoldToDelete] = useState(true);
   const [theme, setTheme] = useState('dark');
   const [accentColor, setAccentColor] = useState('#4a9eff');
 
@@ -750,6 +751,10 @@ function App() {
   const handleBulkDeleteDown = (e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault()
     e.stopPropagation()
+    if (!holdToDelete) {
+      handleBulkDelete()
+      return
+    }
     setIsDeletingBulk(true)
     deleteBulkTimeoutRef.current = setTimeout(() => {
       handleBulkDelete()
@@ -2328,6 +2333,10 @@ function App() {
     localStorage.setItem('showExperimental', JSON.stringify(settings.showExperimental || false))
     localStorage.setItem('autoCheckUpdates', JSON.stringify(settings.autoCheckUpdates || false))
     localStorage.setItem('parallelProcessing', JSON.stringify(settings.parallelProcessing || false))
+    localStorage.setItem('holdToDelete', JSON.stringify(settings.holdToDelete !== false))
+
+    // Apply hold to delete setting
+    setHoldToDelete(settings.holdToDelete !== false)
 
     // Apply parallel processing setting (if changed)
     if (settings.parallelProcessing !== parallelProcessing) {
@@ -2356,6 +2365,7 @@ function App() {
     const savedShowModType = JSON.parse(localStorage.getItem('showModType') || 'false');
     const savedShowExperimental = JSON.parse(localStorage.getItem('showExperimental') || 'false');
     const savedParallelProcessing = JSON.parse(localStorage.getItem('parallelProcessing') || 'false');
+    const savedHoldToDelete = JSON.parse(localStorage.getItem('holdToDelete') ?? 'true');
 
     handleThemeChange(savedTheme);
     handleAccentChange(savedAccent);
@@ -2371,6 +2381,7 @@ function App() {
     setShowModType(savedShowModType);
     setShowExperimental(savedShowExperimental);
     setParallelProcessing(savedParallelProcessing);
+    setHoldToDelete(savedHoldToDelete);
 
     const hasSeenTour = localStorage.getItem('hasSeenOnboarding');
     if (!hasSeenTour) {
@@ -2462,7 +2473,7 @@ function App() {
 
       {panels.settings && (
         <SettingsPanel
-          settings={{ globalUsmap, hideSuffix, autoOpenDetails, showHeroIcons, showHeroBg, showModType, showExperimental, enableDrp, parallelProcessing, autoCheckUpdates }}
+          settings={{ globalUsmap, hideSuffix, autoOpenDetails, showHeroIcons, showHeroBg, showModType, showExperimental, enableDrp, parallelProcessing, autoCheckUpdates, holdToDelete }}
           onSave={handleSaveSettings}
           onClose={() => setPanel('settings', false)}
           theme={theme}
@@ -3009,7 +3020,7 @@ function App() {
                     onMouseUp={handleBulkDeleteUp}
                     onMouseLeave={handleBulkDeleteUp}
                     style={{ marginLeft: '1rem', height: '40px' }}
-                    title="Hold 2s to delete selected mods"
+                    title={holdToDelete ? "Hold 2s to delete selected mods" : "Click to delete selected mods"}
                   >
                     <div className="danger-bg" />
                     <span style={{ position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -3044,6 +3055,7 @@ function App() {
                 onClearRenaming={() => setRenamingModPath(null)}
                 gridRef={modsGridRef}
                 gameRunning={gameRunning}
+                holdToDelete={holdToDelete}
                 onRenameBlocked={() => alert.warning(
                   'Game Running',
                   'Cannot rename mods while game is running.'
@@ -3148,6 +3160,7 @@ function App() {
             onUpdateMod={() => contextMenu.mod && handleInitiateUpdate(contextMenu.mod)}
             allTags={allTags}
             gamePath={gamePath}
+            holdToDelete={holdToDelete}
           />
         )
       }

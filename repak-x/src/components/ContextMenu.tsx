@@ -36,9 +36,10 @@ type ContextMenuProps = {
   onUpdateMod?: () => void
   allTags: string[]
   gamePath?: string
+  holdToDelete?: boolean
 }
 
-const ContextMenu = ({ x, y, mod, folder, onClose, onAssignTag, onNewTag, onMoveTo, onCreateFolder, folders, onDelete, onToggle, onRename, onRenameFolder, onCheckConflicts, onUpdateMod, allTags, gamePath }: ContextMenuProps) => {
+const ContextMenu = ({ x, y, mod, folder, onClose, onAssignTag, onNewTag, onMoveTo, onCreateFolder, folders, onDelete, onToggle, onRename, onRenameFolder, onCheckConflicts, onUpdateMod, allTags, gamePath, holdToDelete = true }: ContextMenuProps) => {
   const [isDeleting, setIsDeleting] = useState(false)
   const deleteTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
@@ -98,6 +99,11 @@ const ContextMenu = ({ x, y, mod, folder, onClose, onAssignTag, onNewTag, onMove
   const handleDeleteDown = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
+    if (!holdToDelete) {
+      onDelete()
+      onClose()
+      return
+    }
     setIsDeleting(true)
     deleteTimeoutRef.current = setTimeout(() => {
       onDelete()
@@ -243,7 +249,7 @@ const ContextMenu = ({ x, y, mod, folder, onClose, onAssignTag, onNewTag, onMove
         onMouseLeave={handleDeleteUp}
       >
         <div className="danger-bg" />
-        <span style={{ position: 'relative', zIndex: 2 }}>{isDeleting ? 'Hold to delete...' : 'Delete (Hold 2s)'}</span>
+        <span style={{ position: 'relative', zIndex: 2 }}>{!holdToDelete ? 'Delete' : isDeleting ? 'Hold to delete...' : 'Delete (Hold 2s)'}</span>
       </div>
 
       <div className="context-menu-separator" />

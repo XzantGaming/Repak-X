@@ -65,6 +65,7 @@ type ModItemProps = {
     onRenameBlocked?: () => void
     onDeleteBlocked?: () => void
     modDetails?: ModDetailsRecord
+    holdToDelete?: boolean
 }
 
 type ModsListProps = {
@@ -93,6 +94,7 @@ type ModsListProps = {
     gameRunning?: boolean
     onRenameBlocked?: () => void
     onDeleteBlocked?: () => void
+    holdToDelete?: boolean
 }
 
 // Get hero image by character name
@@ -166,7 +168,8 @@ const ModItem = memo(function ModItem({
     gameRunning,
     onRenameBlocked,
     onDeleteBlocked,
-    modDetails
+    modDetails,
+    holdToDelete = true
 }: ModItemProps) {
     const [isDeleteHolding, setIsDeleteHolding] = useState(false)
     const [isRenaming, setIsRenaming] = useState(false)
@@ -202,8 +205,12 @@ const ModItem = memo(function ModItem({
             onDeleteBlocked?.()
             return
         }
-        setIsDeleteHolding(true)
         const shouldPermanentDelete = 'shiftKey' in e && Boolean(e.shiftKey)
+        if (!holdToDelete) {
+            handleDeleteMod(mod.path, shouldPermanentDelete)
+            return
+        }
+        setIsDeleteHolding(true)
         holdTimeoutRef.current = setTimeout(() => {
             handleDeleteMod(mod.path, shouldPermanentDelete)
             setIsDeleteHolding(false)
@@ -511,8 +518,8 @@ const ModItem = memo(function ModItem({
                         onMouseLeave={cancelDeleteHold}
                         onTouchStart={startDeleteHold}
                         onTouchEnd={cancelDeleteHold}
-                        aria-label="Hold to delete mod"
-                        title="Hold 2s to delete"
+                        aria-label={holdToDelete ? "Hold to delete mod" : "Delete mod"}
+                        title={holdToDelete ? "Hold 2s to delete" : "Click to delete"}
                     >
                         <RiDeleteBin2Fill size={18} />
                     </button>
@@ -551,7 +558,8 @@ export default function ModsList({
     gridRef,
     gameRunning,
     onRenameBlocked,
-    onDeleteBlocked
+    onDeleteBlocked,
+    holdToDelete
 }: ModsListProps) {
     return (
         <div className="mods-list-wrapper">
@@ -595,6 +603,7 @@ export default function ModsList({
                                 gameRunning={gameRunning}
                                 onRenameBlocked={onRenameBlocked}
                                 onDeleteBlocked={onDeleteBlocked}
+                                holdToDelete={holdToDelete}
                                 modDetails={details}
                             />
                         )
