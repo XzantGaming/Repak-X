@@ -133,6 +133,13 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-sccache-
 
+      - name: Fix sccache permissions
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          mkdir -p ~/.cache/sccache
+          sudo chown -R $(id -u):$(id -g) ~/.cache/sccache
+
       - name: Start sccache server
         shell: bash
         run: |
