@@ -125,6 +125,11 @@ try {
     $toolProject = Join-Path $workspaceRoot "UassetToolRivals\src\UAssetTool\UAssetTool.csproj"
     if (Test-Path $toolProject) {
         $toolOutput = Join-Path $workspaceRoot "target\uassettool"
+        # Clean stale artifacts (e.g. ue4-dds-tools, .pdb) from previous builds
+        if (Test-Path $toolOutput) {
+            Remove-Item -Path $toolOutput -Recurse -Force -ErrorAction SilentlyContinue
+            Write-Info "Cleaned stale target\uassettool directory"
+        }
         New-Item -ItemType Directory -Force -Path $toolOutput | Out-Null
         
         & dotnet publish $toolProject `
