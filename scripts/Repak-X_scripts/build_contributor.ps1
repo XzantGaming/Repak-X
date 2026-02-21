@@ -133,6 +133,8 @@ try {
             --self-contained true `
             -p:PublishSingleFile=true `
             -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:DebugType=none `
+            -p:DebugSymbols=false `
             -o $toolOutput
         
         if ($LASTEXITCODE -ne 0) {

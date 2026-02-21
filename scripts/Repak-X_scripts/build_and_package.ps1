@@ -120,8 +120,12 @@ try {
     if (Test-Path $toolDir) {
         $destToolDir = Join-Path $distDir "uassettool"
         New-Item -ItemType Directory -Force -Path $destToolDir | Out-Null
-        Copy-Item -Path (Join-Path $toolDir "*") -Destination $destToolDir -Recurse -Force -Exclude "*.pdb", "ue4-dds-tools"
-        Write-Success "Copied UAssetTool"
+        Copy-Item -Path (Join-Path $toolDir "*") -Destination $destToolDir -Recurse -Force
+        # Clean out debug symbols and legacy tools that shouldn't ship
+        Get-ChildItem -Path $destToolDir -Filter "*.pdb" -Recurse | Remove-Item -Force -ErrorAction SilentlyContinue
+        $ddsTools = Join-Path $destToolDir "ue4-dds-tools"
+        if (Test-Path $ddsTools) { Remove-Item -Path $ddsTools -Recurse -Force -ErrorAction SilentlyContinue }
+        Write-Success "Copied UAssetTool (cleaned .pdb + ue4-dds-tools)"
     }
     else {
         Write-Warning "UAssetTool not found at $toolDir - asset pipeline will be disabled"
