@@ -35,6 +35,24 @@ function parseChangelog(raw: string): ParsedBlock[] {
     return blocks;
 }
 
+function renderInlineMarkdown(text: string): React.ReactNode {
+    // Handles markdown-style inline formatting inside normal lines
+    // Supported: **bold**, __bold__, *italic*
+    const parts = text.split(/(\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*)/g);
+    return parts.map((part, index) => {
+        if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
+            return <strong key={index}>{part.slice(2, -2)}</strong>;
+        }
+        if (part.startsWith('__') && part.endsWith('__') && part.length > 4) {
+            return <strong key={index}>{part.slice(2, -2)}</strong>;
+        }
+        if (part.startsWith('*') && part.endsWith('*') && part.length > 2) {
+            return <em key={index}>{part.slice(1, -1)}</em>;
+        }
+        return <React.Fragment key={index}>{part}</React.Fragment>;
+    });
+}
+
 function renderBlocks(blocks: ParsedBlock[]) {
     const elements: React.ReactNode[] = [];
     let currentList: string[] = [];
@@ -45,7 +63,7 @@ function renderBlocks(blocks: ParsedBlock[]) {
             elements.push(
                 <ul key={key++} className="changelog-list">
                     {currentList.map((item, i) => (
-                        <li key={i}>{item}</li>
+                        <li key={i}>{renderInlineMarkdown(item)}</li>
                     ))}
                 </ul>
             );
@@ -60,11 +78,11 @@ function renderBlocks(blocks: ParsedBlock[]) {
             flushList();
             if (block.type === 'heading') {
                 elements.push(
-                    <h3 key={key++} className="changelog-section-title">{block.text}</h3>
+                    <h3 key={key++} className="changelog-section-title">{renderInlineMarkdown(block.text)}</h3>
                 );
             } else {
                 elements.push(
-                    <p key={key++} className="changelog-text">{block.text}</p>
+                    <p key={key++} className="changelog-text">{renderInlineMarkdown(block.text)}</p>
                 );
             }
         }
@@ -82,7 +100,9 @@ export default function ChangelogModal({
 }: ChangelogModalProps) {
     const renderedContent = useMemo(() => {
         if (!changelog) return null;
-        return renderBlocks(parseChangelog(changelog));
+        const parsed = parseChangelog(changelog);
+        console.debug('[ChangelogModal] Parsed changelog blocks', { count: parsed.length });
+        return renderBlocks(parsed);
     }, [changelog]);
 
     if (!isOpen) return null;
