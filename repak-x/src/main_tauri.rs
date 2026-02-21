@@ -4413,6 +4413,10 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b 1
 )
 
+:: Remove stale artifacts that should not ship (legacy ue4-dds-tools, debug symbols)
+if exist "{app_dir}\uassettool\ue4-dds-tools" rd /s /q "{app_dir}\uassettool\ue4-dds-tools" 2>nul
+del /q "{app_dir}\uassettool\*.pdb" 2>nul
+
 echo Cleaning up temporary files...
 rd /s /q "{temp_dir}" 2>nul
 
