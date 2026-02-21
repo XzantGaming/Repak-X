@@ -384,11 +384,17 @@ pub fn create_mod_pack(
         }
 
         let hash = hash_file(path)?;
-        let filename = path
+        let raw_filename = path
             .file_name()
             .and_then(|n| n.to_str())
             .ok_or_else(|| P2PError::FileError("Invalid filename".to_string()))?
             .to_string();
+        // Normalize disabled mod extensions so receiver always gets .pak
+        let filename = if raw_filename.ends_with(".bak_repak") {
+            format!("{}.pak", raw_filename.trim_end_matches(".bak_repak"))
+        } else {
+            raw_filename
+        };
 
         // Check for IoStore companion files
         let mut iostore_files = Vec::new();
@@ -507,11 +513,17 @@ impl P2PServer {
         let connection_string = create_connection_string(&share_code, &encryption_key, &local_ip, port);
         let obfuscated_connection_string = create_obfuscated_connection_string(&share_code, &encryption_key, &local_ip, port);
 
-        // Build path map
+        // Build path map (keys are normalized .pak filenames to match share metadata)
         let mut path_map = HashMap::new();
         for path in mod_paths {
-            if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
-                path_map.insert(filename.to_string(), path.clone());
+            if let Some(raw_name) = path.file_name().and_then(|n| n.to_str()) {
+                // Normalize .bak_repak → .pak so requests from receiver match
+                let key = if raw_name.ends_with(".bak_repak") {
+                    format!("{}.pak", raw_name.trim_end_matches(".bak_repak"))
+                } else {
+                    raw_name.to_string()
+                };
+                path_map.insert(key, path.clone());
                 
                 // Also add IoStore files
                 let base_path = path.with_extension("");
