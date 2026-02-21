@@ -37,7 +37,7 @@ jobs:
             dotnet_rid: linux-x64
             artifact_name: Repak-X-Linux
             artifact_ext: .tar.gz
-            sccache_path: ~/.cache/sccache
+            sccache_path: /home/runner/.cache/sccache
     
     runs-on: ${{ matrix.os }}
     
@@ -137,8 +137,8 @@ jobs:
         if: runner.os == 'Linux'
         shell: bash
         run: |
-          mkdir -p ~/.cache/sccache
-          sudo chown -R $(id -u):$(id -g) ~/.cache/sccache
+          mkdir -p /home/runner/.cache/sccache/preprocessor
+          sudo chown -R $(id -u):$(id -g) /home/runner/.cache/sccache
 
       - name: Start sccache server
         shell: bash
