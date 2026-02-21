@@ -10,7 +10,7 @@ use crate::p2p_sharing::{ShareSession, TransferProgress, TransferStatus, P2PErro
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use log::{info, error, warn};
 use std::collections::HashMap;
-use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, TcpStream};
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -397,28 +397,7 @@ impl UnifiedP2PManager {
                     d.progress.status = TransferStatus::Connecting;
                 }
 
-                // Quick reachability test (5s timeout)
-                let sock_addr: std::net::SocketAddr = match addr.parse() {
-                    Ok(a) => a,
-                    Err(e) => {
-                        warn!("[P2P] Invalid address '{}': {}", addr, e);
-                        last_error = format!("Invalid address '{}': {}", addr, e);
-                        continue;
-                    }
-                };
-                match TcpStream::connect_timeout(&sock_addr, Duration::from_secs(5)) {
-                    Ok(probe) => {
-                        info!("[P2P] Address {} is reachable - starting transfer", addr);
-                        drop(probe); // close probe connection
-                    }
-                    Err(e) => {
-                        warn!("[P2P] Address {} not reachable: {}", addr, e);
-                        last_error = format!("{}: {}", addr, e);
-                        continue;
-                    }
-                }
-
-                // Build a fresh client for this address
+                // Build a fresh client for this address (no probe — go directly)
                 let client = crate::p2p_sharing::P2PClient::new(key, addr.clone());
 
                 // Update stop flag so cancellation works on this client

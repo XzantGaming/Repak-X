@@ -581,7 +581,9 @@ impl P2PServer {
             match listener.accept() {
                 Ok((stream, addr)) => {
                     info!("New connection from: {}", addr);
-                    self.handle_connection(stream, addr)?;
+                    if let Err(e) = self.handle_connection(stream, addr) {
+                        warn!("Connection handler error: {} — continuing to accept", e);
+                    }
                 }
                 Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                     thread::sleep(Duration::from_millis(100));
