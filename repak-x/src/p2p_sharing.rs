@@ -666,6 +666,7 @@ impl P2PServer {
                     pack_info: self.mod_pack.clone(),
                 };
                 send_encrypted_message(stream, &self.encryption_key, &welcome)?;
+                info!("[Server] Welcome sent, entering file-request loop");
             }
             _ => {
                 return Err(P2PError::ProtocolError("Expected Hello message".to_string()));
@@ -674,9 +675,16 @@ impl P2PServer {
 
         // Handle file requests
         loop {
+            info!("[Server] Waiting for next message from client...");
             let msg_data = match read_encrypted_message(stream, &self.encryption_key) {
-                Ok(data) => data,
-                Err(P2PError::NetworkError(_)) => break, // Connection closed
+                Ok(data) => {
+                    info!("[Server] Received message ({} bytes)", data.len());
+                    data
+                }
+                Err(P2PError::NetworkError(ref msg)) => {
+                    warn!("[Server] Connection lost while reading: {}", msg);
+                    break;
+                }
                 Err(e) => return Err(e),
             };
 
@@ -888,6 +896,9 @@ impl P2PClient {
         };
 
         info!("Connected to share: {}", pack_info.name);
+
+        // Brief pause to let relay tunnel stabilize before file requests
+        std::thread::sleep(Duration::from_millis(500));
 
         // Calculate total files and bytes
         let mut total_files = 0usize;
@@ -1111,14 +1122,33 @@ fn send_encrypted_message<T: Serialize>(
 
 /// Read an encrypted message from the stream
 fn read_encrypted_message(stream: &mut TcpStream, key: &[u8; 32]) -> P2PResult<Vec<u8>> {
-    // Read and verify magic bytes
+    // Read and verify magic bytes (manual loop for better diagnostics)
     let mut magic = [0u8; 4];
-    stream
-        .read_exact(&mut magic)
-        .map_err(|e| P2PError::NetworkError(format!("Failed to read magic: {}", e)))?;
+    let mut total_read = 0usize;
+    while total_read < 4 {
+        match stream.read(&mut magic[total_read..]) {
+            Ok(0) => {
+                return Err(P2PError::NetworkError(format!(
+                    "Connection closed after reading {}/4 magic bytes (got {:?})",
+                    total_read,
+                    &magic[..total_read]
+                )));
+            }
+            Ok(n) => total_read += n,
+            Err(e) => {
+                return Err(P2PError::NetworkError(format!(
+                    "Read error after {}/4 magic bytes: {}",
+                    total_read, e
+                )));
+            }
+        }
+    }
 
     if &magic != MAGIC_BYTES {
-        return Err(P2PError::ProtocolError("Invalid magic bytes".to_string()));
+        return Err(P2PError::ProtocolError(format!(
+            "Invalid magic bytes: got {:?}, expected {:?}",
+            magic, MAGIC_BYTES
+        )));
     }
 
     // Read length
