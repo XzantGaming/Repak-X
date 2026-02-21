@@ -152,7 +152,7 @@ async fn try_bore_tunnel(local_port: u16) -> Option<(String, u16, tokio::task::J
     // Connect to bore.pub with a 15s timeout
     let client = match tokio::time::timeout(
         Duration::from_secs(15),
-        bore_cli::client::Client::new("localhost", local_port, "bore.pub", 2283, None),
+        bore_cli::client::Client::new("localhost", local_port, "bore.pub:2283", 0, None),
     )
     .await
     {
