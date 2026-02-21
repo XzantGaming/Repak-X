@@ -493,6 +493,8 @@ pub enum UAssetRequest {
     CreateIoStore { output_path: String, input_dir: String, usmap_path: Option<String>, compress: Option<bool>, aes_key: Option<String> },
     #[serde(rename = "is_iostore_compressed")]
     IsIoStoreCompressed { file_path: String },
+    #[serde(rename = "is_iostore_encrypted")]
+    IsIoStoreEncrypted { file_path: String },
     #[serde(rename = "recompress_iostore")]
     RecompressIoStore { file_path: String },
     #[serde(rename = "extract_iostore")]
@@ -624,6 +626,21 @@ pub fn is_iostore_compressed(file_path: &str) -> Result<bool> {
     let data = response.data.unwrap_or(serde_json::json!({}));
     let compressed = data.get("compressed").and_then(|v| v.as_bool()).unwrap_or(false);
     Ok(compressed)
+}
+
+/// Check if IoStore is encrypted (obfuscated)
+pub fn is_iostore_encrypted(file_path: &str) -> Result<bool> {
+    let toolkit = get_global_toolkit()?;
+    let request = UAssetRequest::IsIoStoreEncrypted {
+        file_path: file_path.to_string(),
+    };
+    let response = toolkit.send_request(&request)?;
+    if !response.success {
+        anyhow::bail!("Failed to check IoStore encryption: {}", response.message);
+    }
+    let data = response.data.unwrap_or(serde_json::json!({}));
+    let encrypted = data.get("encrypted").and_then(|v| v.as_bool()).unwrap_or(false);
+    Ok(encrypted)
 }
 
 /// IoStore creation result
