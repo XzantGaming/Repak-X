@@ -159,6 +159,15 @@ jobs:
             --self-contained true \
             -o target/uassettool
 
+      # ========== Sync Version ==========
+      - name: Sync Tauri Config Version
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          cd repak-x
+          # Update version in tauri.conf.json to match Cargo.toml
+          sed -i'' -e "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" tauri.conf.json
+
       # ========== Build Application ==========
       - name: Build Frontend
         working-directory: repak-x
