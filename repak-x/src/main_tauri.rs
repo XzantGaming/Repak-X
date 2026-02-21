@@ -4061,7 +4061,6 @@ async fn get_app_version() -> Result<String, String> {
 #[tauri::command]
 async fn check_for_updates(window: Window) -> Result<Option<UpdateInfo>, String> {
     let client = reqwest::Client::new();
-    // Assuming repository is correct based on context
     let url = "https://api.github.com/repos/XzantGaming/Repak-X/releases/latest";
     
     let res = client.get(url)
@@ -4083,17 +4082,54 @@ async fn check_for_updates(window: Window) -> Result<Option<UpdateInfo>, String>
         if remote_ver > current_ver {
              let url = json["html_url"].as_str().unwrap_or("").to_string();
              let assets = json["assets"].as_array();
+             let changelog = json["body"].as_str().map(|s| s.to_string());
              
              let mut asset_url = None;
              let mut asset_name = None;
              
+             // Find the appropriate asset for the current platform
              if let Some(assets) = assets {
+                 #[cfg(target_os = "windows")]
+                 let platform_pattern = "Windows";
+                 #[cfg(target_os = "linux")]
+                 let platform_pattern = "Linux";
+                 #[cfg(target_os = "macos")]
+                 let platform_pattern = "macOS";
+                 #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
+                 let platform_pattern = "";
+                 
+                 // First, try to find a platform-specific asset
                  if let Some(asset) = assets.iter().find(|a| {
                      let name = a["name"].as_str().unwrap_or("");
-                     name.ends_with(".exe") || name.ends_with(".msi") || name.ends_with(".zip")
+                     name.contains(platform_pattern) && 
+                     (name.ends_with(".zip") || name.ends_with(".tar.gz") || name.ends_with(".exe") || name.ends_with(".msi"))
                  }) {
                      asset_url = asset["browser_download_url"].as_str().map(|s| s.to_string());
                      asset_name = asset["name"].as_str().map(|s| s.to_string());
+                 }
+                 
+                 // Fallback: if no platform-specific asset found, try generic patterns
+                 if asset_url.is_none() {
+                     #[cfg(target_os = "windows")]
+                     {
+                         if let Some(asset) = assets.iter().find(|a| {
+                             let name = a["name"].as_str().unwrap_or("");
+                             name.ends_with(".zip") || name.ends_with(".exe") || name.ends_with(".msi")
+                         }) {
+                             asset_url = asset["browser_download_url"].as_str().map(|s| s.to_string());
+                             asset_name = asset["name"].as_str().map(|s| s.to_string());
+                         }
+                     }
+                     #[cfg(target_os = "linux")]
+                     {
+                         if let Some(asset) = assets.iter().find(|a| {
+                             let name = a["name"].as_str().unwrap_or("");
+                             name.ends_with(".tar.gz") || name.ends_with(".AppImage") || name.ends_with(".deb")
+                         }) {
+                             asset_url = asset["browser_download_url"].as_str().map(|s| s.to_string());
+                             asset_name = asset["name"].as_str().map(|s| s.to_string());
+                         }
+                     }
                  }
              }
              
@@ -4102,6 +4138,7 @@ async fn check_for_updates(window: Window) -> Result<Option<UpdateInfo>, String>
                  url,
                  asset_url,
                  asset_name,
+                 changelog,
              };
              
              // Emit update_available event
@@ -4121,6 +4158,7 @@ struct UpdateInfo {
     url: String,
     asset_url: Option<String>,
     asset_name: Option<String>,
+    changelog: Option<String>,
 }
 
 /// Progress information for update download
@@ -5103,6 +5141,7 @@ struct ModDetails {
     total_size: u64,
     files: Vec<String>,
     is_iostore: bool,
+    is_encrypted: bool,
     has_blueprint: bool,
 }
 
@@ -5209,6 +5248,13 @@ async fn get_mod_details(mod_path: String, _detect_blueprint: Option<bool>) -> R
         .unwrap_or("Unknown")
         .to_string();
     
+    // Check if IoStore is encrypted (obfuscated)
+    let is_encrypted = if is_iostore {
+        uasset_toolkit::is_iostore_encrypted(&utoc_path.to_string_lossy()).unwrap_or(false)
+    } else {
+        false
+    };
+
     Ok(ModDetails {
         mod_name,
         mod_type: characteristics.mod_type,
@@ -5218,6 +5264,7 @@ async fn get_mod_details(mod_path: String, _detect_blueprint: Option<bool>) -> R
         total_size,
         files,
         is_iostore,
+        is_encrypted,
         has_blueprint,
     })
 }
@@ -5688,8 +5735,8 @@ async fn p2p_start_receiving(
 /// Stop receiving
 #[tauri::command]
 async fn p2p_stop_receiving(p2p_state: State<'_, P2PState>) -> Result<(), String> {
-    // Clear all active downloads
-    p2p_state.manager.active_downloads.lock().clear();
+    // Signal all active clients to stop, then clear
+    p2p_state.manager.stop_all_downloads();
     Ok(())
 }
 
@@ -5712,16 +5759,16 @@ async fn p2p_is_receiving(p2p_state: State<'_, P2PState>) -> Result<bool, String
     Ok(!p2p_state.manager.active_downloads.lock().is_empty())
 }
 
-/// Create a shareable mod pack info (for preview before sharing)
+/// Create a shareable mod pack preview (total size and file count)
 #[tauri::command]
 async fn p2p_create_mod_pack_preview(
     name: String,
     description: String,
     mod_paths: Vec<String>,
     creator: Option<String>,
-) -> Result<p2p_sharing::ShareableModPack, String> {
+) -> Result<p2p_sharing::PackPreview, String> {
     let paths: Vec<PathBuf> = mod_paths.iter().map(PathBuf::from).collect();
-    p2p_sharing::create_mod_pack(name, description, &paths, creator)
+    p2p_sharing::create_mod_pack_preview(name, description, &paths, creator)
         .map_err(|e| e.to_string())
 }
 

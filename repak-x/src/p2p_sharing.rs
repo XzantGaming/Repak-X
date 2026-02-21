@@ -432,6 +432,34 @@ pub fn create_mod_pack(
 // P2P SERVER (HOST) IMPLEMENTATION
 // ============================================================================
 
+/// Pack preview for frontend display
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PackPreview {
+    pub total_size: u64,
+    pub file_count: usize,
+}
+
+/// Creates a lightweight preview of a mod pack (total size and file count)
+pub fn create_mod_pack_preview(
+    name: String,
+    description: String,
+    mod_paths: &[PathBuf],
+    creator: Option<String>,
+) -> P2PResult<PackPreview> {
+    let pack = create_mod_pack(name, description, mod_paths, creator)?;
+    let mut total_size = 0u64;
+    let mut file_count = 0usize;
+    for m in &pack.mods {
+        total_size += m.size;
+        file_count += 1;
+        for io in &m.iostore_files {
+            total_size += io.size;
+            file_count += 1;
+        }
+    }
+    Ok(PackPreview { total_size, file_count })
+}
+
 /// Active share session manager
 pub struct P2PServer {
     listener: Option<TcpListener>,
@@ -525,6 +553,16 @@ impl P2PServer {
     /// Get the current session info
     pub fn get_session(&self) -> ShareSession {
         self.session.clone()
+    }
+
+    /// Get the raw encryption key bytes
+    pub fn encryption_key_bytes(&self) -> &[u8; 32] {
+        &self.encryption_key
+    }
+
+    /// Get a clone of the stop flag for external signaling
+    pub fn get_stop_flag(&self) -> Arc<AtomicBool> {
+        self.stop_flag.clone()
     }
 
     /// Start accepting connections (blocking)
@@ -731,6 +769,33 @@ pub struct P2PClient {
 }
 
 impl P2PClient {
+    /// Create a new P2P client from raw components
+    pub fn new(encryption_key: [u8; 32], server_addr: String) -> Self {
+        Self {
+            encryption_key,
+            server_addr,
+            stop_flag: Arc::new(AtomicBool::new(false)),
+            progress: Arc::new(Mutex::new(TransferProgress {
+                current_file: String::new(),
+                files_completed: 0,
+                total_files: 0,
+                bytes_transferred: 0,
+                total_bytes: 0,
+                status: TransferStatus::Connecting,
+            })),
+        }
+    }
+
+    /// Get a shared handle to the progress tracker
+    pub fn progress_handle(&self) -> Arc<Mutex<TransferProgress>> {
+        self.progress.clone()
+    }
+
+    /// Get a clone of the stop flag for external signaling
+    pub fn get_stop_flag(&self) -> Arc<AtomicBool> {
+        self.stop_flag.clone()
+    }
+
     /// Create a new P2P client from a connection string
     pub fn from_connection_string(conn_str: &str) -> P2PResult<Self> {
         let (_, key, ip, port) = parse_connection_string(conn_str)?;

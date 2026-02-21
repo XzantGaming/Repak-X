@@ -1,16 +1,148 @@
 #![allow(dead_code)]
-//! P2P Manager - File Hosting Implementation
-//! Uses free file hosting (0x0.st) for reliable mod sharing
+//! P2P Manager - TCP Direct P2P with Internet NAT Traversal
+//! Uses encrypted TCP connections for direct peer-to-peer mod sharing
+//! with AES-256-GCM encryption, SHA256 integrity verification,
+//! UPnP automatic port forwarding, and public IP detection for
+//! internet-wide sharing without manual configuration.
 
 use crate::p2p_libp2p::ShareInfo;
-use crate::p2p_sharing::{ShareableModPack, ShareSession, TransferProgress, TransferStatus, P2PError, P2PResult};
-use log::{info, error};
+use crate::p2p_sharing::{ShareSession, TransferProgress, TransferStatus, P2PError, P2PResult};
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+use log::{info, error, warn};
 use std::collections::HashMap;
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, TcpStream};
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::io::Write;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 use parking_lot::Mutex;
 use tauri::{Emitter, Window};
+
+// ============================================================================
+// UPnP & PUBLIC IP HELPERS
+// ============================================================================
+
+/// Attempt UPnP port mapping on the router.
+/// Returns (external_ip, external_port) on success.
+async fn try_upnp_port_mapping(local_ip: Ipv4Addr, local_port: u16) -> Option<(std::net::IpAddr, u16)> {
+    info!("[P2P/UPnP] Attempting UPnP port mapping {}:{} ...", local_ip, local_port);
+
+    let search_opts = igd_next::SearchOptions {
+        timeout: Some(Duration::from_secs(5)),
+        ..Default::default()
+    };
+
+    let gateway = match igd_next::aio::tokio::search_gateway(search_opts).await {
+        Ok(gw) => {
+            info!("[P2P/UPnP] Found gateway: {}", gw.addr);
+            gw
+        }
+        Err(e) => {
+            warn!("[P2P/UPnP] Gateway discovery failed: {}", e);
+            return None;
+        }
+    };
+
+    // Get external IP from router
+    let external_ip = match gateway.get_external_ip().await {
+        Ok(ip) => {
+            info!("[P2P/UPnP] External IP from router: {}", ip);
+            ip
+        }
+        Err(e) => {
+            warn!("[P2P/UPnP] Failed to get external IP: {}", e);
+            return None;
+        }
+    };
+
+    // Add port mapping (TCP, same external port, 2 hour lease)
+    let internal_addr = SocketAddr::V4(SocketAddrV4::new(local_ip, local_port));
+    match gateway.add_port(
+        igd_next::PortMappingProtocol::TCP,
+        local_port,
+        internal_addr,
+        7200, // 2 hour lease duration
+        "Repak-X P2P Mod Sharing",
+    ).await {
+        Ok(()) => {
+            info!("[P2P/UPnP] Port mapping created: external {}:{} -> internal {}", external_ip, local_port, internal_addr);
+            Some((external_ip, local_port))
+        }
+        Err(e) => {
+            warn!("[P2P/UPnP] Port mapping failed: {} - trying add_any_port", e);
+            // Fallback: let the router pick an external port
+            match gateway.add_any_port(
+                igd_next::PortMappingProtocol::TCP,
+                internal_addr,
+                7200,
+                "Repak-X P2P Mod Sharing",
+            ).await {
+                Ok(ext_port) => {
+                    info!("[P2P/UPnP] Port mapping created (any port): external {}:{} -> internal {}", external_ip, ext_port, internal_addr);
+                    Some((external_ip, ext_port))
+                }
+                Err(e2) => {
+                    warn!("[P2P/UPnP] add_any_port also failed: {}", e2);
+                    None
+                }
+            }
+        }
+    }
+}
+
+/// Remove a UPnP port mapping.
+async fn remove_upnp_port_mapping(port: u16) {
+    info!("[P2P/UPnP] Removing port mapping for port {}", port);
+    let search_opts = igd_next::SearchOptions {
+        timeout: Some(Duration::from_secs(3)),
+        ..Default::default()
+    };
+    if let Ok(gateway) = igd_next::aio::tokio::search_gateway(search_opts).await {
+        match gateway.remove_port(igd_next::PortMappingProtocol::TCP, port).await {
+            Ok(()) => info!("[P2P/UPnP] Port mapping removed for port {}", port),
+            Err(e) => warn!("[P2P/UPnP] Failed to remove port mapping: {}", e),
+        }
+    }
+}
+
+/// Detect public IP via HTTP API (fallback when UPnP doesn't provide it).
+async fn get_public_ip_http() -> Option<String> {
+    let client = match reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+    {
+        Ok(c) => c,
+        Err(_) => return None,
+    };
+
+    // Try multiple services for reliability
+    let services = [
+        "https://api.ipify.org",
+        "https://api.ip.sb/ip",
+        "https://ifconfig.me/ip",
+    ];
+
+    for url in &services {
+        match client.get(*url).send().await {
+            Ok(resp) if resp.status().is_success() => {
+                if let Ok(ip) = resp.text().await {
+                    let ip = ip.trim().to_string();
+                    if !ip.is_empty() && ip.parse::<std::net::IpAddr>().is_ok() {
+                        info!("[P2P] Public IP detected via {}: {}", url, ip);
+                        return Some(ip);
+                    }
+                }
+            }
+            _ => continue,
+        }
+    }
+    warn!("[P2P] Could not detect public IP from any HTTP service");
+    None
+}
+
+// ============================================================================
+// MANAGER
+// ============================================================================
 
 pub struct UnifiedP2PManager {
     instance_id: String,
@@ -20,21 +152,21 @@ pub struct UnifiedP2PManager {
 
 pub struct ActiveShare {
     pub session: ShareSession,
-    pub mod_pack: ShareableModPack,
-    pub mod_paths: Vec<PathBuf>,
-    pub download_url: String,
+    pub stop_flag: Arc<AtomicBool>,
+    pub upnp_external_port: Option<u16>,
 }
 
 pub struct ActiveDownload {
     pub share_info: ShareInfo,
     pub progress: TransferProgress,
     pub output_dir: PathBuf,
+    pub stop_flag: Arc<AtomicBool>,
 }
 
 impl UnifiedP2PManager {
     pub async fn new() -> P2PResult<Self> {
         let id = format!("repak-{}", &uuid::Uuid::new_v4().to_string()[..8]);
-        info!("[Share] Manager initialized: {}", id);
+        info!("[P2P] Manager initialized: {}", id);
         Ok(Self {
             instance_id: id,
             active_shares: Arc::new(Mutex::new(HashMap::new())),
@@ -42,113 +174,360 @@ impl UnifiedP2PManager {
         })
     }
 
-    pub async fn start_sharing(&self, name: String, desc: String, paths: Vec<PathBuf>, creator: Option<String>) -> P2PResult<ShareInfo> {
-        info!("[Share] Starting share: {} ({} files)", name, paths.len());
-        
+    pub async fn start_sharing(
+        &self,
+        name: String,
+        desc: String,
+        paths: Vec<PathBuf>,
+        creator: Option<String>,
+    ) -> P2PResult<ShareInfo> {
+        info!("[P2P] Starting share: {} ({} files)", name, paths.len());
+
+        // Create mod pack metadata
         let pack = crate::p2p_sharing::create_mod_pack(name.clone(), desc, &paths, creator)?;
-        let code = crate::p2p_sharing::generate_share_code();
 
-        // Create temp zip of all files
-        let temp_dir = std::env::temp_dir().join(format!("repak_share_{}", code));
-        std::fs::create_dir_all(&temp_dir).map_err(|e| P2PError::FileError(e.to_string()))?;
-        let zip_path = temp_dir.join("mods.zip");
-        
-        info!("[Share] Creating zip at: {}", zip_path.display());
-        create_zip(&paths, &zip_path)?;
-        
-        // Upload to 0x0.st (provides direct download links)
-        info!("[Share] Uploading to 0x0.st...");
-        let download_url = upload_to_fileio(&zip_path).await?;
-        info!("[Share] Upload complete: {}", download_url);
-        
-        // Clean up temp zip
-        let _ = std::fs::remove_file(&zip_path);
-        let _ = std::fs::remove_dir(&temp_dir);
+        // Create TCP P2P server (binds port, generates encryption key)
+        let server = crate::p2p_sharing::P2PServer::new(pack, paths)?;
+        let session = server.get_session();
+        let stop_flag = server.get_stop_flag();
+        let key_bytes = *server.encryption_key_bytes();
+        let local_port = session.port;
 
+        // -----------------------------------------------------------
+        // NAT traversal: UPnP port mapping + public IP detection
+        // -----------------------------------------------------------
+        let local_ip_parsed: Ipv4Addr = session.local_ip.parse().unwrap_or(Ipv4Addr::LOCALHOST);
+        let mut addresses: Vec<String> = Vec::new();
+        let mut upnp_external_port: Option<u16> = None;
+
+        // 1) Try UPnP automatic port forwarding
+        match try_upnp_port_mapping(local_ip_parsed, local_port).await {
+            Some((ext_ip, ext_port)) => {
+                info!("[P2P] UPnP success - public address: {}:{}", ext_ip, ext_port);
+                addresses.push(format!("{}:{}", ext_ip, ext_port));
+                upnp_external_port = Some(ext_port);
+            }
+            None => {
+                // 2) Fallback: detect public IP via HTTP; include it
+                //    optimistically (works if user has manual port-fwd).
+                if let Some(pub_ip) = get_public_ip_http().await {
+                    info!(
+                        "[P2P] UPnP failed, but detected public IP {}. Including optimistically.",
+                        pub_ip
+                    );
+                    addresses.push(format!("{}:{}", pub_ip, local_port));
+                } else {
+                    warn!("[P2P] No UPnP, no public IP - sharing limited to local network.");
+                }
+            }
+        }
+
+        // 3) Always include local address as LAN fallback
+        addresses.push(format!("{}:{}", session.local_ip, local_port));
+
+        info!("[P2P] Share addresses: {:?}", addresses);
+
+        // Build ShareInfo for frontend (base64 JSON format)
+        let key_b64 = URL_SAFE_NO_PAD.encode(key_bytes);
         let share_info = ShareInfo {
             peer_id: self.instance_id.clone(),
-            addresses: vec![download_url.clone()],
-            encryption_key: "cloud-hosted".to_string(), // Placeholder for cloud hosting (no encryption needed)
-            share_code: code.clone(),
+            addresses,
+            encryption_key: key_b64,
+            share_code: session.share_code.clone(),
         };
 
-        let conn = share_info.encode().map_err(|e| P2PError::ValidationError(format!("{}", e)))?;
-        
+        // Encode as base64 JSON connection string
+        let conn = share_info
+            .encode()
+            .map_err(|e| P2PError::ValidationError(format!("{}", e)))?;
+
+        // Create session with encoded connection string
         let sess = ShareSession {
-            share_code: code.clone(),
+            share_code: session.share_code.clone(),
             encryption_key: share_info.encryption_key.clone(),
-            local_ip: "cloud".into(),
-            obfuscated_ip: "[Cloud Hosted]".into(),
-            port: 0,
-            connection_string: conn.clone(),
-            obfuscated_connection_string: format!("Share Code: {}", code),
+            local_ip: session.local_ip.clone(),
+            obfuscated_ip: session.obfuscated_ip.clone(),
+            port: session.port,
+            connection_string: conn,
+            obfuscated_connection_string: session.obfuscated_connection_string.clone(),
             active: true,
         };
 
-        self.active_shares.lock().insert(code.clone(), ActiveShare {
-            session: sess,
-            mod_pack: pack,
-            mod_paths: paths,
-            download_url,
+        let code = session.share_code.clone();
+        let shares = self.active_shares.clone();
+        let code_for_thread = code.clone();
+
+        // Start TCP server in background thread (blocking accept loop)
+        std::thread::spawn(move || {
+            let mut server = server;
+            info!("[P2P] Server thread started for share: {}", code_for_thread);
+            if let Err(e) = server.run() {
+                if !e.to_string().contains("Server already started") {
+                    error!("[P2P] Server error: {}", e);
+                }
+            }
+            info!("[P2P] Server thread ended for share: {}", code_for_thread);
+            shares.lock().remove(&code_for_thread);
         });
 
-        info!("[Share] Share ready! Code length: {} chars", conn.len());
+        // Store active share
+        self.active_shares.lock().insert(
+            code.clone(),
+            ActiveShare {
+                session: sess,
+                stop_flag,
+                upnp_external_port,
+            },
+        );
+
+        info!("[P2P] Share ready!");
         Ok(share_info)
     }
 
     pub fn stop_sharing(&self, code: &str) -> P2PResult<()> {
-        info!("[Share] Stopping share: {}", code);
-        self.active_shares.lock().remove(code);
+        info!("[P2P] Stopping share: {}", code);
+        if let Some(share) = self.active_shares.lock().remove(code) {
+            share.stop_flag.store(true, Ordering::SeqCst);
+
+            // Clean up UPnP port mapping in background
+            if let Some(ext_port) = share.upnp_external_port {
+                tokio::spawn(async move {
+                    remove_upnp_port_mapping(ext_port).await;
+                });
+            }
+        }
         Ok(())
     }
 
-    pub async fn start_receiving(&self, conn: &str, out: PathBuf, _name: Option<String>, window: Window) -> P2PResult<()> {
-        info!("[Share] Starting download to: {}", out.display());
-        
-        let share_info = ShareInfo::decode(conn).map_err(|e| P2PError::ValidationError(format!("{}", e)))?;
-        let download_url = share_info.addresses.first().ok_or_else(|| P2PError::ValidationError("No download URL".into()))?.clone();
+    pub async fn start_receiving(
+        &self,
+        conn: &str,
+        out: PathBuf,
+        client_name: Option<String>,
+        window: Window,
+    ) -> P2PResult<()> {
+        info!("[P2P] Starting receive to: {}", out.display());
+
+        // Decode connection string
+        let share_info = ShareInfo::decode(conn)
+            .map_err(|e| P2PError::ValidationError(format!("{}", e)))?;
+        if share_info.addresses.is_empty() {
+            return Err(P2PError::ValidationError(
+                "No addresses in share info".into(),
+            ));
+        }
         let code = share_info.share_code.clone();
 
-        info!("[Share] Download URL: {}", download_url);
+        // Decode AES-256 encryption key from base64
+        let key_bytes = URL_SAFE_NO_PAD
+            .decode(&share_info.encryption_key)
+            .map_err(|e| P2PError::ValidationError(format!("Invalid encryption key: {}", e)))?;
+        if key_bytes.len() != 32 {
+            return Err(P2PError::ValidationError(
+                "Invalid encryption key length".into(),
+            ));
+        }
+        let mut key = [0u8; 32];
+        key.copy_from_slice(&key_bytes);
 
-        self.active_downloads.lock().insert(code.clone(), ActiveDownload {
-            share_info: share_info.clone(),
-            progress: TransferProgress {
-                current_file: "Connecting...".into(),
-                files_completed: 0,
-                total_files: 1,
-                bytes_transferred: 0,
-                total_bytes: 0,
-                status: TransferStatus::Connecting,
+        let addresses = share_info.addresses.clone();
+        info!(
+            "[P2P] Will try {} address(es): {:?}",
+            addresses.len(),
+            addresses
+        );
+
+        // Initial stop flag (replaced per-client once a working address is found)
+        let initial_stop = Arc::new(AtomicBool::new(false));
+
+        // Insert initial progress
+        self.active_downloads.lock().insert(
+            code.clone(),
+            ActiveDownload {
+                share_info: share_info.clone(),
+                progress: TransferProgress {
+                    current_file: "Connecting...".into(),
+                    files_completed: 0,
+                    total_files: 1,
+                    bytes_transferred: 0,
+                    total_bytes: 0,
+                    status: TransferStatus::Connecting,
+                },
+                output_dir: out.clone(),
+                stop_flag: initial_stop.clone(),
             },
-            output_dir: out.clone(),
-        });
+        );
 
         let dl = self.active_downloads.clone();
         let c = code.clone();
-        
-        tokio::spawn(async move {
-            match download_and_extract(&download_url, &out, dl.clone(), &c).await {
-                Ok(()) => {
-                    info!("[Share] Download complete!");
+
+        // Shared slot for the active progress handle so the sync task can
+        // pick it up once the working client is determined.
+        let active_progress: Arc<std::sync::Mutex<Option<Arc<std::sync::Mutex<TransferProgress>>>>> =
+            Arc::new(std::sync::Mutex::new(None));
+        let active_progress_for_sync = active_progress.clone();
+
+        // Spawn download thread - tries each address in order
+        std::thread::spawn(move || {
+            info!(
+                "[P2P] Download thread started - trying {} address(es)",
+                addresses.len()
+            );
+            let mut last_error = String::from("No addresses to try");
+
+            for (i, addr) in addresses.iter().enumerate() {
+                // Check cancellation
+                if initial_stop.load(Ordering::SeqCst) {
+                    info!("[P2P] Download cancelled by user");
                     if let Some(d) = dl.lock().get_mut(&c) {
-                        d.progress.status = TransferStatus::Completed;
-                        d.progress.files_completed = d.progress.total_files;
+                        d.progress.status = TransferStatus::Cancelled;
                     }
-                    // Emit event to refresh mod list
-                    info!("[Share] Emitting mods_dir_changed event to refresh UI");
-                    let _ = window.emit("mods_dir_changed", ());
+                    return;
                 }
-                Err(e) => {
-                    error!("[Share] Download failed: {}", e);
-                    if let Some(d) = dl.lock().get_mut(&c) {
-                        d.progress.status = TransferStatus::Failed(e.to_string());
+
+                info!(
+                    "[P2P] Trying address {}/{}: {}",
+                    i + 1,
+                    addresses.len(),
+                    addr
+                );
+                if let Some(d) = dl.lock().get_mut(&c) {
+                    d.progress.current_file =
+                        format!("Trying {} ({}/{})...", addr, i + 1, addresses.len());
+                    d.progress.status = TransferStatus::Connecting;
+                }
+
+                // Quick reachability test (5s timeout)
+                let sock_addr: std::net::SocketAddr = match addr.parse() {
+                    Ok(a) => a,
+                    Err(e) => {
+                        warn!("[P2P] Invalid address '{}': {}", addr, e);
+                        last_error = format!("Invalid address '{}': {}", addr, e);
+                        continue;
+                    }
+                };
+                match TcpStream::connect_timeout(&sock_addr, Duration::from_secs(5)) {
+                    Ok(probe) => {
+                        info!("[P2P] Address {} is reachable - starting transfer", addr);
+                        drop(probe); // close probe connection
+                    }
+                    Err(e) => {
+                        warn!("[P2P] Address {} not reachable: {}", addr, e);
+                        last_error = format!("{}: {}", addr, e);
+                        continue;
+                    }
+                }
+
+                // Build a fresh client for this address
+                let client = crate::p2p_sharing::P2PClient::new(key, addr.clone());
+
+                // Update stop flag so cancellation works on this client
+                let client_stop = client.get_stop_flag();
+                if let Some(d) = dl.lock().get_mut(&c) {
+                    d.stop_flag = client_stop.clone();
+                }
+
+                // Publish progress handle for the sync task
+                if let Ok(mut guard) = active_progress.lock() {
+                    *guard = Some(client.progress_handle());
+                }
+
+                match client.download_pack(&out, client_name.clone()) {
+                    Ok(pack) => {
+                        info!(
+                            "[P2P] Download complete! {} mods received via {}",
+                            pack.mods.len(),
+                            addr
+                        );
+                        if let Some(d) = dl.lock().get_mut(&c) {
+                            d.progress.status = TransferStatus::Completed;
+                            d.progress.files_completed = d.progress.total_files;
+                        }
+                        let _ = window.emit("mods_dir_changed", ());
+                        return; // success
+                    }
+                    Err(crate::p2p_sharing::P2PError::Cancelled) => {
+                        info!("[P2P] Download cancelled by user");
+                        if let Some(d) = dl.lock().get_mut(&c) {
+                            d.progress.status = TransferStatus::Cancelled;
+                        }
+                        return;
+                    }
+                    Err(e) => {
+                        warn!("[P2P] Transfer via {} failed: {}", addr, e);
+                        last_error = format!("{}: {}", addr, e);
+                        // try next address
+                    }
+                }
+            }
+
+            // All addresses exhausted
+            error!("[P2P] All addresses failed. Last error: {}", last_error);
+            if let Some(d) = dl.lock().get_mut(&c) {
+                d.progress.status =
+                    TransferStatus::Failed(format!("Could not connect to host: {}", last_error));
+            }
+        });
+
+        // Spawn progress sync task
+        let dl2 = self.active_downloads.clone();
+        let c2 = code.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_millis(250)).await;
+
+                // Try to read from the active client's progress handle
+                let handle = active_progress_for_sync
+                    .lock()
+                    .ok()
+                    .and_then(|g| g.clone());
+                if let Some(h) = handle {
+                    if let Ok(prog) = h.lock().map(|p| p.clone()) {
+                        let is_done = matches!(
+                            prog.status,
+                            TransferStatus::Completed
+                                | TransferStatus::Failed(_)
+                                | TransferStatus::Cancelled
+                        );
+                        if let Some(d) = dl2.lock().get_mut(&c2) {
+                            d.progress = prog;
+                        }
+                        if is_done {
+                            break;
+                        }
+                    }
+                } else {
+                    // No client yet - check if download already finished/failed
+                    let done = dl2
+                        .lock()
+                        .get(&c2)
+                        .map(|d| {
+                            matches!(
+                                d.progress.status,
+                                TransferStatus::Completed
+                                    | TransferStatus::Failed(_)
+                                    | TransferStatus::Cancelled
+                            )
+                        })
+                        .unwrap_or(true);
+                    if done {
+                        break;
                     }
                 }
             }
         });
 
         Ok(())
+    }
+
+    /// Stop all active downloads
+    pub fn stop_all_downloads(&self) {
+        let mut downloads = self.active_downloads.lock();
+        for (code, download) in downloads.iter() {
+            info!("[P2P] Stopping download: {}", code);
+            download.stop_flag.store(true, Ordering::SeqCst);
+        }
+        downloads.clear();
     }
 
     pub fn get_share_session(&self, code: &str) -> Option<ShareSession> {
@@ -156,306 +535,51 @@ impl UnifiedP2PManager {
     }
 
     pub fn get_transfer_progress(&self, code: &str) -> Option<TransferProgress> {
-        self.active_downloads.lock().get(code).map(|d| d.progress.clone())
+        self.active_downloads
+            .lock()
+            .get(code)
+            .map(|d| d.progress.clone())
     }
 
-    pub fn is_sharing(&self, code: &str) -> bool { self.active_shares.lock().contains_key(code) }
-    pub fn is_receiving(&self, code: &str) -> bool { self.active_downloads.lock().contains_key(code) }
-    pub fn local_peer_id(&self) -> String { self.instance_id.clone() }
-    pub fn listening_addresses(&self) -> Vec<String> { vec!["cloud://0x0.st".into()] }
-}
-
-fn create_zip(paths: &[PathBuf], zip_path: &PathBuf) -> P2PResult<()> {
-    let file = std::fs::File::create(zip_path).map_err(|e| P2PError::FileError(e.to_string()))?;
-    let mut zip = zip::ZipWriter::new(file);
-    let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
-
-    // Track files we've already added to avoid duplicates
-    let mut added_files = std::collections::HashSet::new();
-
-    for path in paths {
-        if path.is_file() {
-            let original_name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
-            
-            // Check if this is a disabled mod (.bak_repak) - rename to .pak for enabled state
-            let (zip_name, is_disabled_mod) = if original_name.ends_with(".bak_repak") {
-                let enabled_name = original_name.replace(".bak_repak", ".pak");
-                info!("[Share] Converting disabled mod to enabled: {} -> {}", original_name, enabled_name);
-                (enabled_name, true)
-            } else {
-                (original_name.clone(), false)
-            };
-            
-            // Add the main file with the appropriate name
-            if added_files.insert(zip_name.clone()) {
-                info!("[Share] Adding to zip: {}", zip_name);
-                zip.start_file(zip_name.clone(), options).map_err(|e| P2PError::FileError(e.to_string()))?;
-                let data = std::fs::read(path).map_err(|e| P2PError::FileError(e.to_string()))?;
-                zip.write_all(&data).map_err(|e| P2PError::FileError(e.to_string()))?;
-            }
-
-            // Check for accompanying .ucas and .utoc files
-            // Works for both .pak and .bak_repak files
-            let should_check_companions = zip_name.ends_with(".pak");
-            
-            if should_check_companions {
-                let base_name = &zip_name[..zip_name.len() - 4]; // Remove ".pak"
-                let parent_dir = path.parent();
-
-                if let Some(dir) = parent_dir {
-                    // Determine the base name on disk (for disabled mods, companions also have .bak_repak)
-                    let disk_base = if is_disabled_mod {
-                        original_name[..original_name.len() - 10].to_string() // Remove ".bak_repak"
-                    } else {
-                        base_name.to_string()
-                    };
-
-                    // Check for .ucas file
-                    let ucas_disk_name = if is_disabled_mod {
-                        format!("{}.ucas.bak_repak", disk_base)
-                    } else {
-                        format!("{}.ucas", disk_base)
-                    };
-                    let ucas_zip_name = format!("{}.ucas", base_name);
-                    let ucas_path = dir.join(&ucas_disk_name);
-                    
-                    if ucas_path.exists() && added_files.insert(ucas_zip_name.clone()) {
-                        info!("[Share] Adding accompanying file: {} (from {})", ucas_zip_name, ucas_disk_name);
-                        zip.start_file(ucas_zip_name, options).map_err(|e| P2PError::FileError(e.to_string()))?;
-                        let data = std::fs::read(&ucas_path).map_err(|e| P2PError::FileError(e.to_string()))?;
-                        zip.write_all(&data).map_err(|e| P2PError::FileError(e.to_string()))?;
-                    }
-
-                    // Check for .utoc file
-                    let utoc_disk_name = if is_disabled_mod {
-                        format!("{}.utoc.bak_repak", disk_base)
-                    } else {
-                        format!("{}.utoc", disk_base)
-                    };
-                    let utoc_zip_name = format!("{}.utoc", base_name);
-                    let utoc_path = dir.join(&utoc_disk_name);
-                    
-                    if utoc_path.exists() && added_files.insert(utoc_zip_name.clone()) {
-                        info!("[Share] Adding accompanying file: {} (from {})", utoc_zip_name, utoc_disk_name);
-                        zip.start_file(utoc_zip_name, options).map_err(|e| P2PError::FileError(e.to_string()))?;
-                        let data = std::fs::read(&utoc_path).map_err(|e| P2PError::FileError(e.to_string()))?;
-                        zip.write_all(&data).map_err(|e| P2PError::FileError(e.to_string()))?;
-                    }
-                }
-            }
-        }
+    pub fn is_sharing(&self, code: &str) -> bool {
+        self.active_shares.lock().contains_key(code)
     }
-    zip.finish().map_err(|e| P2PError::FileError(e.to_string()))?;
-    Ok(())
-}
-
-async fn upload_to_fileio(path: &PathBuf) -> P2PResult<String> {
-    // 0x0.st provides simple, reliable file hosting (512MB limit, 365 day retention)
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(300)) // 5 minute timeout for large files
-        .build()
-        .map_err(|e| P2PError::ConnectionError(format!("Failed to create HTTP client: {}", e)))?;
-    
-    let file_data = std::fs::read(path).map_err(|e| P2PError::FileError(e.to_string()))?;
-    let file_name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
-    let file_size = file_data.len();
-    
-    info!("[Share] Uploading {} ({} bytes / {:.2} MB) to 0x0.st...", file_name, file_size, file_size as f64 / 1024.0 / 1024.0);
-    
-    // Check file size (0x0.st has 512MB limit)
-    if file_size > 512 * 1024 * 1024 {
-        error!("[Share] File too large: {} bytes (max 512MB)", file_size);
-        return Err(P2PError::FileError("File exceeds 512MB limit".into()));
+    pub fn is_receiving(&self, code: &str) -> bool {
+        self.active_downloads.lock().contains_key(code)
     }
-    
-    let part = reqwest::multipart::Part::bytes(file_data)
-        .file_name(file_name.clone())
-        .mime_str("application/zip").map_err(|e| P2PError::ConnectionError(e.to_string()))?;
-    let form = reqwest::multipart::Form::new().part("file", part);
-
-    info!("[Share] Sending upload request to 0x0.st...");
-    let response = client.post("https://0x0.st")
-        .header("User-Agent", "RepakX/1.0")
-        .multipart(form)
-        .send().await.map_err(|e| P2PError::ConnectionError(format!("Failed to send request: {}", e)))?;
-
-    // Check status code first
-    let status = response.status();
-    info!("[Share] 0x0.st response status: {}", status);
-    
-    if !status.is_success() {
-        let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-        error!("[Share] Upload failed with status {}: {}", status, error_text);
-        return Err(P2PError::ConnectionError(format!("Upload failed with status {}: {}", status, error_text)));
+    pub fn local_peer_id(&self) -> String {
+        self.instance_id.clone()
     }
-
-    // 0x0.st returns the download URL as plain text
-    let download_url = response.text().await
-        .map_err(|e| P2PError::ConnectionError(format!("Failed to read response: {}", e)))?
-        .trim()
-        .to_string();
-    
-    info!("[Share] 0x0.st raw response: {}", download_url);
-
-    // Validate URL format
-    if !download_url.starts_with("https://0x0.st/") {
-        error!("[Share] Invalid response from 0x0.st: {}", download_url);
-        return Err(P2PError::ConnectionError(format!("Invalid response from server: {}", download_url)));
+    pub fn listening_addresses(&self) -> Vec<String> {
+        vec!["tcp://direct+upnp".into()]
     }
-    
-    info!("[Share] Upload complete! URL: {} (expires in 365 days)", download_url);
-    Ok(download_url)
-}
-
-async fn download_and_extract(url: &str, out_dir: &PathBuf, dl: Arc<Mutex<HashMap<String, ActiveDownload>>>, code: &str) -> Result<(), String> {
-    info!("[Share] Starting download from: {}", url);
-    
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(600)) // 10 minute timeout for downloads
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
-    
-    // Update status
-    if let Some(d) = dl.lock().get_mut(code) {
-        d.progress.status = TransferStatus::Transferring;
-        d.progress.current_file = "Downloading...".into();
-    }
-
-    // Download with better error handling
-    info!("[Share] Sending download request...");
-    let resp = client.get(url).send().await.map_err(|e| {
-        error!("[Share] Download request failed: {}", e);
-        format!("Failed to download: {}", e)
-    })?;
-    
-    let status = resp.status();
-    info!("[Share] Download response status: {}", status);
-    
-    if !status.is_success() {
-        let error_msg = format!("Download failed with status: {}", status);
-        error!("[Share] {}", error_msg);
-        return Err(error_msg);
-    }
-    
-    let total = resp.content_length().unwrap_or(0);
-    info!("[Share] Download size: {} bytes ({:.2} MB)", total, total as f64 / 1024.0 / 1024.0);
-    
-    if let Some(d) = dl.lock().get_mut(code) {
-        d.progress.total_bytes = total;
-    }
-
-    info!("[Share] Downloading file...");
-    let bytes = resp.bytes().await.map_err(|e| {
-        error!("[Share] Failed to read download bytes: {}", e);
-        format!("Failed to read download: {}", e)
-    })?;
-    
-    info!("[Share] Downloaded {} bytes", bytes.len());
-    
-    if let Some(d) = dl.lock().get_mut(code) {
-        d.progress.bytes_transferred = bytes.len() as u64;
-        d.progress.current_file = "Extracting...".into();
-        d.progress.status = TransferStatus::Verifying;
-    }
-
-    // Save and extract
-    let temp_zip = out_dir.join("_temp_download.zip");
-    std::fs::create_dir_all(out_dir).map_err(|e| {
-        error!("[Share] Failed to create output directory: {}", e);
-        e.to_string()
-    })?;
-    
-    info!("[Share] Saving zip to: {}", temp_zip.display());
-    std::fs::write(&temp_zip, &bytes).map_err(|e| {
-        error!("[Share] Failed to write zip file: {}", e);
-        e.to_string()
-    })?;
-
-    // Extract zip
-    info!("[Share] Opening zip archive...");
-    let file = std::fs::File::open(&temp_zip).map_err(|e| {
-        error!("[Share] Failed to open zip: {}", e);
-        e.to_string()
-    })?;
-    let mut archive = zip::ZipArchive::new(file).map_err(|e| {
-        error!("[Share] Failed to read zip archive: {}", e);
-        format!("Invalid or corrupted zip file: {}", e)
-    })?;
-    
-    let total_files = archive.len();
-    info!("[Share] Extracting {} files...", total_files);
-    
-    if let Some(d) = dl.lock().get_mut(code) {
-        d.progress.total_files = total_files;
-        d.progress.status = TransferStatus::Transferring;
-    }
-
-    for i in 0..archive.len() {
-        let mut file = archive.by_index(i).map_err(|e| {
-            error!("[Share] Failed to access file {} in zip: {}", i, e);
-            e.to_string()
-        })?;
-        let name = file.name().to_string();
-        let out_path = out_dir.join(&name);
-        
-        info!("[Share] Extracting: {} ({}/{})", name, i + 1, total_files);
-        
-        if let Some(d) = dl.lock().get_mut(code) {
-            d.progress.current_file = name.clone();
-            d.progress.files_completed = i;
-        }
-
-        if let Some(parent) = out_path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| {
-                error!("[Share] Failed to create directory: {}", e);
-                e.to_string()
-            })?;
-        }
-        
-        let mut out_file = std::fs::File::create(&out_path).map_err(|e| {
-            error!("[Share] Failed to create output file {}: {}", name, e);
-            e.to_string()
-        })?;
-        std::io::copy(&mut file, &mut out_file).map_err(|e| {
-            error!("[Share] Failed to extract {}: {}", name, e);
-            e.to_string()
-        })?;
-        info!("[Share] ✓ Extracted: {}", name);
-    }
-
-    // Cleanup
-    info!("[Share] Cleaning up temporary files...");
-    let _ = std::fs::remove_file(&temp_zip);
-    
-    info!("[Share] Download and extraction complete!");
-    Ok(())
 }
 
 pub fn validate_connection_string(s: &str) -> P2PResult<bool> {
-    info!("[Share] Validating connection string: {} chars", s.len());
-    
-    // Helper: try to decode a ShareInfo and ensure it has at least one address
+    info!("[P2P] Validating connection string: {} chars", s.len());
+
     fn try_decode(input: &str) -> P2PResult<bool> {
         match ShareInfo::decode(input) {
             Ok(info) => {
-                info!("[Share] Decoded ShareInfo - peer_id: {}, addresses: {:?}, encryption_key: {}, share_code: {}", 
-                    info.peer_id, info.addresses, info.encryption_key, info.share_code);
+                info!(
+                    "[P2P] Decoded ShareInfo - peer_id: {}, addresses: {:?}, share_code: {}",
+                    info.peer_id, info.addresses, info.share_code
+                );
                 Ok(!info.addresses.is_empty())
-            },
+            }
             Err(e) => {
-                error!("[Share] Failed to decode: {}", e);
+                error!("[P2P] Failed to decode: {}", e);
                 Err(P2PError::ValidationError(format!("{}", e)))
             }
         }
     }
 
-    // 1) First try the raw string as-is
+    // Try the raw string as-is
     if let Ok(valid) = try_decode(s) {
-        info!("[Share] Validation result: {}", valid);
         return Ok(valid);
     }
 
-    // 2) Fallback: strip any non-base64 prefix (e.g. ":" or "Share Code: ")
+    // Fallback: strip any non-base64 prefix
     let trimmed = s.trim();
     let start_idx = trimmed
         .char_indices()
@@ -464,10 +588,10 @@ pub fn validate_connection_string(s: &str) -> P2PResult<bool> {
 
     if let Some(i) = start_idx {
         let candidate = &trimmed[i..];
-        info!("[Share] Trying trimmed candidate: {} chars", candidate.len());
         return try_decode(candidate);
     }
 
-    error!("[Share] Validation failed - invalid format");
-    Err(P2PError::ValidationError("Invalid connection string".to_string()))
+    Err(P2PError::ValidationError(
+        "Invalid connection string".to_string(),
+    ))
 }
