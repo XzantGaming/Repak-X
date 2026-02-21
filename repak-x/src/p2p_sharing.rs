@@ -605,6 +605,11 @@ impl P2PServer {
 
     /// Handle a single client connection
     fn handle_connection(&self, mut stream: TcpStream, addr: SocketAddr) -> P2PResult<()> {
+        // The listener is non-blocking for the accept loop, but accepted
+        // streams must be switched back to blocking for read/write to work.
+        stream
+            .set_nonblocking(false)
+            .map_err(|e| P2PError::NetworkError(format!("Failed to set blocking: {}", e)))?;
         stream
             .set_nodelay(true)
             .map_err(|e| P2PError::NetworkError(format!("Failed to set nodelay: {}", e)))?;
