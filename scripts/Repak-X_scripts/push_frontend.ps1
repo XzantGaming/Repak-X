@@ -14,6 +14,12 @@ Set-Location $repoRoot
 
 Write-Host "`n=== Frontend UI Push Script ===" -ForegroundColor Cyan
 
+# Source the version bump utility
+. "$scriptDir\version_bump.ps1"
+
+# Check for [run-ci] release
+$versionResult = Invoke-VersionBump -RepoRoot $repoRoot
+
 # Check if we need to pull first
 Write-Host "`nChecking for remote changes..." -ForegroundColor Cyan
 git fetch origin
@@ -127,7 +133,10 @@ if ($confirm -eq "n" -or $confirm -eq "N") {
     exit 1
 }
 
-# Commit
+# Commit (prepend [run-ci] if this is a release)
+if ($versionResult.RunCI) {
+    $Message = "[run-ci] $Message"
+}
 Write-Host "`nCommitting..." -ForegroundColor Cyan
 git commit -m $Message
 

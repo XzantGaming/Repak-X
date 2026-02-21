@@ -9,6 +9,12 @@ $scriptDir = $PSScriptRoot
 $repoRoot = Split-Path -Parent (Split-Path -Parent $scriptDir)
 Set-Location $repoRoot
 
+# Source the version bump utility
+. "$scriptDir\version_bump.ps1"
+
+# Check for [run-ci] release
+$versionResult = Invoke-VersionBump -RepoRoot $repoRoot
+
 # 1. Add Rust Source Files (Recursive)
 Write-Host "Staging Rust files (*.rs, Cargo.toml, Cargo.lock)..."
 git add "**/*.rs"
@@ -40,7 +46,10 @@ if (-not $status) {
     exit
 }
 
-# 6. Commit
+# 6. Commit (prepend [run-ci] if this is a release)
+if ($versionResult.RunCI) {
+    $Message = "[run-ci] $Message"
+}
 Write-Host "Committing: $Message" -ForegroundColor Green
 git commit -m "$Message"
 

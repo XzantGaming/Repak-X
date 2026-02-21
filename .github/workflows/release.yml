@@ -282,6 +282,25 @@ jobs:
           echo "Downloaded artifacts:"
           ls -la dist/
 
+      - name: Extract Changelog
+        id: changelog
+        shell: bash
+        run: |
+          VERSION="${{ needs.build.outputs.version }}"
+          # Extract everything between ## [VERSION] and the next ## [ or --- or EOF
+          CHANGELOG=$(awk "/^## \[$VERSION\]/{found=1; next} /^## \[|^---/{if(found) exit} found{print}" CHANGELOG.md)
+          
+          if [ -z "$CHANGELOG" ]; then
+            CHANGELOG="No changelog entry found for v$VERSION."
+          fi
+          
+          # Write to file to avoid multiline env var issues
+          echo "$CHANGELOG" > /tmp/changelog_body.md
+          echo "CHANGELOG_FILE=/tmp/changelog_body.md" >> $GITHUB_OUTPUT
+          
+          echo "Extracted changelog for v$VERSION:"
+          cat /tmp/changelog_body.md
+
       - name: Create and Push Tag
         run: |
           VERSION="${{ needs.build.outputs.version }}"
@@ -297,6 +316,37 @@ jobs:
             git push origin "v$VERSION"
           fi
 
+      - name: Build Release Body
+        id: release_body
+        shell: bash
+        run: |
+          VERSION="${{ needs.build.outputs.version }}"
+          CHANGELOG=$(cat ${{ steps.changelog.outputs.CHANGELOG_FILE }})
+          
+          # Build the full release body
+          cat > /tmp/release_body.md << 'RELEASE_EOF'
+          $CHANGELOG
+          
+          ---
+          
+          ## Downloads
+          
+          - **Windows**: `Repak-X-v$VERSION-Windows.zip`
+          - **Linux**: `Repak-X-v$VERSION-Linux.tar.gz`
+          
+          ### Linux Requirements
+          Make sure you have the following packages installed:
+          ```bash
+          sudo apt install libwebkit2gtk-4.1-0 libgtk-3-0 libayatana-appindicator3-1 unzip
+          ```
+          RELEASE_EOF
+          
+          # Replace variables in the file
+          sed -i "s/\$VERSION/$VERSION/g" /tmp/release_body.md
+          sed -i "s/\$CHANGELOG/$CHANGELOG/g" /tmp/release_body.md
+          
+          echo "BODY_FILE=/tmp/release_body.md" >> $GITHUB_OUTPUT
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
@@ -305,17 +355,7 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: false
-          body: |
-            ## Downloads
-            
-            - **Windows**: `Repak-X-v${{ needs.build.outputs.version }}-Windows.zip`
-            - **Linux**: `Repak-X-v${{ needs.build.outputs.version }}-Linux.tar.gz`
-            
-            ### Linux Requirements
-            Make sure you have the following packages installed:
-            ```bash
-            sudo apt install libwebkit2gtk-4.1-0 libgtk-3-0 libayatana-appindicator3-1 unzip
-            ```
+          body_path: ${{ steps.changelog.outputs.CHANGELOG_FILE }}
           files: |
             dist/Repak-X-v${{ needs.build.outputs.version }}-Windows.zip
             dist/Repak-X-v${{ needs.build.outputs.version }}-Linux.tar.gz
@@ -326,18 +366,32 @@ jobs:
         if: success()
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          CHANGELOG_FILE: ${{ steps.changelog.outputs.CHANGELOG_FILE }}
+          VERSION: ${{ needs.build.outputs.version }}
+        shell: bash
         run: |
-          VERSION="${{ needs.build.outputs.version }}"
-          
           if [ -z "$DISCORD_WEBHOOK" ]; then
             echo "Discord webhook not configured, skipping notification"
             exit 0
           fi
           
-          echo "Sending Discord notification..."
+          RELEASE_URL="https://github.com/XzantGaming/Repak-X/releases/tag/v${VERSION}"
+          CHANGELOG=$(cat "$CHANGELOG_FILE" 2>/dev/null || echo "")
           
-          curl -H "Content-Type: application/json" \
-            -d "{\"content\": \"<@&1472639362557542510> <:RepakXApp:1448417099318956133> **Repak X v$VERSION** is now available for Windows and Linux!\nhttps://github.com/XzantGaming/Repak-X/releases/latest\"}" \
+          # Build message - header first, then changelog
+          MESSAGE="<@&1472639362557542510> <:RepakXApp:1448417099318956133> **Repak X v${VERSION}** is now available for Windows and Linux!
+          ${RELEASE_URL}
+          
+          ${CHANGELOG}"
+          
+          # Truncate to Discord's 2000 char limit if needed
+          if [ ${#MESSAGE} -gt 2000 ]; then
+            MESSAGE="${MESSAGE:0:1997}..."
+          fi
+          
+          # Send to Discord
+          curl -s -H "Content-Type: application/json" \
+            -d "$(jq -n --arg content "$MESSAGE" '{content: $content}')" \
             "$DISCORD_WEBHOOK"
           
           echo "Discord notification sent!"
