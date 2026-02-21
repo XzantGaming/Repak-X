@@ -332,37 +332,6 @@ jobs:
             git push origin "v$VERSION"
           fi
 
-      - name: Build Release Body
-        id: release_body
-        shell: bash
-        run: |
-          VERSION="${{ needs.build.outputs.version }}"
-          CHANGELOG=$(cat ${{ steps.changelog.outputs.CHANGELOG_FILE }})
-          
-          # Build the full release body
-          cat > /tmp/release_body.md << 'RELEASE_EOF'
-          $CHANGELOG
-          
-          ---
-          
-          ## Downloads
-          
-          - **Windows**: `Repak-X-v$VERSION-Windows.zip`
-          - **Linux**: `Repak-X-v$VERSION-Linux.tar.gz`
-          
-          ### Linux Requirements
-          Make sure you have the following packages installed:
-          ```bash
-          sudo apt install libwebkit2gtk-4.1-0 libgtk-3-0 libayatana-appindicator3-1 unzip
-          ```
-          RELEASE_EOF
-          
-          # Replace variables in the file
-          sed -i "s/\$VERSION/$VERSION/g" /tmp/release_body.md
-          sed -i "s/\$CHANGELOG/$CHANGELOG/g" /tmp/release_body.md
-          
-          echo "BODY_FILE=/tmp/release_body.md" >> $GITHUB_OUTPUT
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
