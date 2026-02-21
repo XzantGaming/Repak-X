@@ -141,6 +141,49 @@ async fn get_public_ip_http() -> Option<String> {
 }
 
 // ============================================================================
+// BORE RELAY TUNNEL (free TCP relay via bore.pub)
+// ============================================================================
+
+/// Create a bore tunnel to relay TCP traffic through bore.pub.
+/// Returns (bore_address, bore_port, join_handle) on success.
+async fn try_bore_tunnel(local_port: u16) -> Option<(String, u16, tokio::task::JoinHandle<()>)> {
+    info!("[P2P/Bore] Creating relay tunnel for local port {} via bore.pub ...", local_port);
+
+    // Connect to bore.pub with a 15s timeout
+    let client = match tokio::time::timeout(
+        Duration::from_secs(15),
+        bore_cli::client::Client::new("localhost", local_port, "bore.pub", 2283, None),
+    )
+    .await
+    {
+        Ok(Ok(c)) => c,
+        Ok(Err(e)) => {
+            warn!("[P2P/Bore] Failed to create tunnel: {}", e);
+            return None;
+        }
+        Err(_) => {
+            warn!("[P2P/Bore] Tunnel creation timed out");
+            return None;
+        }
+    };
+
+    let remote_port = client.remote_port();
+    info!(
+        "[P2P/Bore] Tunnel established! Public address: bore.pub:{}",
+        remote_port
+    );
+
+    // Spawn the forwarding loop — runs until aborted or error
+    let handle = tokio::spawn(async move {
+        if let Err(e) = client.listen().await {
+            warn!("[P2P/Bore] Tunnel closed: {}", e);
+        }
+    });
+
+    Some(("bore.pub".to_string(), remote_port, handle))
+}
+
+// ============================================================================
 // MANAGER
 // ============================================================================
 
@@ -154,6 +197,7 @@ pub struct ActiveShare {
     pub session: ShareSession,
     pub stop_flag: Arc<AtomicBool>,
     pub upnp_external_port: Option<u16>,
+    pub bore_task_handle: Option<tokio::task::JoinHandle<()>>,
 }
 
 pub struct ActiveDownload {
@@ -199,6 +243,7 @@ impl UnifiedP2PManager {
         let local_ip_parsed: Ipv4Addr = session.local_ip.parse().unwrap_or(Ipv4Addr::LOCALHOST);
         let mut addresses: Vec<String> = Vec::new();
         let mut upnp_external_port: Option<u16> = None;
+        let mut bore_task_handle: Option<tokio::task::JoinHandle<()>> = None;
 
         // 1) Try UPnP automatic port forwarding
         match try_upnp_port_mapping(local_ip_parsed, local_port).await {
@@ -208,17 +253,17 @@ impl UnifiedP2PManager {
                 upnp_external_port = Some(ext_port);
             }
             None => {
-                // 2) Fallback: detect public IP via HTTP; include it
-                //    optimistically (works if user has manual port-fwd).
-                if let Some(pub_ip) = get_public_ip_http().await {
-                    info!(
-                        "[P2P] UPnP failed, but detected public IP {}. Including optimistically.",
-                        pub_ip
-                    );
-                    addresses.push(format!("{}:{}", pub_ip, local_port));
-                } else {
-                    warn!("[P2P] No UPnP, no public IP - sharing limited to local network.");
-                }
+                info!("[P2P] UPnP unavailable - trying bore.pub relay tunnel...");
+            }
+        }
+
+        // 2) If no UPnP, create a bore.pub relay tunnel (free, works through any NAT)
+        if upnp_external_port.is_none() {
+            if let Some((host, port, handle)) = try_bore_tunnel(local_port).await {
+                addresses.push(format!("{}:{}", host, port));
+                bore_task_handle = Some(handle);
+            } else {
+                warn!("[P2P] Bore tunnel also failed - sharing limited to local network.");
             }
         }
 
@@ -277,6 +322,7 @@ impl UnifiedP2PManager {
                 session: sess,
                 stop_flag,
                 upnp_external_port,
+                bore_task_handle,
             },
         );
 
@@ -294,6 +340,12 @@ impl UnifiedP2PManager {
                 tokio::spawn(async move {
                     remove_upnp_port_mapping(ext_port).await;
                 });
+            }
+
+            // Abort bore relay tunnel
+            if let Some(handle) = share.bore_task_handle {
+                info!("[P2P/Bore] Aborting relay tunnel");
+                handle.abort();
             }
         }
         Ok(())

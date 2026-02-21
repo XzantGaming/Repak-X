@@ -80,6 +80,9 @@ bincode = "1.3"
 # UPnP port mapping for automatic NAT traversal
 igd-next = { version = "0.16", features = ["aio_tokio"] }
 
+# Free TCP relay tunnel (bore.pub) for NAT traversal fallback
+bore-cli = "0.6"
+
 # libp2p for internet-wide P2P with NAT traversal
 libp2p = { version = "0.54", features = [
     "tcp",
